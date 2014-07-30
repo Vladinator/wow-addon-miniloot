@@ -29,3 +29,4 @@ Thumbs.db
 # Notepad++
 nppBackup/
 *.bak
+*.out
