@@ -163,6 +163,7 @@ local function OutputReport()
 				for i, data in ipairs(sorted) do
 					local playerName, items = data[1], data[2]
 					if playerName == 1 or playerName == "1" then
+						--[=[ TODO: DEPRECATED
 						lastName = ""
 						if type(items) == "table" then
 							str = NewLine(str)
@@ -211,6 +212,7 @@ local function OutputReport()
 								str = NewLine(str)
 							end
 						end
+						--]=]
 
 					else
 						if lastName ~= playerName then
@@ -640,6 +642,7 @@ function module:ON_MATCHER_EVENT(event, message, ...)
 		local isRollType = IsRollType(ptable[4])
 
 		if itemName and isRollDecision then
+			--[=[ TODO: DEPRECATED
 			if addonData:GetBoolOpt("SHOW_ROLL_DECISIONS") and addonData:InLFR(not addonData:GetBoolOpt("HIDE_LFR_ROLL_DECISIONS")) then
 				local itemName, targetName, decisionType, historyId =
 					addonData:GetBoolOpt("SHOW_ROLL_ICONS") and addonData:GetIconWithLink(itemName) or itemName,
@@ -666,8 +669,10 @@ function module:ON_MATCHER_EVENT(event, message, ...)
 					end
 				end
 			end
+			--]=]
 
 		elseif itemName and isRollType then
+			--[=[ TODO: DEPRECATED
 			if addonData:GetBoolOpt("SHOW_ROLL_SUMMARY") and addonData:InLFR(not addonData:GetBoolOpt("HIDE_LFR_ROLL_SUMMARY")) then
 				local itemName, targetName, roll, rollType =
 					addonData:GetBoolOpt("SHOW_ROLL_ICONS") and addonData:GetIconWithLink(itemName) or itemName,
@@ -693,6 +698,7 @@ function module:ON_MATCHER_EVENT(event, message, ...)
 					report[event][1][itemName][targetName] = {0, 0}
 				end
 			end
+			--]=]
 
 		elseif itemName then
 			if not addonData:GetBoolOpt("HIDE_JUNK") or not itemName:find(select(4, GetItemQualityColor(0)), nil, 1) then

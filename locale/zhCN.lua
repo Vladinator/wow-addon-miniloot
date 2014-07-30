@@ -44,14 +44,6 @@ L["INT_MINILOOT_OUTPUT_TOOLTIP"] = [=[报告将会发送到你设置聊天窗口
 
 使用"/fstack"指令可开启窗口侦测工具。]=] -- Needs review
 L["INT_ROLL"] = "掷骰" -- Needs review
-L["INT_ROLL_DECISIONS_LABEL"] = "显示掷骰动作" -- Needs review
-L["INT_ROLL_DECISIONS_TOOLTIP"] = "需求/贪婪的动作将立即显示。" -- Needs review
-L["INT_ROLL_DESC"] = "变更掷骰处理方式。" -- Needs review
-L["INT_ROLL_ICONS_LABEL"] = "显示掷骰图标" -- Needs review
-L["INT_ROLL_ICONS_TOOLTIP"] = "将掷骰相关事件的物品连结显示为图标。" -- Needs review
-L["INT_ROLL_SUMMARY_LABEL"] = "显示掷骰细节" -- Needs review
-L["INT_ROLL_SUMMARY_TOOLTIP"] = [=[将掷骰结果发送独立的一行
-不与其他的报告合并。]=] -- Needs review
 L["INT_TIMER"] = "延迟" -- Needs review
 L["INT_TIMER_DESC"] = "变更细节显示和收集资料的间隔速度。" -- Needs review
 L["INT_TIMER_SLEEP_COMBAT_LABEL"] = "战斗之後延迟" -- Needs review

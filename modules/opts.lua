@@ -470,20 +470,6 @@ function module:OnLoad()
 		end,
 	})
 
-	--[[ DEPRECATED FEATURE
-	CreatePanelOption(scroll, {title = L.INT_ROLL_LABEL, desc = L.INT_ROLL_DESC})
-
-	CreatePanelCheckbox(scroll, "SHOW_ROLL_DECISIONS", L.INT_ROLL_DECISIONS_LABEL, L.INT_ROLL_DECISIONS_TOOLTIP)
-
-	CreatePanelCheckbox(scroll, "HIDE_LFR_ROLL_DECISIONS", L.INT_ROLL_DECISIONS_LFR_LABEL, L.INT_ROLL_DECISIONS_LFR_TOOLTIP)
-
-	CreatePanelCheckbox(scroll, "SHOW_ROLL_SUMMARY", L.INT_ROLL_SUMMARY_LABEL, L.INT_ROLL_SUMMARY_TOOLTIP)
-
-	CreatePanelCheckbox(scroll, "HIDE_LFR_ROLL_SUMMARY", L.INT_ROLL_SUMMARY_LFR_LABEL, L.INT_ROLL_SUMMARY_LFR_TOOLTIP)
-
-	CreatePanelCheckbox(scroll, "SHOW_ROLL_ICONS", L.INT_ROLL_ICONS_LABEL, L.INT_ROLL_ICONS_TOOLTIP)
-	--]]
-
 	CreatePanelOption(scroll, {title = L.INT_TIMER_LABEL, desc = L.INT_TIMER_DESC})
 
 	CreatePanelOption(scroll, {

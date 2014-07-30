@@ -60,18 +60,6 @@ L["INT_MINILOOT_OUTPUT_TOOLTIP"] = [=[The reports will be printed in this chat. 
 
 Use "/fstack" to find the name of a frame you are hover over with your mouse.]=]
 L["INT_ROLL"] = "Roll"
-L["INT_ROLL_DECISIONS_LABEL"] = "Show roll decisions"
-L["INT_ROLL_DECISIONS_LFR_LABEL"] = "Hide roll decisions in the Raid Finder"
-L["INT_ROLL_DECISIONS_LFR_TOOLTIP"] = "Overrides above option and hides roll decisions in the Raid Finder."
-L["INT_ROLL_DECISIONS_TOOLTIP"] = "Decisions to need/greed and so forth, are instantly shown."
-L["INT_ROLL_DESC"] = "Change the roll handling behavior."
-L["INT_ROLL_ICONS_LABEL"] = "Show rolls as icons"
-L["INT_ROLL_ICONS_TOOLTIP"] = "Instead of links the items will appear as icons on all roll related messages."
-L["INT_ROLL_LABEL"] = "Rolls"
-L["INT_ROLL_SUMMARY_LABEL"] = "Show roll summary"
-L["INT_ROLL_SUMMARY_LFR_LABEL"] = "Hide roll summary in the Raid Finder"
-L["INT_ROLL_SUMMARY_LFR_TOOLTIP"] = "Overrides above option and hides the roll results in the Raid Finder."
-L["INT_ROLL_SUMMARY_TOOLTIP"] = "Prints the roll results in one line together with the rest of the report."
 L["INT_SLEEP_DURING_TRADESKILL_LABEL"] = "Sleep during tradeskill"
 L["INT_SLEEP_DURING_TRADESKILL_TOOLTIP"] = [=[Wait for the tradeskill to stop crafting.
 Otherwise, if the timer is too fast, the
