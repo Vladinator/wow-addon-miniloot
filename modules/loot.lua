@@ -797,9 +797,9 @@ function module:CHAT_MSG_SYSTEM(event, message, ...)
 				[1] = {ERR_QUEST_REWARD_ITEM_MULT_IS,              {ITEM_COUNT, ITEM_LINK},    {2, 1, 0}}, -- "Received %d of item: %s."
 				[2] = {ERR_QUEST_REWARD_ITEM_S,                    {ITEM_LINK},                {1, 0, 0}}, -- "Received item: %s."
 			},
-			CHAT_MSG_MONEY = { -- money, targetName
-				[1] = {ERR_QUEST_REWARD_MONEY_S,                   {MONEY_VALUE},              {1, 0}}, -- "Received %s."
-			},
+			-- CHAT_MSG_MONEY = { -- money, targetName
+			-- 	[1] = {ERR_QUEST_REWARD_MONEY_S,                   {MONEY_VALUE},              {1, 0}}, -- "Received %s." -- ignoring because the money event actually fires as well
+			-- },
 		}
 		local tempMatches, tempIndex, tempPattern = {}
 		for event, patterns in pairs(HOTFIX_CHAT_MSG_SYSTEM) do
