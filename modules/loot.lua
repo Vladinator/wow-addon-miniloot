@@ -832,10 +832,18 @@ function module:CHAT_MSG_SYSTEM(event, message, ...)
 				tempMatches[event][tempIndex][tempPattern] = matchOrder
 			end
 		end
+		for hName, hEvent in pairs(tempMatches) do
+			if type(matches[hName]) ~= "table" then
+				matches[hName] = {}
+			end
+			for i, patternData in ipairs(hEvent) do
+				table.insert(matches[hName], patternData)
+			end
+		end
 		matches.HOTFIX_CHAT_MSG_SYSTEM = tempMatches
 	end
 	local temp, found, ptable
-	for _, hEvent in pairs(matches.HOTFIX_CHAT_MSG_SYSTEM) do
+	for hName, hEvent in pairs(matches.HOTFIX_CHAT_MSG_SYSTEM) do
 		found, ptable = nil
 		for i, patternData in ipairs(hEvent) do
 			for pattern, data in pairs(patternData) do
@@ -852,7 +860,7 @@ function module:CHAT_MSG_SYSTEM(event, message, ...)
 			end
 		end
 		if found and ptable then
-			return module:ON_MATCHER_EVENT(hEvent, message, ...)
+			return module:ON_MATCHER_EVENT(hName, message, ...)
 		end
 	end
 end
