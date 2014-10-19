@@ -32,6 +32,7 @@ local matches, elapsed, report
 
 local CURRENCY_COUNT = "C_C"
 local CURRENCY_NAME = "C_N"
+local GXP_VALUE = "GX_V"
 local HONOR_NAME = "H_N"
 local HONOR_RANK = "H_R"
 local HONOR_VALUE = "H_V"
@@ -41,6 +42,8 @@ local ITEM_HISTORY = "I_H"
 local ITEM_LINK = "I_L"
 local ITEM_ROLL = "I_R"
 local ITEM_TARGET = "I_T"
+local MONEY_NAME = "M_N"
+local MONEY_VALUE = "M_V"
 local NO_INSTANT = "N_I"
 local REP_GAINED = "R_G"
 local REP_LOST = "R_L"
@@ -430,7 +433,7 @@ function module:OnLoad()
 			[5] = {LOOT_MONEY,                                   {MONEY_NAME, MONEY_VALUE},  {2, 1}}, -- "%s loots %s."
 		},
 		CHAT_MSG_COMBAT_GUILD_XP_GAIN = { -- xpPoints
-			[1] = {COMBATLOG_GUILD_XPGAIN,                       {GXP_VALUE},  {1}}, -- "You gain %d guild experience."
+			[1] = {COMBATLOG_GUILD_XPGAIN,                       {GXP_VALUE},                {1}}, -- "You gain %d guild experience."
 		},
 	}
 
@@ -454,7 +457,7 @@ function module:OnLoad()
 
 				tempPattern = addonData:FormatMatcher(_G[pattern] or pattern, "(.-)")
 				for j, flag in ipairs(matchTypes) do
-					if flag == CURRENCY_COUNT or flag == ITEM_COUNT or flag == ITEM_HISTORY or flag == REP_VALUE or flag == XP_VALUE then -- %d
+					if flag == CURRENCY_COUNT or flag == ITEM_COUNT or flag == ITEM_HISTORY or flag == REP_VALUE or flag == XP_VALUE or flag == GXP_VALUE then -- %d
 						matchTypes[j] = "number"
 					elseif flag == CURRENCY_NAME or flag == ITEM_LINK or flag == REP_NAME then -- %s
 						matchTypes[j] = ""
@@ -511,6 +514,9 @@ function module:Enable()
 		module:RegisterEvent(event)
 	end
 
+	-- HOTFIX_CHAT_MSG_SYSTEM
+	module:RegisterEvent("CHAT_MSG_SYSTEM")
+
 	ChatFrame_AddMessageEventFilter("CHAT_MSG_SYSTEM", SpecialChatEventFilter)
 
 	module:RegisterEvent("LOOT_OPENED")
@@ -531,6 +537,9 @@ function module:Disable()
 		ChatFrame_RemoveMessageEventFilter(event, ChatEventFilter)
 		module:UnregisterEvent(event)
 	end
+
+	-- HOTFIX_CHAT_MSG_SYSTEM
+	module:UnregisterEvent("CHAT_MSG_SYSTEM")
 
 	ChatFrame_RemoveMessageEventFilter("CHAT_MSG_SYSTEM", SpecialChatEventFilter)
 
@@ -772,3 +781,78 @@ module.CHAT_MSG_CURRENCY = module.ON_MATCHER_EVENT
 module.CHAT_MSG_LOOT = module.ON_MATCHER_EVENT
 module.CHAT_MSG_MONEY = module.ON_MATCHER_EVENT
 module.CHAT_MSG_COMBAT_GUILD_XP_GAIN = module.ON_MATCHER_EVENT
+
+-- HOTFIX: esception for bugged loot messages appearing in the SYSTEM channel - really Blizz?
+function module:CHAT_MSG_SYSTEM(event, message, ...)
+	if not module.IsEnabled then
+		return
+	end
+	if type(matches.HOTFIX_CHAT_MSG_SYSTEM) ~= "table" then
+		local HOTFIX_CHAT_MSG_SYSTEM = {
+			CHAT_MSG_COMBAT_XP_GAIN = { -- xpPoints, sourceName, flag(XP_GAINED|XP_LOST)
+				[1] = {ERR_QUEST_REWARD_EXP_I,                     {XP_VALUE},                 {1, 0, XP_GAINED}}, -- "Experience gained: %d."
+			},
+			CHAT_MSG_LOOT = {
+				-- itemName, itemCount, targetName
+				[1] = {ERR_QUEST_REWARD_ITEM_MULT_IS,              {ITEM_COUNT, ITEM_LINK},    {2, 1, 0}}, -- "Received %d of item: %s."
+				[2] = {ERR_QUEST_REWARD_ITEM_S,                    {ITEM_LINK},                {1, 0, 0}}, -- "Received item: %s."
+			},
+			CHAT_MSG_MONEY = { -- money, targetName
+				[1] = {ERR_QUEST_REWARD_MONEY_S,                   {MONEY_VALUE},              {1, 0}}, -- "Received %s."
+			},
+		}
+		local tempMatches, tempIndex, tempPattern = {}
+		for event, patterns in pairs(HOTFIX_CHAT_MSG_SYSTEM) do
+			for i, patternData in ipairs(patterns) do
+				local pattern, matchTypes, matchOrder = patternData[1], patternData[2], patternData[3]
+				if not tempMatches[event] then
+					tempMatches[event] = {}
+				end
+				tempIndex = #tempMatches[event] + 1
+				if not tempMatches[event][tempIndex] then
+					tempMatches[event][tempIndex] = {}
+				end
+				tempPattern = addonData:FormatMatcher(_G[pattern] or pattern, "(.-)")
+				for j, flag in ipairs(matchTypes) do
+					if flag == CURRENCY_COUNT or flag == ITEM_COUNT or flag == ITEM_HISTORY or flag == REP_VALUE or flag == XP_VALUE or flag == GXP_VALUE then -- %d
+						matchTypes[j] = "number"
+					elseif flag == CURRENCY_NAME or flag == ITEM_LINK or flag == REP_NAME then -- %s
+						matchTypes[j] = ""
+					elseif flag == HONOR_NAME or flag == ITEM_TARGET or flag == XP_NAME then -- %s
+						matchTypes[j] = ""
+					elseif flag == HONOR_RANK then -- %s
+						matchTypes[j] = ""
+					elseif flag == HONOR_VALUE then -- %.2f
+						matchTypes[j] = "float"
+					elseif flag == ITEM_ROLL then -- ?
+						matchTypes[j] = ""
+					end
+				end
+				tempPattern = "^" .. addonData:PatternFlags(tempPattern, "(.-)", matchTypes) .. "$"
+				tempMatches[event][tempIndex][tempPattern] = matchOrder
+			end
+		end
+		matches.HOTFIX_CHAT_MSG_SYSTEM = tempMatches
+	end
+	local temp, found, ptable
+	for _, hEvent in pairs(matches.HOTFIX_CHAT_MSG_SYSTEM) do
+		found, ptable = nil
+		for i, patternData in ipairs(hEvent) do
+			for pattern, data in pairs(patternData) do
+				temp = {message:match(pattern)}
+				if #temp > 0 then
+					found = temp
+					ptable = data
+					temp = pattern
+					break
+				end
+			end
+			if found then
+				break
+			end
+		end
+		if found and ptable then
+			return module:ON_MATCHER_EVENT(hEvent, message, ...)
+		end
+	end
+end
