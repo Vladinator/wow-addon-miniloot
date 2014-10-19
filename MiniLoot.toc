@@ -2,7 +2,7 @@
 ## Title: MiniLoot
 ## Notes: Reduces chat related spam by a whole deal!
 ## Author: Vladinator
-## Version: 6.0.0.140730
+## Version: 6.0.0.141019
 ## DefaultState: enabled
 ## SavedVariables: MiniLootDB
 
