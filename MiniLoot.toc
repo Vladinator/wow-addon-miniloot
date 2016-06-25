@@ -2,8 +2,8 @@
 ## Title: MiniLoot
 ## Notes: Reduces chat related spam by a whole deal!
 ## Author: Vladinator
-## Version: 7.0.0.160604
-## SavedVariables: MiniLoot2DB
+## Version: 7.0.0.160625
+## SavedVariables: MiniLootDB
 locale.lua
 config.lua
 events.lua
