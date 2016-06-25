@@ -1,34 +1,13 @@
-﻿## Interface: 60000
+## Interface: 70000
 ## Title: MiniLoot
 ## Notes: Reduces chat related spam by a whole deal!
 ## Author: Vladinator
-## Version: 6.0.0.141019-2
-## DefaultState: enabled
-## SavedVariables: MiniLootDB
-
-libs\LibStub\LibStub.lua
-libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
-libs\AceGUI-3.0\AceGUI-3.0.xml
-libs\AceConfig-3.0\AceConfig-3.0.xml
-
-locale\enUS.lua
-locale\deDE.lua
-locale\esES.lua
-locale\esMX.lua
-locale\frFR.lua
-locale\itIT.lua
-locale\koKR.lua
-locale\ptBR.lua
-locale\ruRU.lua
-locale\zhCN.lua
-locale\zhTW.lua
-
+## Version: 7.0.0.160604
+## SavedVariables: MiniLoot2DB
+locale.lua
+config.lua
+events.lua
+tooltip.lua
+options.lua
+util.lua
 core.lua
-
-modules\loot.lua
-modules\extra_loot.lua
-modules\extra_mailbox.lua
-modules\extra_petbattle.lua
-modules\extra_tooltip.lua
-modules\extra_trade.lua
-modules\opts.lua

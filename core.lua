@@ -1,555 +1,3946 @@
-﻿local _G = _G
-local C_PetJournal_GetPetInfoBySpeciesID = C_PetJournal.GetPetInfoBySpeciesID
-local COPPER_AMOUNT = COPPER_AMOUNT
-local CreateFrame = CreateFrame
-local CUSTOM_RAID_CLASS_COLORS = CUSTOM_RAID_CLASS_COLORS
-local DEFAULT_CHAT_FRAME = DEFAULT_CHAT_FRAME
-local FCF_GetChatWindowInfo = FCF_GetChatWindowInfo
-local format = format
-local GetAuctionItemClasses = GetAuctionItemClasses
-local GetCurrencyInfo = GetCurrencyInfo
-local GetCurrencyListInfo = GetCurrencyListInfo
-local GetCurrencyListLink = GetCurrencyListLink
-local GetCurrencyListSize = GetCurrencyListSize
-local GetItemCount = GetItemCount
-local GetItemIcon = GetItemIcon
-local GetItemInfo = GetItemInfo
-local GetItemQualityColor = GetItemQualityColor
-local GetLFGMode = GetLFGMode
-local GetLocale = GetLocale
-local GOLD_AMOUNT = GOLD_AMOUNT
-local ipairs = ipairs
-local ITEM_BIND_QUEST = ITEM_BIND_QUEST
-local ITEM_STARTS_QUEST = ITEM_STARTS_QUEST
-local ITEM_UNIQUE = ITEM_UNIQUE
-local LE_LFG_CATEGORY_LFR = LE_LFG_CATEGORY_LFR
-local pairs = pairs
-local RAID_CLASS_COLORS = RAID_CLASS_COLORS
-local select = select
-local SILVER_AMOUNT = SILVER_AMOUNT
-local string_gsub = string.gsub
-local table_concat = table.concat
-local table_insert = table.insert
-local table_wipe = table.wipe
-local tonumber = tonumber
-local tostring = tostring
-local type = type
-local UnitClass = UnitClass
-local unpack = unpack
+local addonName, ns = ...
+ns.core = {}
 
-local addonName, addonData = ...
-local L, addon = addonData.L, CreateFrame("Frame")
-local tipScanner
-addon.modules = {}
-MiniLootDB = MiniLootDB or {}
+-- log handling
+do
+	local interval
 
-addon:SetScript("OnEvent", function(addon, event, ...) addon[event](addon, event, ...) end)
-addon:RegisterEvent("ADDON_LOADED")
+	local summary = {
+		count = 0,
+		reputation = {},
+		honor = {},
+		experience = {},
+		guildexperience = {},
+		currency = {},
+		money = {},
+		guildmoney = {},
+		loot = {},
+		roll = {},
+		artifact = {},
+	}
 
-function addon:ADDON_LOADED(event, name)
-	if name == addonName then
-		addon:UnregisterEvent(event)
-		addon:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
+	local summaryOrder = {
+		"guildexperience",
+		"experience",
+		"reputation",
+		"currency",
+		"honor",
+		"guildmoney",
+		"money",
+		"artifact",
+		"loot",
+		"roll",
+	}
 
-		tipScanner = CreateFrame("GameTooltip", "MiniLootTooltipScanner", UIParent, "GameTooltipTemplate")
-
-		for _, module in ipairs(addon.modules) do
-			module:OnLoad()
-		end
-
-		for _, module in ipairs(addon.modules) do
-			if module.name == "LOOT" or module.name == "LOOT_ROLLS" or module.name == "EXTRA_LOOT" then
-				module:Enable() -- these are modules enabled by default
-			end
-		end
-
-		addonData:CheckModuleStates()
-	end
-end
-
-function addon:CURRENCY_DISPLAY_UPDATE()
-	addonData:CacheCurrency()
-	addonData:CacheArchCurrency()
-end
-
-function addonData:GetModule(name)
-	for _, module in ipairs(addon.modules) do
-		if module.name == name then
-			return module
-		end
-	end
-end
-
-function addonData:CheckModuleStates(name, isOptKey)
-	for _, module in ipairs(addon.modules) do
-		if isOptKey and module.optKey and name == module.optKey then
-			if addonData:GetBoolOpt(module.optKey) then
-				module:Enable()
-			else
-				module:Disable()
-			end
-			break
-
-		elseif not isOptKey and module.optKey and (not name or name == module.name) then
-			if addonData:GetBoolOpt(module.optKey) then
-				module:Enable()
-			else
-				module:Disable()
-			end
-		end
-	end
-end
-
-local defaults = {
-	FONT_SIZE =               {0, 0, 32},
-	HIDE_EVENTS =             {},
-	HIDE_JUNK =               {0, 0, 1},
-	HIDE_SOLO_LOOT =          {0, 0, 1},
-	HIDE_SOLO_LOOT_T =        {0, 0, 9},
-	HIDE_PARTY_LOOT =         {0, 0, 1},
-	HIDE_PARTY_LOOT_T =       {0, 0, 9},
-	CHAT_FRAME =              "ChatFrame1",
-	--SHOW_ROLL_DECISIONS =     {1, 0, 1}, -- TODO: DEPRECATED
-	--HIDE_LFR_ROLL_DECISIONS = {0, 0, 1}, -- TODO: DEPRECATED
-	--SHOW_ROLL_SUMMARY =       {1, 0, 1}, -- TODO: DEPRECATED
-	--HIDE_LFR_ROLL_SUMMARY =   {0, 0, 1}, -- TODO: DEPRECATED
-	--SHOW_ROLL_ICONS =         {0, 0, 1}, -- TODO: DEPRECATED
-	SLEEP_AFTER_COMBAT =      {2, -1, 999},
-	SLEEP_BETWEEN_EVENTS =    {2, 0, 999},
-	SLEEP_DURING_TRADESKILL = {1, 0, 1},
-	SHOW_MOUSEOVER_LINKS =    {0, 0, 1},
-	MOUSEOVER_LINKS_ANCHOR =  {0, 0, 1},
-	MOUSEOVER_LINKS_ICON =    {0, 0, 1},
-	SHOW_LOOT_COUNT =         {0, 0, 1},
-	SHOW_CLASS_COLORS =       {0, 0, 1},
-	PET_BATTLES =             {0, 0, 1},
-	SHOW_MAILBOX_LOOT =       {0, 0, 1},
-	SHOW_TRADE_LOOT =         {0, 0, 1},
-}
-
-function addonData.print(...)
-	if not ... then
-		return
-	end
-	local output = ""
-	for i, part in ipairs({...}) do
-		output = output .. tostring(part) .. " "
-	end
-	if output:len() > 1 then
-		addonData:GetChatFrame():AddMessage(output:sub(1, -1), 1, 1, 0)
-	end
-end
-
-function addonData:GetDefaultOpts()
-	local temp = {}
-	for opt, data in pairs(defaults) do
-		if type(data) == "table" then
-			if opt == "HIDE_EVENTS" then
-				table_insert(temp, {opt = opt, val = {}})
-			else
-				table_insert(temp, {opt = opt, val = data[1], min = data[2], max = data[3]})
-			end
-		else
-			table_insert(temp, {opt = opt, val = data})
-		end
-	end
-	return temp
-end
-
-function addonData:GetOpt(key, isDefault)
-	local data = defaults[key]
-	local val, min, max
-	if type(data) == "table" then
-		val, min, max = data[1], data[2], data[3]
-		if not isDefault then
-			val = tonumber(MiniLootDB[key]) or val
-			if not MiniLootDB[key] then
-				MiniLootDB[key] = val
-			end
-			if min and max and (val < min or val > max) then
-				val = data[1]
-				MiniLootDB[key] = val
-			end
-		end
-	else
-		val = data
-		if not isDefault then
-			val = MiniLootDB[key] or val
-		end
-		if not MiniLootDB[key] then
-			MiniLootDB[key] = val
-		end
-	end
-	if key == "HIDE_EVENTS" then
-		val = MiniLootDB[key] or data, nil
-	elseif type(data) == "table" and type(val) ~= "number" then
-		val = data[1]
-	end
-	return val, min, max
-end
-
-function addonData:GetBoolOpt(key)
-	local val = addonData:GetOpt(key)
-	val = type(val) == "number" and val or tonumber(val)
-	if not val or val == 0 then return false end
-	return true
-end
-
-function addonData:SetOpt(key, val)
-	MiniLootDB[key] = val
-	local data = defaults[key]
-	if type(data) == "table" then
-		local min, max = data[2], data[3]
-		if min and max and (type(val) ~= "number" or val < min or val > max) then
-			val = tonumber(val)
-			if val then
-				MiniLootDB[key] = val
-			else
-				val = data[1]
-			end
-		end
-	end
-	if key == "CHAT_FRAME" then
-		local frame = _G[val]
-		if type(frame) ~= "table" or type(frame.AddMessage) ~= "function" then
-			val = DEFAULT_CHAT_FRAME:GetName()
-			MiniLootDB[key] = val
-		end
-	end
-end
-
-function addonData:GetChatFrame()
-	return _G[addonData:GetOpt("CHAT_FRAME") or "DEFAULT_CHAT_FRAME"] or DEFAULT_CHAT_FRAME
-end
-
-function addonData:GetFontSize()
-	local size, _ = addonData:GetOpt("FONT_SIZE")
-	if size <= 0 then
-		_, size = FCF_GetChatWindowInfo(addonData:GetChatFrame():GetID())
-		size = (size or 13) - 1
-	end
-	return size
-end
-
-function addonData:GetIconWithLink(raw, isCurrency)
-	if type(raw) ~= "string" then
-		return ""
-	end
-	local petColor, petSpeciesID, petData, petName = raw:match("|cff(.-)|Hbattlepet:(%d-):(.-)|h%[(.-)%]|h|r")
-	if petColor then
-		local petName, petIcon = C_PetJournal_GetPetInfoBySpeciesID(petSpeciesID)
-		return format("|cff%s|Hbattlepet:%d:%s|h[|T%s:%d|t]|h|r", petColor, petSpeciesID, petData, petIcon or "Interface\\Icons\\INV_Box_PetCarrier_01", addonData:GetFontSize())
-	elseif isCurrency then
-		raw = raw:match("|h%[(.+)%]|h")
-		local currency = addonData:GetCurrencyByName(raw)
-		if type(currency) == "table" then
-			return format("|cff00AA00|Hcurrency:%d|h[|T%s:%d|t]|h|r", currency[1], currency[2], addonData:GetFontSize())
-		end
-	else
-		local color, itemString, name = raw:match("|cff(.+)|Hitem:(.+)|h%[(.+)%]|h|r")
-		if color then
-			local _, _, _, _, _, class, subClass = GetItemInfo(raw)
-			if addonData:ItemClassQuest(class) or addonData:ItemClassQuest(subClass) then
-				if addonData:ItemStartsQuest(raw) then
-					color = "FF3333"
-				else
-					color = "E6CC80"
+	local summarySort
+	do
+		local function tableIndex(t, v)
+			for i = 1, #t do
+				if t[i] == v then
+					return i
 				end
-			elseif addonData:ItemStartsQuest(raw, 1) then
-				color = "E6CC80"
 			end
-			return format("|cff%s|Hitem:%s|h[|T%s:%d|t]|h|r", color, itemString, GetItemIcon(raw), addonData:GetFontSize())
+			return math.huge
 		end
-	end
-	return raw
-end
 
-function addonData:GetItemCount(count, ...)
-	local total = GetItemCount(...)
-	if count == total then
-		return ""
-	end
-	return total > 1 and format("|cff999999(%d)|r", total) or ""
-end
-
-function addonData:PlayerName(name)
-	if GetLocale() == "ruRU" then
-		if name and name:match(" ") and not name:match("%+") then
-			name = nil
+		local function sortBy1stValue(a, b)
+			return a[1] < b[1]
 		end
-	end
-	if name then
-		if name:match("%+") then
-			local new = name:gsub("%+.+$", ""):trim()
-			return new ~= "" and new or name, 1
+
+		local function sortBy1stValueLink(a, b)
+			return (a[1]:match("%[(.+)%]") or a[1]) < (b[1]:match("%[(.+)%]") or b[1])
 		end
-	end
-	return name
-end
 
-function addonData:ClassColor(name, forceColor)
-	if not forceColor and not addonData:GetBoolOpt("SHOW_CLASS_COLORS") then
-		name = nil
-	end
-	local _, class
-	if type(name) == "string" then
-		_, class = UnitClass(name)
-	end
-	local color = class and (type(CUSTOM_RAID_CLASS_COLORS) == "table" and CUSTOM_RAID_CLASS_COLORS or RAID_CLASS_COLORS)[class]
-	return type(color) == "table" and format("%02x%02x%02x", color.r*255, color.g*255, color.b*255) or "FFFF00"
-end
-
-function addonData:CacheItemQualities()
-	if not addon.itemQualities then
-		addon.itemQualities = {}
-	else
-		table_wipe(addon.itemQualities)
-	end
-	for i = 0, 7 do
-		local r, g, b, hex = GetItemQualityColor(i)
-		hex = hex:sub(3)
-		addon.itemQualities[i] = {r, g, b, hex, _G["ITEM_QUALITY"..i.."_DESC"]}
-	end
-	addon.itemQualities[8] = {1, .2, 0, "FF3300", L.INT_LOOT_HIDE_ALL}
-end
-
-function addonData:GetQualityInfo(raw)
-	if not addon.itemQualities then
-		addonData:CacheItemQualities()
-	end
-	for i = #addon.itemQualities, 0, -1 do
-		local r, g, b, hex, name = unpack(addon.itemQualities[i])
-		if i == raw or (type(raw) == "string" and raw:match(hex)) or (type(raw) == "string" and name:find(raw, nil, 1)) or (type(raw) == "string" and raw:match(hex)) then
-			return i, r, g, b, hex, name
+		local function sortByKeyOrder(a, b)
+			return tableIndex(summaryOrder, a[1]) < tableIndex(summaryOrder, b[1])
 		end
-	end
-	return 0, unpack(addon.itemQualities[0])
-end
 
-function addonData:ItemStartsQuest(raw, questInGeneral)
-	local itemId = tonumber(raw) or tonumber(raw:match("item:(%d+)"))
-	if itemId then
-		tipScanner:SetOwner(UIParent, "ANCHOR_NONE")
-		tipScanner:SetHyperlink("item:"..itemId)
-		local tipLine = tipScanner:GetName() .. "TextLeft"
-		local line
-		for i = 1, tipScanner:NumLines() do
-			if _G[tipLine..i]:GetText():match(ITEM_STARTS_QUEST) then
-				tipScanner:Hide()
-				return 1
-			elseif questInGeneral and _G[tipLine..i]:GetText():match(ITEM_BIND_QUEST) then
-				tipScanner:Hide()
-				return 1
+		local function sortData(data, func)
+			local temp = {}
+			for k, v in pairs(data) do
+				table.insert(temp, {k, v})
 			end
+			table.sort(temp, func)
+			return temp
 		end
-		tipScanner:Hide()
-	end
-end
 
-function addonData:ItemIsUnique(link)
-	tipScanner:SetOwner(UIParent, "ANCHOR_NONE")
-	tipScanner:SetHyperlink(link)
-	local tipLine = tipScanner:GetName() .. "TextLeft"
-	local line
-	for i = 1, tipScanner:NumLines() do
-		if _G[tipLine..i]:GetText() == ITEM_UNIQUE then
-			tipScanner:Hide()
-			return 1
-		end
+		summarySort = {
+			firstValue = function(data)
+				return sortData(data, sortBy1stValue)
+			end,
+			firstValueLink = function(data)
+				return sortData(data, sortBy1stValueLink)
+			end,
+			keyOrder = function(data)
+				return sortData(data, sortByKeyOrder)
+			end
+		}
 	end
-	tipScanner:Hide()
-end
 
-function addonData:ItemClassQuest(class)
-	return class == select(10, GetAuctionItemClasses())
-end
+	local function chatOutput(report)
+		local temp = type(report) == "table" and table.concat(report, " ") or report
 
-function addonData:MoneyToCopper(raw)
-	if type(raw) ~= "string" then
-		return 0
-	end
-	raw = raw:lower()
-	local copper = 0
-	local gp = addonData:FormatMatcher(GOLD_AMOUNT, "(%%d+)"):lower()
-	local sp = addonData:FormatMatcher(SILVER_AMOUNT, "(%%d+)"):lower()
-	local cp = addonData:FormatMatcher(COPPER_AMOUNT, "(%%d+)"):lower()
-	local g, s, c = raw:match(gp), raw:match(sp), raw:match(cp)
-	g, s, c = tonumber(g), tonumber(s), tonumber(c)
-	if g then
-		copper = copper + g * 10000
-	end
-	if s then
-		copper = copper + s * 100
-	end
-	if c then
-		copper = copper + c
-	end
-	return copper
-end
-
-function addonData:CacheCurrency()
-	if not addon.currencyCache then
-		addon.currencyCache = {}
-	else
-		table_wipe(addon.currencyCache)
-	end
-	for i = 1, GetCurrencyListSize() do
-		local name, header, _, _, _, _, icon = GetCurrencyListInfo(i)
-		if name and not header and icon then
-			addon.currencyCache[name] = {tonumber((GetCurrencyListLink(i) or ""):match(":(%d+)")) or i, icon}
+		if type(temp) == "string" and temp ~= "" then
+			DEFAULT_CHAT_FRAME:AddMessage(temp, YELLOW_FONT_COLOR.r, YELLOW_FONT_COLOR.g, YELLOW_FONT_COLOR.b)
 		end
 	end
-end
 
-function addonData:CacheArchCurrency()
-	if not addon.archCurrencyCache then
-		addon.archCurrencyCache = {}
-	else
-		table_wipe(addon.archCurrencyCache)
-	end
-	for _, i in ipairs({384, 385, 393, 394, 397, 398, 399, 400, 401, 676, 677, 754}) do -- CurrencyTypes.dbc
-		local name, _, icon = GetCurrencyInfo(i)
-		if name and icon then
-			addon.archCurrencyCache[name] = {tonumber((GetCurrencyListLink(i) or ""):match(":(%d+)")) or i, icon}
-		end
-	end
-end
+	local function outputRoll(data)
+		local temp -- do we wish to return anything for later report use?
 
-function addonData:GetCurrencyByName(name)
-	if not addon.currencyCache then
-		addonData:CacheCurrency()
-	end
-	if not addon.archCurrencyCache then
-		addonData:CacheArchCurrency()
-	end
-	return addon.currencyCache[name] or addon.archCurrencyCache[name]
-end
+		if data.decision then
+			if data.pass then
+				if data.everyone then
+					-- data.history
+					-- data.item
+					chatOutput(format("%s: Everyone Passed", ns.util:toLootIcon(data.item, true)))
 
-function addonData:GetCurrencyCount(count, currencyLink)
-	currencyLink = tostring(currencyLink):match("|h%[(.+)%]|h") or currencyLink
-	local total = 0
-	if currencyLink then
-		local currencyId, _ = addonData:GetCurrencyByName(currencyLink)
-		if currencyId then
-			_, total = GetCurrencyInfo(currencyId[1])
-			if count == total then
-				return ""
+				else
+					-- data.history
+					-- data.target
+					-- data.item
+					chatOutput(format("%s: %s Passed", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
+				end
+
+			elseif data.disenchant then
+				-- data.history
+				-- data.target
+				-- data.item
+				chatOutput(format("%s: %s rolling for Disenchant", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
+
+			elseif data.greed then
+				-- data.history
+				-- data.target
+				-- data.item
+				chatOutput(format("%s: %s rolling for Greed", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
+
+			elseif data.need then
+				-- data.history
+				-- data.target
+				-- data.item
+				chatOutput(format("%s: %s rolling for Need", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
+			end
+
+		elseif data.rolled then
+			if data.disenchant then
+				-- data.number
+				-- data.item
+				-- data.target
+				-- print(format("%s: %s Disenchant rolling for %d", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.number))
+
+			elseif data.greed then
+				-- data.number
+				-- data.item
+				-- data.target
+				-- print(format("%s: %s Greed rolling for %d", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.number))
+
+			elseif data.need then
+				-- data.number
+				-- data.item
+				-- data.target
+				-- print(format("%s: %s Need rolling for %d", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.number))
+			end
+
+		elseif data.result then
+			if data.lost then
+				-- data.history
+				-- data.type
+				-- data.number
+				-- data.item
+				chatOutput(format("%s: %s %s rolled %d |cffFF4800and lost|r", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.type, data.number))
+
+			elseif data.ineligible then
+				-- data.target
+				-- data.item
+				chatOutput(format("%s: %s is ineligible", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
+
+			elseif data.disenchanted then
+				-- data.item
+				-- data.target
+				chatOutput(format("%s: Disenchanted by %s", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
+
+			elseif data.disenchant then
+				-- data.history
+				-- data.number
+				-- data.target
+				-- data.item
+				chatOutput(format("%s: %s Disenchant rolled %d", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.number))
+
+			elseif data.greed then
+				-- data.history
+				-- data.number
+				-- data.target
+				-- data.item
+				chatOutput(format("%s: %s Greed rolled %d", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.number))
+
+			elseif data.need then
+				-- data.history
+				-- data.number
+				-- data.target
+				-- data.item
+				chatOutput(format("%s: %s Need rolled %d", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.number))
+
+			elseif data.started then -- TODO: matches wrong string
+				-- data.history
+				-- data.item
+				-- print(format("%s: |HlootHistory:%d|hRolling...|h", ns.util:toLootIcon(data.item, true), data.history))
+
+			elseif data.winner then
+				-- data.target
+				-- data.item
+				chatOutput(format("%s: |cff00FF00%s won!|r", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
 			end
 		end
-	end
-	return total > 1 and format("|cff999999(%d)|r", total) or ""
-end
 
-function addonData:NewModule(name, optKey)
-	local module = CreateFrame("Frame", name, addon)
-	module.name = name
-	module.optKey = optKey
-	module:SetScript("OnEvent", function(module, event, ...)
-		if type(module[event]) == "function" then
-			module[event](module, event, ...)
-		else
-			_G.print("FATAL ERROR: MiniLoot module \"" .. module.name .. "\" triggered on \"" .. event .. "\" but has no handler. Please report this, and any other error messages that may have appeared, to the developers - thank you!") -- DEBUG: until this error is fixed, this helps users report more helpful comments!
-		end
-	end)
-	table_insert(addon.modules, module)
-	return module
-end
-
-function addonData:FormatMatcher(pattern, catcher)
-	pattern = tostring(pattern)
-	-- escape the reserved characters
-	pattern = pattern:gsub("[%+%-%*%?%[%]%(%)%.%%]", "%%%1")
-	-- escape what is left of patterns (account for extra %% from above replacement)
-	pattern = pattern:gsub("%%%%(%d?)%%%.(%d?)%S", "\1") -- %3.4f
-	pattern = pattern:gsub("%%%%(%d?)%%%.($?)%S", "\1") -- %2.f
-	pattern = pattern:gsub("%%%%%.(%d?)($?)%S", "\1") -- %.1f
-	pattern = pattern:gsub("%%%%(%d?)($?)%S", "\1") -- %s %d %5$f e.g.
-	-- escape back to matcher pattern
-	pattern = pattern:gsub("\1", catcher or "(.-)") -- TODO: issues when item contains "x" in the name and we match for "[link]x5" strings :(
-	return pattern
-end
-
-function addonData:ReplacePatternAtIndex(pattern, find, index, replacement)
-	local count = 0
-	return pattern:gsub(addonData:FormatMatcher(find), function(match)
-		count = count + 1
-		if count == index then
-			return replacement
-		end
-	end)
-end
-
-function addonData:PatternFlags(pattern, find, flags)
-	pattern, find, flags = tostring(pattern), find or "(.-)", type(flags) == "table" and flags or {}
-	local skip, replaced = 0
-	for i, flag in ipairs(flags) do
-		local replace
-		if flag == "number" then
-			replace = "(%d+)"
-		elseif flag == "float" then
-			replace = "(%d+%.%d+)"
-		elseif flag == "team" then
-			replace = "(%S+)"
-		elseif flag == "csw" then
-			replace = "%s-(%S-)"
-		end
-		if replace then
-			pattern, replaced = addonData:ReplacePatternAtIndex(pattern, find, i - skip, replace)
-			if replaced then
-				skip = skip + 1
-			end
-		end
-	end
-	return pattern
-end
-
-function addonData:InLFR(expect, fallback)
-	if GetLFGMode(LE_LFG_CATEGORY_LFR) then
-		return expect
-	end
-	if type(fallback) ~= "nil" then
-		return fallback and true or false
-	end
-	return true
-end
-
-function addonData:Abbreviate(name)
-	name = tostring(name)
-	local words = {(" "):split(name)}
-	if words[2] then
-		local temp = ""
-		for _, word in ipairs(words) do
-			temp = temp .. addonData:UpperCaseFirst(addonData:GetNumLetters(word, 3))
-		end
-		if (select(2, string_gsub(temp, "[^\128-\193]", "")) or temp:len()) > 12 then
-			temp = ""
-			for _, word in ipairs(words) do
-				temp = temp .. addonData:UpperCaseFirst(addonData:GetNumLetters(word, 2))
-			end
-		end
 		return temp
-	else
-		name = addonData:GetNumLetters(name, 10) -- Tonyleila will hate me for this, but it must be shorter than 10 characters!
 	end
-	return name
+
+	-- parse the various events
+	function ns.core:PARSE_CHAT(event, text)
+		local data, silenced = ns.util:parse(text, event)
+		local temp
+
+		-- should we buypass the filter and do nothing?
+		if not data and silenced then
+			return false
+		end
+
+		-- should we filter and ignore the message?
+		if data and data.ignore then
+			return true
+		end
+
+		-- prepare the data
+		if data then
+			temp = {}
+
+			if data.reputation then
+				temp.key = "reputation"
+
+				if data.value then
+					if data.loss then
+						temp.value = { data.value * -1, data.faction }
+					else
+						temp.value = { data.value, data.faction }
+					end
+				end
+
+			elseif data.honor then
+				temp.key = "honor"
+
+				if data.value then
+					temp.value = { data.value, data.target }
+				end
+
+			elseif data.experience then
+				temp.key = "experience"
+
+				if data.value then
+					if data.guild then
+						temp.key = "guildexperience"
+						temp.value = { data.value }
+					elseif data.loss then
+						temp.value = { data.value * -1 }
+					else
+						temp.value = { data.value }
+					end
+				end
+
+			elseif data.currency then
+				temp.key = "currency"
+
+				if data.item then
+					temp.value = { data.item, data.count or 1 }
+				end
+
+			elseif data.money then
+				temp.key = "money"
+
+				if data.value then
+					if data.guild then
+						temp.key = "guildmoney"
+						temp.value = { data.value }
+					else
+						temp.value = { data.value, data.target }
+					end
+				end
+
+			elseif data.loot then
+				temp.key = "loot"
+
+				if data.roll then
+					temp.key = "roll"
+					temp.value = outputRoll(data)
+
+					-- DEBUG
+					-- local rolldebug = ns.config:read("rolldebug", {}, true)
+					-- table.insert(rolldebug, { event = event, text = text, data = data })
+
+				else
+					temp.value = { data.item, data.count or 1, data.target }
+				end
+
+			elseif data.artifact then
+				temp.key = "artifact"
+
+				if data.item then
+					temp.value = { data.item, data.power }
+				end
+			end
+		end
+
+		-- store in the report table
+		if temp and temp.key and temp.value then
+			summary.count = summary.count + 1
+			table.insert(summary[temp.key], temp.value)
+			interval:Check()
+			return true
+
+		elseif event ~= "CHAT_MSG_SYSTEM" and (not temp or temp.key ~= "roll") then -- DEBUG: AVOID FLOOD!
+			print("PARSE_CHAT", event, text, data, "") -- DEBUG
+		end
+
+		return false
+	end
+
+	-- need this to read how much money we received from a quest (not experience, otherwise we get duplicate values parsed from the PARSE_CHAT handler)
+	function ns.core:QUEST_COMPLETE(event, questID, experience, money)
+		if experience and experience > 0 then
+			-- ns.core.PARSE_CHAT(self, "CHAT_MSG_COMBAT_XP_GAIN", format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED, experience))
+		end
+		if money and money > 0 then
+			ns.core.PARSE_CHAT(self, "CHAT_MSG_MONEY", format(YOU_LOOT_MONEY, GetCoinText(money)))
+		end
+	end
+
+	-- report intervals
+	do
+		local UPDATE_INTERVAL = 5 -- DEBUG
+		local elapsed = 0
+		interval = CreateFrame("Frame")
+
+		-- TODO
+		function interval:Tick()
+			local playerName = UnitName("player") or YOU or "You"
+			local guildName = GetGuildInfo("player") or GUILD or "Guild"
+			local playerKey, hasPlayerName, hasOtherPlayerNames = "_"
+			local playerNameSeparator = ":"
+			local prefixWithPlayerNames = ns.config.bool:read("ITEM_SELF_PREFIX")
+
+			local report = { sorted = {}, grouped = {} }
+
+			local tempReport = {}
+			local tempLine
+
+			for i = 1, #summaryOrder do
+				local key = summaryOrder[i]
+				local entries = summary[key]
+
+				for j = 1, #entries do
+					local entry = entries[j]
+
+					if key == "reputation" then
+
+						local rawFaction = entry[2]
+						tempReport[key] = tempReport[key] or {}
+						tempReport[key][rawFaction] = tempReport[key][rawFaction] or 0
+						tempReport[key][rawFaction] = tempReport[key][rawFaction] + entry[1]
+
+					elseif key == "honor" then
+
+						local rawTarget = entry[2] or playerKey
+						tempReport[key] = tempReport[key] or {}
+						tempReport[key][rawTarget] = tempReport[key][rawTarget] or 0
+						tempReport[key][rawTarget] = tempReport[key][rawTarget] + entry[1]
+
+					elseif key == "experience" then
+
+						tempReport[key] = tempReport[key] or 0
+						tempReport[key] = tempReport[key] + entry[1]
+
+					elseif key == "guildexperience" then
+
+						tempReport[key] = tempReport[key] or 0
+						tempReport[key] = tempReport[key] + entry[1]
+
+					elseif key == "currency" then
+
+						local rawItem = entry[1]
+						tempReport[key] = tempReport[key] or {}
+						tempReport[key][rawItem] = tempReport[key][rawItem] or 0
+						tempReport[key][rawItem] = tempReport[key][rawItem] + entry[2]
+
+					elseif key == "money" then
+
+						local rawTarget = entry[2] or playerKey
+						tempReport[key] = tempReport[key] or {}
+						tempReport[key][rawTarget] = tempReport[key][rawTarget] or 0
+						tempReport[key][rawTarget] = tempReport[key][rawTarget] + entry[1]
+
+					elseif key == "guildmoney" then
+
+						tempReport[key] = tempReport[key] or {}
+						tempReport[key][guildName] = tempReport[key][guildName] or 0
+						tempReport[key][guildName] = tempReport[key][guildName] + entry[1]
+
+					elseif key == "loot" then
+
+						local rawItem = entry[1]
+						local rawTarget = entry[3] or playerKey
+						tempReport[key] = tempReport[key] or {}
+						tempReport[key][rawTarget] = tempReport[key][rawTarget] or {}
+						tempReport[key][rawTarget][rawItem] = tempReport[key][rawTarget][rawItem] or 0
+						tempReport[key][rawTarget][rawItem] = tempReport[key][rawTarget][rawItem] + entry[2]
+
+					elseif key == "roll" then
+
+						-- TODO: OBSCOLETE?
+
+					elseif key == "artifact" then
+
+						local rawItem = entry[1]
+						tempReport[key] = tempReport[key] or {}
+						tempReport[key][rawItem] = tempReport[key][rawItem] or 0
+						tempReport[key][rawItem] = tempReport[key][rawItem] + entry[2]
+
+					end
+
+				end
+
+				table.wipe(entries)
+			end
+
+			for i = 1, #summaryOrder do
+				local key = summaryOrder[i]
+				local tempData = tempReport[key]
+
+				if tempData then
+					if key == "reputation" then
+						hasPlayerName = true -- this can only be the player
+						local sorted = summarySort.firstValue(tempData)
+						for j = 1, #sorted do
+							local faction, value = sorted[j][1], sorted[j][2]
+							tempLine = ns.util:toFaction(faction) .. ns.util:toNumber(value, true)
+							table.insert(report.sorted, tempLine)
+						end
+
+					elseif key == "honor" then
+						hasPlayerName = true -- this can only be the player
+						local sorted = summarySort.firstValue(tempData)
+						for j = 1, #sorted do
+							local target, value = sorted[j][1], sorted[j][2]
+							-- local isPlayer = target == playerKey
+							-- target = isPlayer and "" or ns.util:toTarget(target)
+							tempLine = HONOR .. ns.util:toNumber(value, true) -- TODO: target names?
+							table.insert(report.sorted, tempLine)
+						end
+
+					elseif key == "experience" then
+						hasPlayerName = true -- this can only be the player
+						tempLine = XP .. ns.util:toNumber(tempData, true)
+						table.insert(report.sorted, tempLine)
+
+					elseif key == "guildexperience" then
+						hasPlayerName = true -- this can only be the player
+						tempLine = GUILD .. XP .. ns.util:toNumber(tempData, true)
+						table.insert(report.sorted, tempLine)
+
+					elseif key == "currency" then
+						hasPlayerName = true -- this can only be the player
+						local sorted = summarySort.firstValueLink(tempData)
+						for j = 1, #sorted do
+							local item, count = sorted[j][1], sorted[j][2]
+							tempLine = ns.util:toLootIcon(item, true) .. ns.util:toItemCount(count)
+							table.insert(report.sorted, tempLine)
+						end
+
+					elseif key == "money" then
+						local sorted = summarySort.firstValue(tempData)
+						for j = 1, #sorted do
+							local target, copper = sorted[j][1], sorted[j][2]
+							local isPlayer = target == playerKey
+							target = isPlayer and "" or ns.util:toTarget(target)
+							tempLine = ns.util:toMoney(copper)
+							if isPlayer then
+								hasPlayerName = true
+								table.insert(report.sorted, tempLine)
+							else
+								hasOtherPlayerNames = true
+								table.insert(report.grouped, { target, key, tempLine })
+							end
+						end
+
+					elseif key == "guildmoney" then
+						hasPlayerName = true -- this can only be the player
+						local sorted = summarySort.firstValue(tempData)
+						for j = 1, #sorted do
+							local guild, copper = sorted[j][1], sorted[j][2]
+							tempLine = guild .. " " .. ns.util:toMoney(copper)
+							table.insert(report.sorted, tempLine)
+						end
+
+					elseif key == "loot" then
+						local sorted = summarySort.firstValue(tempData)
+						for j = 1, #sorted do
+							local target, items = sorted[j][1], sorted[j][2]
+							local isPlayer = target == playerKey
+							target = isPlayer and "" or ns.util:toTarget(target)
+							local playerTemp = {}
+							local subSorted = summarySort.firstValueLink(items)
+
+							-- scan the items looted by the player
+							for k = 1, #subSorted do
+								local item, count = subSorted[k][1], subSorted[k][2]
+
+								-- stage one: if we don't wish to show junk items, drop parsing any further
+								if not ns.config.bool:read("ITEM_HIDE_JUNK") or not ns.util:isItemJunk(item) then
+
+									-- is this a quest related item?
+									local questItem = ns.util:isItemQuest(item) or ns.util:isItemQuestStarting(item)
+
+									-- does it have an uncollected appearance?
+									local uncollectedItem = ns.config.bool:read("ITEM_ALERT_TRANSMOG") and (isPlayer or ns.config.bool:read("ITEM_ALERT_TRANSMOG_EVERYTHING")) and ns.util:isItemAppearanceUncollected(item)
+
+									-- pick what quality threshold we should use for this item
+									local withinQualityThreshold = true
+
+									-- only if the previous checks fail
+									if not questItem and not uncollectedItem then
+										local quality = 0 -- Poor
+
+										if IsInRaid() then
+											quality = ns.config:read("ITEM_QUALITY_RAID", quality)
+										elseif IsInGroup() then
+											quality = ns.config:read("ITEM_QUALITY_GROUP", quality)
+										else
+											quality = ns.config:read("ITEM_QUALITY_PLAYER", quality)
+										end
+
+										withinQualityThreshold = ns.util:isItemQuality(item, quality, "ge", true)
+									end
+
+									-- stage two: is this item quality meeting our minimum criteria?
+									if questItem or uncollectedItem or withinQualityThreshold then
+
+										-- prepare the item link
+										local tempItem
+
+										if uncollectedItem then
+											-- pink brackets and curly brackets to highlight the importance
+											tempItem = "|cffFF80FF{|r" .. ns.util:toLootIcon(item, true, false, "ffFF80FF") .. "|cffFF80FF}|r" .. ns.util:toItemCount(count)
+
+										elseif questItem then
+											-- red brackets
+											tempItem = ns.util:toLootIcon(item, true, false, "ffFF0000") .. ns.util:toItemCount(count)
+
+										else
+											-- default coloring
+											tempItem = ns.util:toLootIcon(item, true) .. ns.util:toItemCount(count)
+										end
+
+										-- add the item count if the user wishes to see that
+										if isPlayer and ns.config.bool:read("ITEM_COUNT_BAGS") then
+											local tempCount = ns.util:getNumItems(item, ns.config.bool:read("ITEM_COUNT_BAGS_INCLUDE_BANK"), ns.config.bool:read("ITEM_COUNT_BAGS_INCLUDE_CHARGES"))
+											if tempCount > 1 then
+												tempItem = tempItem .. "|cff999999(" .. tempCount .. ")|r"
+											end
+										end
+
+										-- insert into the item table for this player
+										table.insert(playerTemp, tempItem)
+									end
+
+								end
+							end
+
+							-- if we have data, concat and push into the report
+							if playerTemp[1] then
+								tempLine = table.concat(playerTemp, " ")
+								if isPlayer then
+									hasPlayerName = true
+									table.insert(report.sorted, tempLine)
+								else
+									hasOtherPlayerNames = true
+									table.insert(report.grouped, { target, key, tempLine })
+								end
+							end
+						end
+
+					elseif key == "artifact" then
+						hasPlayerName = true -- this can only be the player
+						local sorted = summarySort.firstValueLink(tempData)
+						for j = 1, #sorted do
+							local item, power = sorted[j][1], sorted[j][2]
+							local currentXP, maxXP, numPoints = ns.util:getArtifactInfo()
+							tempLine = ns.util:toLootIcon(item, true) .. ns.util:toNumber(power, true)
+							if numPoints and numPoints > 0 then
+								tempLine = tempLine .. "|cff999999(" .. numPoints .. ")|r"
+							end
+							table.insert(report.sorted, tempLine)
+						end
+					end
+				end
+			end
+
+			local lines = {}
+
+			-- hides our own name if we are soloing content and there is no one else that can receive things
+			if hasPlayerName and not hasOtherPlayerNames and GetNumGroupMembers() <= (IsInRaid() and 1 or 0) and ns.config.bool:read("ITEM_SELF_TRIM_SOLO") then
+				hasPlayerName = nil
+			end
+
+			-- prepend our name in front of our own messages
+			if hasPlayerName and prefixWithPlayerNames then
+				local addPlayerName = ns.config.bool:read("ITEM_SELF_PREFIX_NAME") and playerName
+
+				if not addPlayerName or addPlayerName == "" then
+					addPlayerName = YOU
+				end
+
+				table.insert(lines, addPlayerName .. playerNameSeparator)
+			end
+
+			for i = 1, #report.sorted do
+				table.insert(lines, report.sorted[i])
+			end
+
+			do
+				local temp = {}
+
+				for i = 1, #report.grouped do
+					local entry = report.grouped[i]
+					local name, key, line = entry[1], entry[2], entry[3]
+
+					temp[name] = temp[name] or {}
+					temp[name][key] = temp[name][key] or {}
+					table.insert(temp[name][key], line)
+				end
+
+				local sorted = summarySort.firstValue(temp)
+
+				for i = 1, #sorted do
+					local name, entries = sorted[i][1], sorted[i][2]
+					tempLine = { name }
+
+					-- prepend the other players loot with their own name
+					if prefixWithPlayerNames then
+						tempLine[1] = tempLine[1] .. playerNameSeparator
+					end
+
+					entries = summarySort.keyOrder(entries)
+					for j = 1, #entries do
+						local subEntries = entries[j][2]
+
+						for k = 1, #subEntries do
+							table.insert(tempLine, subEntries[k])
+						end
+					end
+
+					if tempLine[2] then
+						table.insert(lines, table.concat(tempLine, " "))
+					end
+				end
+			end
+			-- if not DevTools_Dump then LoadAddOn("Blizzard_DebugTools") end if DevTools_Dump then DevTools_Dump({lines}) end -- DEBUG
+
+			summary.count = 0
+			interval:Check()
+
+			chatOutput(lines)
+			table.wipe(lines)
+		end
+
+		function interval:OnUpdate(e)
+			elapsed = elapsed + e
+
+			if elapsed > UPDATE_INTERVAL and not InCombatLockdown() then
+				elapsed = 0
+
+				interval:Tick()
+			end
+		end
+
+		function interval:Check()
+			if summary.count > 0 then
+				interval:SetScript("OnUpdate", interval.OnUpdate)
+				interval:Show()
+			else
+				interval:Hide()
+				elapsed = 0
+			end
+		end
+	end
 end
 
-function addonData:GetNumLetters(raw, numLetters)
-	numLetters = tonumber(numLetters) or 1
-	local matchLetter = "([%z\1-\127\194-\244][\128-\191]*)"
-	local matcher = ""
-	for i = 1, (numLetters < 1 and 1 or numLetters) do
-		matcher = matcher .. matchLetter
+-- enable and disable the addon
+do
+	function ns.core:on()
+		-- register events
+		ns.events:on("QUEST_TURNED_IN", ns.core.QUEST_COMPLETE)
+
+		-- register filters
+		ns.events.filters:on("CHAT_MSG_COMBAT_XP_GAIN", ns.core.PARSE_CHAT)
+		ns.events.filters:on("CHAT_MSG_COMBAT_GUILD_XP_GAIN", ns.core.PARSE_CHAT)
+		ns.events.filters:on("CHAT_MSG_COMBAT_FACTION_CHANGE", ns.core.PARSE_CHAT)
+		ns.events.filters:on("CHAT_MSG_COMBAT_HONOR_GAIN", ns.core.PARSE_CHAT)
+		ns.events.filters:on("CHAT_MSG_MONEY", ns.core.PARSE_CHAT)
+		ns.events.filters:on("CHAT_MSG_CURRENCY", ns.core.PARSE_CHAT)
+		ns.events.filters:on("CHAT_MSG_LOOT", ns.core.PARSE_CHAT)
+		ns.events.filters:on("CHAT_MSG_SYSTEM", ns.core.PARSE_CHAT)
 	end
-	local matched = table_concat({raw:match(matcher)})
-	if matched ~= "" then
-		return matched
-	elseif numLetters > 1 then
-		return addonData:GetNumLetters(raw, numLetters - 1)
+
+	function ns.core:off()
+		-- unregister events
+		ns.events:off("QUEST_TURNED_IN", ns.core.QUEST_COMPLETE)
+
+		-- unregister filters
+		ns.events.filters:off("CHAT_MSG_COMBAT_XP_GAIN", ns.core.PARSE_CHAT)
+		ns.events.filters:off("CHAT_MSG_COMBAT_GUILD_XP_GAIN", ns.core.PARSE_CHAT)
+		ns.events.filters:off("CHAT_MSG_COMBAT_FACTION_CHANGE", ns.core.PARSE_CHAT)
+		ns.events.filters:off("CHAT_MSG_COMBAT_HONOR_GAIN", ns.core.PARSE_CHAT)
+		ns.events.filters:off("CHAT_MSG_MONEY", ns.core.PARSE_CHAT)
+		ns.events.filters:off("CHAT_MSG_CURRENCY", ns.core.PARSE_CHAT)
+		ns.events.filters:off("CHAT_MSG_LOOT", ns.core.PARSE_CHAT)
+		ns.events.filters:off("CHAT_MSG_SYSTEM", ns.core.PARSE_CHAT)
 	end
-	return ""
 end
 
-function addonData:UpperCaseFirst(raw)
-	return tostring(raw):gsub("([%z\1-\127\194-\244][\128-\191]*)(.+)", function(a, b) return a:upper() .. b:lower() end)
+-- addon load event
+local function ADDON_LOADED(self, event, name)
+	if addonName == name then
+		-- assign default metatable to the saved variables (now that it is loaded)
+		ns.config:metatableDefaults()
+
+		-- create the options interface
+		ns.options:create()
+
+		-- enable the addon
+		ns.core:on()
+
+		-- check if the parser is functioning with the current patterns and locale
+		local tests = ns.util:parseTests()
+		if tests.failed > 0 then
+			print(format("%s: %d/%d parsing tests succeeded. %d failed. The addon needs an update to fix this issue.", addonName, tests.success, tests.total, tests.failed))
+		end
+	end
 end
+
+-- load the addon and modules
+ns.events:on("ADDON_LOADED", ADDON_LOADED)
+
+--[[
+_G.T = function(...) return ns.core:PARSE_CHAT(...) end -- DEBUG
+_G.X = function(s, e)
+	for i = s, e do
+		local t = _G.Y[i]
+		local r = T("CHAT_MSG_LOOT", t)
+		if r then
+			if not DevTools_Dump then LoadAddOn("Blizzard_DebugTools") end if DevTools_Dump then DevTools_Dump({i,r}) end -- DEBUG
+		end
+	end
+end
+--/run X(1,50)
+--/run X(51,100)
+_G.Y = {
+"|HlootHistory:1|h[Loot]|h: |cff0070dd|Hitem:17717:0:0:0:0:0:0:0:34:264:0:1:0|h[Megashot Rifle]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff0070dd|Hitem:18397:0:0:0:0:0:0:0:46:66:0:1:0|h[Elder Magus Pendant]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff0070dd|Hitem:9243:0:0:0:0:0:0:0:48:268:0:1:0|h[Shriveled Troll Heart]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:106465:0:0:0:0:0:0:0:92:253:0:0:1:25|h[Tailthrasher Bindings of the Fireflash]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:116526:0:0:0:0:0:0:0:96:253:0:0:1:126|h[Incised Broadaxe of the Feverflare]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:1210:0:0:0:0:0:0:0:15:104:0:0:0|h[Shadowgem]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:1465:0:0:0:0:0:0:0:45:66:0:1:0|h[Tigerbane]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:14777:0:0:0:0:0:0:0:44:270:0:1:0|h[Ravager's Shield]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:15262:0:0:0:0:0:-10:656290688:52:268:0:1:0|h[Greater Maul of the Gorilla]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:24718:0:0:0:0:0:-12:2100297750:60:64:0:1:0|h[Dreghood Boots of the Boar]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:6393:0:0:0:0:0:0:0:28:104:0:1:0|h[Silver-Thread Gloves]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:6541:0:0:0:0:0:-11:299822592:13:104:0:0:0|h[Willow Gloves of the Falcon]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:7544:0:0:0:0:0:-11:1915985536:45:268:0:1:0|h[Champion's Cape of the Falcon]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:774:0:0:0:0:0:0:0:10:268:0:0:0|h[Malachite]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:774:0:0:0:0:0:0:0:5:0:0:0:0|h[Malachite]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:12:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:9747:0:0:0:0:0:-9:1402281216:15:73:0:1:0|h[Simple Britches of the Owl]|h|r",
+"|HlootHistory:1|h[Loot]|h: |cff1eff00|Hitem:9884:0:0:0:0:0:-19:689975296:48:263:0:1:0|h[Sorcerer Robe of Intellect]|h|r",
+"|HlootHistory:1|h[Loot]|h: Alehara (Greed - 60) Won: |cff1eff00|Hitem:774:0:0:0:0:0:0:0:5:0:0:0:0|h[Malachite]|h|r",
+"|HlootHistory:1|h[Loot]|h: Aurôra-Dunemaul (Need - 7) Won: |cff1eff00|Hitem:6393:0:0:0:0:0:0:0:28:104:0:1:0|h[Silver-Thread Gloves]|h|r",
+"|HlootHistory:1|h[Loot]|h: Bowjack-ChamberofAspects (Greed - 99) Won: |cff1eff00|Hitem:9747:0:0:0:0:0:-9:1402281216:15:73:0:1:0|h[Simple Britches of the Owl]|h|r",
+"|HlootHistory:1|h[Loot]|h: Gronnth (Greed - 57) Won: |cff1eff00|Hitem:116526:0:0:0:0:0:0:0:96:253:0:0:1:126|h[Incised Broadaxe of the Feverflare]|h|r",
+"|HlootHistory:1|h[Loot]|h: Kaneky-Magtheridon (Greed - 27) Won: |cff1eff00|Hitem:24718:0:0:0:0:0:-12:2100297750:60:64:0:1:0|h[Dreghood Boots of the Boar]|h|r",
+"|HlootHistory:1|h[Loot]|h: Lerona (Greed - 91) Won: |cff1eff00|Hitem:15262:0:0:0:0:0:-10:656290688:52:268:0:1:0|h[Greater Maul of the Gorilla]|h|r",
+"|HlootHistory:1|h[Loot]|h: Lethalundead-Outland (Greed - 95) Won: |cff1eff00|Hitem:9884:0:0:0:0:0:-19:689975296:48:263:0:1:0|h[Sorcerer Robe of Intellect]|h|r",
+"|HlootHistory:1|h[Loot]|h: Mangoworm (Greed - 5) Won: |cff1eff00|Hitem:6541:0:0:0:0:0:-11:299822592:13:104:0:0:0|h[Willow Gloves of the Falcon]|h|r",
+"|HlootHistory:1|h[Loot]|h: Receeda (Greed - 82) Won: |cff1eff00|Hitem:106465:0:0:0:0:0:0:0:92:253:0:0:1:25|h[Tailthrasher Bindings of the Fireflash]|h|r",
+"|HlootHistory:1|h[Loot]|h: Roxgor-Hellscream (Greed - 63) Won: |cff1eff00|Hitem:14777:0:0:0:0:0:0:0:44:270:0:1:0|h[Ravager's Shield]|h|r",
+"|HlootHistory:1|h[Loot]|h: Selskab-Moonglade (Greed - 83) Won: |cff0070dd|Hitem:17717:0:0:0:0:0:0:0:34:264:0:1:0|h[Megashot Rifle]|h|r",
+"|HlootHistory:1|h[Loot]|h: Uglyaf-DefiasBrotherhood (Greed - 62) Won: |cff0070dd|Hitem:18397:0:0:0:0:0:0:0:46:66:0:1:0|h[Elder Magus Pendant]|h|r",
+"|HlootHistory:1|h[Loot]|h: Valhallir-Spinebreaker (Greed - 54) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:50:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:1|h[Loot]|h: Wydad-Draenor (Greed - 100) Won: |cff1eff00|Hitem:1210:0:0:0:0:0:0:0:15:104:0:0:0|h[Shadowgem]|h|r",
+"|HlootHistory:1|h[Loot]|h: You (Greed - 61) Won: |cff1eff00|Hitem:774:0:0:0:0:0:0:0:10:268:0:0:0|h[Malachite]|h|r",
+"|HlootHistory:1|h[Loot]|h: You (Greed - 65) Won: |cff1eff00|Hitem:7544:0:0:0:0:0:-11:1915985536:45:268:0:1:0|h[Champion's Cape of the Falcon]|h|r",
+"|HlootHistory:1|h[Loot]|h: You (Greed - 71) Won: |cff0070dd|Hitem:9243:0:0:0:0:0:0:0:48:268:0:1:0|h[Shriveled Troll Heart]|h|r",
+"|HlootHistory:1|h[Loot]|h: You (Greed - 89) Won: |cff1eff00|Hitem:1465:0:0:0:0:0:0:0:45:66:0:1:0|h[Tigerbane]|h|r",
+"|HlootHistory:1|h[Loot]|h: You (Greed - 91) Won: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:12:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have rolled Greed - 14 for: |cff1eff00|Hitem:24718:0:0:0:0:0:-12:2100297750:60:64:0:1:0|h[Dreghood Boots of the Boar]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have rolled Greed - 20 for: |cff0070dd|Hitem:18397:0:0:0:0:0:0:0:46:66:0:1:0|h[Elder Magus Pendant]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have rolled Greed - 20 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:50:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have rolled Greed - 24 for: |cff1eff00|Hitem:106465:0:0:0:0:0:0:0:92:253:0:0:1:25|h[Tailthrasher Bindings of the Fireflash]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have rolled Greed - 30 for: |cff1eff00|Hitem:9747:0:0:0:0:0:-9:1402281216:15:73:0:1:0|h[Simple Britches of the Owl]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have rolled Greed - 4 for: |cff1eff00|Hitem:14777:0:0:0:0:0:0:0:44:270:0:1:0|h[Ravager's Shield]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have rolled Greed - 40 for: |cff1eff00|Hitem:116526:0:0:0:0:0:0:0:96:253:0:0:1:126|h[Incised Broadaxe of the Feverflare]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have rolled Greed - 75 for: |cff0070dd|Hitem:17717:0:0:0:0:0:0:0:34:264:0:1:0|h[Megashot Rifle]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have rolled Greed - 95 for: |cff1eff00|Hitem:9884:0:0:0:0:0:-19:689975296:48:263:0:1:0|h[Sorcerer Robe of Intellect]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:17717:0:0:0:0:0:0:0:34:264:0:1:0|h[Megashot Rifle]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18397:0:0:0:0:0:0:0:46:66:0:1:0|h[Elder Magus Pendant]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:9243:0:0:0:0:0:0:0:48:268:0:1:0|h[Shriveled Troll Heart]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:106465:0:0:0:0:0:0:0:92:253:0:0:1:25|h[Tailthrasher Bindings of the Fireflash]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:116526:0:0:0:0:0:0:0:96:253:0:0:1:126|h[Incised Broadaxe of the Feverflare]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:50:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:1465:0:0:0:0:0:0:0:45:66:0:1:0|h[Tigerbane]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14777:0:0:0:0:0:0:0:44:270:0:1:0|h[Ravager's Shield]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24718:0:0:0:0:0:-12:2100297750:60:64:0:1:0|h[Dreghood Boots of the Boar]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7544:0:0:0:0:0:-11:1915985536:45:268:0:1:0|h[Champion's Cape of the Falcon]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:774:0:0:0:0:0:0:0:10:268:0:0:0|h[Malachite]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:12:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9747:0:0:0:0:0:-9:1402281216:15:73:0:1:0|h[Simple Britches of the Owl]|h|r",
+"|HlootHistory:1|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9884:0:0:0:0:0:-19:689975296:48:263:0:1:0|h[Sorcerer Robe of Intellect]|h|r",
+"|HlootHistory:1|h[Loot]|h: You passed on: |cff1eff00|Hitem:1210:0:0:0:0:0:0:0:15:104:0:0:0|h[Shadowgem]|h|r",
+"|HlootHistory:1|h[Loot]|h: You passed on: |cff1eff00|Hitem:15262:0:0:0:0:0:-10:656290688:52:268:0:1:0|h[Greater Maul of the Gorilla]|h|r",
+"|HlootHistory:1|h[Loot]|h: You passed on: |cff1eff00|Hitem:6393:0:0:0:0:0:0:0:28:104:0:1:0|h[Silver-Thread Gloves]|h|r",
+"|HlootHistory:1|h[Loot]|h: You passed on: |cff1eff00|Hitem:6541:0:0:0:0:0:-11:299822592:13:104:0:0:0|h[Willow Gloves of the Falcon]|h|r",
+"|HlootHistory:1|h[Loot]|h: You passed on: |cff1eff00|Hitem:774:0:0:0:0:0:0:0:5:0:0:0:0|h[Malachite]|h|r",
+"|HlootHistory:10|h[Loot]|h: |cff0070dd|Hitem:10412:0:0:0:0:0:0:0:17:104:0:1:0|h[Belt of the Fang]|h|r",
+"|HlootHistory:10|h[Loot]|h: |cff0070dd|Hitem:13528:0:0:0:0:0:0:0:53:268:0:1:0|h[Twilight Void Bracers]|h|r",
+"|HlootHistory:10|h[Loot]|h: |cff0070dd|Hitem:17736:0:0:0:0:0:0:0:36:264:0:1:0|h[Rockgrip Gauntlets]|h|r",
+"|HlootHistory:10|h[Loot]|h: |cff0070dd|Hitem:18319:0:0:0:0:0:0:0:46:66:0:1:0|h[Fervent Helm]|h|r",
+"|HlootHistory:10|h[Loot]|h: |cff0070dd|Hitem:18389:0:0:0:0:0:0:0:47:66:0:1:0|h[Cloak of the Cosmos]|h|r",
+"|HlootHistory:10|h[Loot]|h: |cff0070dd|Hitem:1930:0:0:0:0:0:0:0:16:268:0:1:0|h[Stonemason Cloak]|h|r",
+"|HlootHistory:10|h[Loot]|h: |cff0070dd|Hitem:88356:0:0:0:0:0:0:0:46:268:0:1:0|h[Tombstone Gauntlets]|h|r",
+"|HlootHistory:10|h[Loot]|h: |cff0070dd|Hitem:9453:0:0:0:0:0:0:0:29:104:0:1:0|h[Toxic Revenger]|h|r",
+"|HlootHistory:10|h[Loot]|h: |cff0070dd|Hitem:9476:0:0:0:0:0:0:0:49:268:0:1:0|h[Big Bad Pauldrons]|h|r",
+"|HlootHistory:10|h[Loot]|h: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:48:263:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:10|h[Loot]|h: |cff1eff00|Hitem:24821:0:0:0:0:0:-12:250740752:61:64:0:1:0|h[Felstone Bindings of the Boar]|h|r",
+"|HlootHistory:10|h[Loot]|h: |cff1eff00|Hitem:7288:0:0:0:0:0:0:0:16:73:0:1:0|h[Pattern: Rugged Leather Pants]|h|r",
+"|HlootHistory:10|h[Loot]|h: Celebornn-AeriePeak (Need - 74) Won: |cff0070dd|Hitem:17736:0:0:0:0:0:0:0:36:264:0:1:0|h[Rockgrip Gauntlets]|h|r",
+"|HlootHistory:10|h[Loot]|h: Celvariel-Auchindoun (Greed - 63) Won: |cff0070dd|Hitem:9476:0:0:0:0:0:0:0:49:268:0:1:0|h[Big Bad Pauldrons]|h|r",
+"|HlootHistory:10|h[Loot]|h: Eternalwitch-Draenor (Greed - 93) Won: |cff0070dd|Hitem:13528:0:0:0:0:0:0:0:53:268:0:1:0|h[Twilight Void Bracers]|h|r",
+"|HlootHistory:10|h[Loot]|h: Fennec (Need - 58) Won: |cff0070dd|Hitem:18319:0:0:0:0:0:0:0:46:66:0:1:0|h[Fervent Helm]|h|r",
+"|HlootHistory:10|h[Loot]|h: Jorelemental-Ragnaros (Need - 100) Won: |cff0070dd|Hitem:10412:0:0:0:0:0:0:0:17:104:0:1:0|h[Belt of the Fang]|h|r",
+"|HlootHistory:10|h[Loot]|h: Lethalundead-Outland (Greed - 99) Won: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:48:263:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:10|h[Loot]|h: Mangoworm (Greed - 80) Won: |cff0070dd|Hitem:9453:0:0:0:0:0:0:0:29:104:0:1:0|h[Toxic Revenger]|h|r",
+"|HlootHistory:10|h[Loot]|h: Valhallir-Spinebreaker (Greed - 99) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:10|h[Loot]|h: You (Greed - 65) Won: |cff1eff00|Hitem:7288:0:0:0:0:0:0:0:16:73:0:1:0|h[Pattern: Rugged Leather Pants]|h|r",
+"|HlootHistory:10|h[Loot]|h: You (Greed - 85) Won: |cff0070dd|Hitem:1930:0:0:0:0:0:0:0:16:268:0:1:0|h[Stonemason Cloak]|h|r",
+"|HlootHistory:10|h[Loot]|h: You (Greed - 94) Won: |cff0070dd|Hitem:18389:0:0:0:0:0:0:0:47:66:0:1:0|h[Cloak of the Cosmos]|h|r",
+"|HlootHistory:10|h[Loot]|h: You (Greed - 96) Won: |cff1eff00|Hitem:24821:0:0:0:0:0:-12:250740752:61:64:0:1:0|h[Felstone Bindings of the Boar]|h|r",
+"|HlootHistory:10|h[Loot]|h: You (Need - 59) Won: |cff0070dd|Hitem:88356:0:0:0:0:0:0:0:46:268:0:1:0|h[Tombstone Gauntlets]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have rolled Greed - 39 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have rolled Greed - 40 for: |cff0070dd|Hitem:13528:0:0:0:0:0:0:0:53:268:0:1:0|h[Twilight Void Bracers]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have rolled Greed - 61 for: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:48:263:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have rolled Need - 7 for: |cff0070dd|Hitem:10412:0:0:0:0:0:0:0:17:104:0:1:0|h[Belt of the Fang]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13528:0:0:0:0:0:0:0:53:268:0:1:0|h[Twilight Void Bracers]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:17736:0:0:0:0:0:0:0:36:264:0:1:0|h[Rockgrip Gauntlets]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18319:0:0:0:0:0:0:0:46:66:0:1:0|h[Fervent Helm]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18389:0:0:0:0:0:0:0:47:66:0:1:0|h[Cloak of the Cosmos]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:1930:0:0:0:0:0:0:0:16:268:0:1:0|h[Stonemason Cloak]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:48:263:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24821:0:0:0:0:0:-12:250740752:61:64:0:1:0|h[Felstone Bindings of the Boar]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7288:0:0:0:0:0:0:0:16:73:0:1:0|h[Pattern: Rugged Leather Pants]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:10412:0:0:0:0:0:0:0:17:104:0:1:0|h[Belt of the Fang]|h|r",
+"|HlootHistory:10|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:88356:0:0:0:0:0:0:0:46:268:0:1:0|h[Tombstone Gauntlets]|h|r",
+"|HlootHistory:10|h[Loot]|h: You passed on: |cff0070dd|Hitem:9453:0:0:0:0:0:0:0:29:104:0:1:0|h[Toxic Revenger]|h|r",
+"|HlootHistory:10|h[Loot]|h: You passed on: |cff0070dd|Hitem:9476:0:0:0:0:0:0:0:49:268:0:1:0|h[Big Bad Pauldrons]|h|r",
+"|HlootHistory:100|h[Loot]|h: |cff0070dd|Hitem:10843:0:0:0:0:0:0:0:58:268:0:1:0|h[Featherskin Cape]|h|r",
+"|HlootHistory:100|h[Loot]|h: |cff0070dd|Hitem:18464:0:0:0:0:0:0:0:47:264:0:1:0|h[Gordok Nose Ring]|h|r",
+"|HlootHistory:100|h[Loot]|h: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:100|h[Loot]|h: |cff1eff00|Hitem:25302:0:0:0:0:0:-15:1177747471:65:64:0:1:0|h[Soul-Drain Dagger of Spirit]|h|r",
+"|HlootHistory:100|h[Loot]|h: Celvariel-Auchindoun (Greed - 90) Won: |cff0070dd|Hitem:10843:0:0:0:0:0:0:0:58:268:0:1:0|h[Featherskin Cape]|h|r",
+"|HlootHistory:100|h[Loot]|h: Fennec (Greed - 90) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:100|h[Loot]|h: Sokinlife-Draenor (Greed - 92) Won: |cff1eff00|Hitem:25302:0:0:0:0:0:-15:1177747471:65:64:0:1:0|h[Soul-Drain Dagger of Spirit]|h|r",
+"|HlootHistory:100|h[Loot]|h: Thecrusader-Karazhan (Need - 96) Won: |cff0070dd|Hitem:18464:0:0:0:0:0:0:0:47:264:0:1:0|h[Gordok Nose Ring]|h|r",
+"|HlootHistory:100|h[Loot]|h: You have rolled Greed - 32 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:100|h[Loot]|h: You have rolled Greed - 60 for: |cff1eff00|Hitem:25302:0:0:0:0:0:-15:1177747471:65:64:0:1:0|h[Soul-Drain Dagger of Spirit]|h|r",
+"|HlootHistory:100|h[Loot]|h: You have rolled Greed - 73 for: |cff0070dd|Hitem:10843:0:0:0:0:0:0:0:58:268:0:1:0|h[Featherskin Cape]|h|r",
+"|HlootHistory:100|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10843:0:0:0:0:0:0:0:58:268:0:1:0|h[Featherskin Cape]|h|r",
+"|HlootHistory:100|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18464:0:0:0:0:0:0:0:47:264:0:1:0|h[Gordok Nose Ring]|h|r",
+"|HlootHistory:100|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:100|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25302:0:0:0:0:0:-15:1177747471:65:64:0:1:0|h[Soul-Drain Dagger of Spirit]|h|r",
+"|HlootHistory:101|h[Loot]|h: |cff0070dd|Hitem:18503:0:0:0:0:0:0:0:47:264:0:1:0|h[Kromcrush's Chestplate]|h|r",
+"|HlootHistory:101|h[Loot]|h: |cff0070dd|Hitem:22223:0:0:0:0:0:0:0:54:263:0:1:0|h[Foreman's Head Protector]|h|r",
+"|HlootHistory:101|h[Loot]|h: |cff0070dd|Hitem:24083:0:0:0:0:0:0:0:58:268:0:1:0|h[Lifegiver Britches]|h|r",
+"|HlootHistory:101|h[Loot]|h: |cff0070dd|Hitem:25945:0:0:0:0:0:0:0:66:64:0:1:0|h[Cloak of Revival]|h|r",
+"|HlootHistory:101|h[Loot]|h: Moaizer-Nemesis (Greed - 78) Won: |cff0070dd|Hitem:18503:0:0:0:0:0:0:0:47:264:0:1:0|h[Kromcrush's Chestplate]|h|r",
+"|HlootHistory:101|h[Loot]|h: Sanctisius (Need - 31) Won: |cff0070dd|Hitem:22223:0:0:0:0:0:0:0:54:263:0:1:0|h[Foreman's Head Protector]|h|r",
+"|HlootHistory:101|h[Loot]|h: Sokinlife-Draenor (Greed - 83) Won: |cff0070dd|Hitem:25945:0:0:0:0:0:0:0:66:64:0:1:0|h[Cloak of Revival]|h|r",
+"|HlootHistory:101|h[Loot]|h: You have rolled Greed - 59 for: |cff0070dd|Hitem:25945:0:0:0:0:0:0:0:66:64:0:1:0|h[Cloak of Revival]|h|r",
+"|HlootHistory:101|h[Loot]|h: You have rolled Greed - 78 for: |cff0070dd|Hitem:18503:0:0:0:0:0:0:0:47:264:0:1:0|h[Kromcrush's Chestplate]|h|r",
+"|HlootHistory:101|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18503:0:0:0:0:0:0:0:47:264:0:1:0|h[Kromcrush's Chestplate]|h|r",
+"|HlootHistory:101|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22223:0:0:0:0:0:0:0:54:263:0:1:0|h[Foreman's Head Protector]|h|r",
+"|HlootHistory:101|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24083:0:0:0:0:0:0:0:58:268:0:1:0|h[Lifegiver Britches]|h|r",
+"|HlootHistory:101|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:25945:0:0:0:0:0:0:0:66:64:0:1:0|h[Cloak of Revival]|h|r",
+"|HlootHistory:102|h[Loot]|h: |cff0070dd|Hitem:18490:0:0:0:0:0:0:0:47:264:0:1:0|h[Insightful Hood]|h|r",
+"|HlootHistory:102|h[Loot]|h: |cff0070dd|Hitem:24064:0:0:0:0:0:0:0:58:268:0:1:0|h[Ironsole Clompers]|h|r",
+"|HlootHistory:102|h[Loot]|h: |cff1eff00|Hitem:16048:0:0:0:0:0:0:0:54:263:0:1:0|h[Schematic: Dark Iron Rifle]|h|r",
+"|HlootHistory:102|h[Loot]|h: |cff1eff00|Hitem:24959:0:0:0:0:0:-14:776011801:66:64:0:1:0|h[Khan'aish Greaves of the Tiger]|h|r",
+"|HlootHistory:102|h[Loot]|h: Fennec (Greed - 79) Won: |cff1eff00|Hitem:16048:0:0:0:0:0:0:0:54:263:0:1:0|h[Schematic: Dark Iron Rifle]|h|r",
+"|HlootHistory:102|h[Loot]|h: Smetke-Drak'thul (Greed - 97) Won: |cff0070dd|Hitem:18490:0:0:0:0:0:0:0:47:264:0:1:0|h[Insightful Hood]|h|r",
+"|HlootHistory:102|h[Loot]|h: Sokinlife-Draenor (Greed - 87) Won: |cff1eff00|Hitem:24959:0:0:0:0:0:-14:776011801:66:64:0:1:0|h[Khan'aish Greaves of the Tiger]|h|r",
+"|HlootHistory:102|h[Loot]|h: You have rolled Greed - 35 for: |cff0070dd|Hitem:18490:0:0:0:0:0:0:0:47:264:0:1:0|h[Insightful Hood]|h|r",
+"|HlootHistory:102|h[Loot]|h: You have rolled Greed - 73 for: |cff1eff00|Hitem:16048:0:0:0:0:0:0:0:54:263:0:1:0|h[Schematic: Dark Iron Rifle]|h|r",
+"|HlootHistory:102|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18490:0:0:0:0:0:0:0:47:264:0:1:0|h[Insightful Hood]|h|r",
+"|HlootHistory:102|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24064:0:0:0:0:0:0:0:58:268:0:1:0|h[Ironsole Clompers]|h|r",
+"|HlootHistory:102|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:16048:0:0:0:0:0:0:0:54:263:0:1:0|h[Schematic: Dark Iron Rifle]|h|r",
+"|HlootHistory:102|h[Loot]|h: You passed on: |cff1eff00|Hitem:24959:0:0:0:0:0:-14:776011801:66:64:0:1:0|h[Khan'aish Greaves of the Tiger]|h|r",
+"|HlootHistory:103|h[Loot]|h: |cff0070dd|Hitem:18523:0:0:0:0:0:0:0:47:264:0:1:0|h[Brightly Glowing Stone]|h|r",
+"|HlootHistory:103|h[Loot]|h: |cff1eff00|Hitem:12034:0:0:0:0:0:-19:1512656896:54:263:0:1:0|h[Marble Necklace of Intellect]|h|r",
+"|HlootHistory:103|h[Loot]|h: |cff1eff00|Hitem:24876:0:0:0:0:0:-40:1710161947:66:64:0:1:0|h[Ironspine Shoulderguards of the Bandit]|h|r",
+"|HlootHistory:103|h[Loot]|h: |cff1eff00|Hitem:25157:0:0:0:0:0:-40:679215133:58:268:0:1:0|h[Serpentlord Claymore of the Bandit]|h|r",
+"|HlootHistory:103|h[Loot]|h: Fennec (Greed - 62) Won: |cff1eff00|Hitem:12034:0:0:0:0:0:-19:1512656896:54:263:0:1:0|h[Marble Necklace of Intellect]|h|r",
+"|HlootHistory:103|h[Loot]|h: Moaizer-Nemesis (Greed - 91) Won: |cff0070dd|Hitem:18523:0:0:0:0:0:0:0:47:264:0:1:0|h[Brightly Glowing Stone]|h|r",
+"|HlootHistory:103|h[Loot]|h: Qxie-TwistingNether (Greed - 75) Won: |cff1eff00|Hitem:24876:0:0:0:0:0:-40:1710161947:66:64:0:1:0|h[Ironspine Shoulderguards of the Bandit]|h|r",
+"|HlootHistory:103|h[Loot]|h: You have rolled Greed - 20 for: |cff1eff00|Hitem:12034:0:0:0:0:0:-19:1512656896:54:263:0:1:0|h[Marble Necklace of Intellect]|h|r",
+"|HlootHistory:103|h[Loot]|h: You have rolled Greed - 5 for: |cff0070dd|Hitem:18523:0:0:0:0:0:0:0:47:264:0:1:0|h[Brightly Glowing Stone]|h|r",
+"|HlootHistory:103|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18523:0:0:0:0:0:0:0:47:264:0:1:0|h[Brightly Glowing Stone]|h|r",
+"|HlootHistory:103|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12034:0:0:0:0:0:-19:1512656896:54:263:0:1:0|h[Marble Necklace of Intellect]|h|r",
+"|HlootHistory:103|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25157:0:0:0:0:0:-40:679215133:58:268:0:1:0|h[Serpentlord Claymore of the Bandit]|h|r",
+"|HlootHistory:103|h[Loot]|h: You passed on: |cff1eff00|Hitem:24876:0:0:0:0:0:-40:1710161947:66:64:0:1:0|h[Ironspine Shoulderguards of the Bandit]|h|r",
+"|HlootHistory:104|h[Loot]|h: |cff0070dd|Hitem:10838:0:0:0:0:0:0:0:54:263:0:1:0|h[Might of Hakkar]|h|r",
+"|HlootHistory:104|h[Loot]|h: |cff0070dd|Hitem:18525:0:0:0:0:0:0:0:47:264:0:1:0|h[Bracers of Prosperity]|h|r",
+"|HlootHistory:104|h[Loot]|h: |cff0070dd|Hitem:24091:0:0:0:0:0:0:0:59:268:0:1:0|h[Tenacious Defender]|h|r",
+"|HlootHistory:104|h[Loot]|h: |cff0070dd|Hitem:25956:0:0:0:0:0:0:0:66:64:0:1:0|h[Nexus-Bracers of Vigor]|h|r",
+"|HlootHistory:104|h[Loot]|h: Lyndie-Kazzak (Greed - 84) Won: |cff0070dd|Hitem:10838:0:0:0:0:0:0:0:54:263:0:1:0|h[Might of Hakkar]|h|r",
+"|HlootHistory:104|h[Loot]|h: Moaizer-Nemesis (Greed - 84) Won: |cff0070dd|Hitem:18525:0:0:0:0:0:0:0:47:264:0:1:0|h[Bracers of Prosperity]|h|r",
+"|HlootHistory:104|h[Loot]|h: You have rolled Greed - 73 for: |cff0070dd|Hitem:18525:0:0:0:0:0:0:0:47:264:0:1:0|h[Bracers of Prosperity]|h|r",
+"|HlootHistory:104|h[Loot]|h: You have rolled Greed - 77 for: |cff0070dd|Hitem:10838:0:0:0:0:0:0:0:54:263:0:1:0|h[Might of Hakkar]|h|r",
+"|HlootHistory:104|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10838:0:0:0:0:0:0:0:54:263:0:1:0|h[Might of Hakkar]|h|r",
+"|HlootHistory:104|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18525:0:0:0:0:0:0:0:47:264:0:1:0|h[Bracers of Prosperity]|h|r",
+"|HlootHistory:104|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24091:0:0:0:0:0:0:0:59:268:0:1:0|h[Tenacious Defender]|h|r",
+"|HlootHistory:104|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:25956:0:0:0:0:0:0:0:66:64:0:1:0|h[Nexus-Bracers of Vigor]|h|r",
+"|HlootHistory:105|h[Loot]|h: |cff0070dd|Hitem:10844:0:0:0:0:0:0:0:54:263:0:1:0|h[Spire of Hakkar]|h|r",
+"|HlootHistory:105|h[Loot]|h: |cff0070dd|Hitem:24020:0:0:0:0:0:0:0:59:268:0:1:0|h[Shadowrend Longblade]|h|r",
+"|HlootHistory:105|h[Loot]|h: Lerona (Need - 99) Won: |cff0070dd|Hitem:24020:0:0:0:0:0:0:0:59:268:0:1:0|h[Shadowrend Longblade]|h|r",
+"|HlootHistory:105|h[Loot]|h: Sanctisius (Greed - 41) Won: |cff0070dd|Hitem:10844:0:0:0:0:0:0:0:54:263:0:1:0|h[Spire of Hakkar]|h|r",
+"|HlootHistory:105|h[Loot]|h: You have rolled Greed - 27 for: |cff0070dd|Hitem:10844:0:0:0:0:0:0:0:54:263:0:1:0|h[Spire of Hakkar]|h|r",
+"|HlootHistory:105|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10844:0:0:0:0:0:0:0:54:263:0:1:0|h[Spire of Hakkar]|h|r",
+"|HlootHistory:105|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24020:0:0:0:0:0:0:0:59:268:0:1:0|h[Shadowrend Longblade]|h|r",
+"|HlootHistory:106|h[Loot]|h: |cff0070dd|Hitem:10806:0:0:0:0:0:0:0:54:263:0:1:0|h[Vestments of the Atal'ai Prophet]|h|r",
+"|HlootHistory:106|h[Loot]|h: |cff1eff00|Hitem:24587:0:0:0:0:0:-36:458883094:59:268:0:1:0|h[Outlander's Pauldrons of the Sorcerer]|h|r",
+"|HlootHistory:106|h[Loot]|h: Wartoshika (Disenchant - 74) Won: |cff1eff00|Hitem:24587:0:0:0:0:0:-36:458883094:59:268:0:1:0|h[Outlander's Pauldrons of the Sorcerer]|h|r",
+"|HlootHistory:106|h[Loot]|h: You (Greed - 74) Won: |cff0070dd|Hitem:10806:0:0:0:0:0:0:0:54:263:0:1:0|h[Vestments of the Atal'ai Prophet]|h|r",
+"|HlootHistory:106|h[Loot]|h: You have rolled Greed - 71 for: |cff1eff00|Hitem:24587:0:0:0:0:0:-36:458883094:59:268:0:1:0|h[Outlander's Pauldrons of the Sorcerer]|h|r",
+"|HlootHistory:106|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10806:0:0:0:0:0:0:0:54:263:0:1:0|h[Vestments of the Atal'ai Prophet]|h|r",
+"|HlootHistory:106|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24587:0:0:0:0:0:-36:458883094:59:268:0:1:0|h[Outlander's Pauldrons of the Sorcerer]|h|r",
+"|HlootHistory:107|h[Loot]|h: |cff0070dd|Hitem:10805:0:0:0:0:0:0:0:54:263:0:1:0|h[Eater of the Dead]|h|r",
+"|HlootHistory:107|h[Loot]|h: |cff0070dd|Hitem:24091:0:0:0:0:0:0:0:59:268:0:1:0|h[Tenacious Defender]|h|r",
+"|HlootHistory:107|h[Loot]|h: Sanctisius (Greed - 85) Won: |cff0070dd|Hitem:10805:0:0:0:0:0:0:0:54:263:0:1:0|h[Eater of the Dead]|h|r",
+"|HlootHistory:107|h[Loot]|h: Wartoshika (Greed - 96) Won: |cff0070dd|Hitem:24091:0:0:0:0:0:0:0:59:268:0:1:0|h[Tenacious Defender]|h|r",
+"|HlootHistory:107|h[Loot]|h: You have rolled Greed - 36 for: |cff0070dd|Hitem:24091:0:0:0:0:0:0:0:59:268:0:1:0|h[Tenacious Defender]|h|r",
+"|HlootHistory:107|h[Loot]|h: You have rolled Greed - 60 for: |cff0070dd|Hitem:10805:0:0:0:0:0:0:0:54:263:0:1:0|h[Eater of the Dead]|h|r",
+"|HlootHistory:107|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10805:0:0:0:0:0:0:0:54:263:0:1:0|h[Eater of the Dead]|h|r",
+"|HlootHistory:107|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24091:0:0:0:0:0:0:0:59:268:0:1:0|h[Tenacious Defender]|h|r",
+"|HlootHistory:108|h[Loot]|h: |cff0070dd|Hitem:12466:0:0:0:0:0:0:0:54:263:0:1:0|h[Dawnspire Cord]|h|r",
+"|HlootHistory:108|h[Loot]|h: |cff1eff00|Hitem:25144:0:0:0:0:0:-40:539099148:59:268:0:1:0|h[Skettis Curved Blade of the Bandit]|h|r",
+"|HlootHistory:108|h[Loot]|h: Wartoshika (Disenchant - 72) Won: |cff1eff00|Hitem:25144:0:0:0:0:0:-40:539099148:59:268:0:1:0|h[Skettis Curved Blade of the Bandit]|h|r",
+"|HlootHistory:108|h[Loot]|h: You (Greed - 41) Won: |cff0070dd|Hitem:12466:0:0:0:0:0:0:0:54:263:0:1:0|h[Dawnspire Cord]|h|r",
+"|HlootHistory:108|h[Loot]|h: You have rolled Greed - 42 for: |cff1eff00|Hitem:25144:0:0:0:0:0:-40:539099148:59:268:0:1:0|h[Skettis Curved Blade of the Bandit]|h|r",
+"|HlootHistory:108|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12466:0:0:0:0:0:0:0:54:263:0:1:0|h[Dawnspire Cord]|h|r",
+"|HlootHistory:108|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25144:0:0:0:0:0:-40:539099148:59:268:0:1:0|h[Skettis Curved Blade of the Bandit]|h|r",
+"|HlootHistory:109|h[Loot]|h: |cff0070dd|Hitem:12243:0:0:0:0:0:0:0:54:263:0:1:0|h[Smoldering Claw]|h|r",
+"|HlootHistory:109|h[Loot]|h: |cff0070dd|Hitem:24083:0:0:0:0:0:0:0:60:268:0:1:0|h[Lifegiver Britches]|h|r",
+"|HlootHistory:109|h[Loot]|h: Fennec (Greed - 87) Won: |cff0070dd|Hitem:12243:0:0:0:0:0:0:0:54:263:0:1:0|h[Smoldering Claw]|h|r",
+"|HlootHistory:109|h[Loot]|h: You have rolled Greed - 42 for: |cff0070dd|Hitem:12243:0:0:0:0:0:0:0:54:263:0:1:0|h[Smoldering Claw]|h|r",
+"|HlootHistory:109|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12243:0:0:0:0:0:0:0:54:263:0:1:0|h[Smoldering Claw]|h|r",
+"|HlootHistory:109|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24083:0:0:0:0:0:0:0:60:268:0:1:0|h[Lifegiver Britches]|h|r",
+"|HlootHistory:11|h[Loot]|h: |cff0070dd|Hitem:18382:0:0:0:0:0:0:0:47:66:0:1:0|h[Fluctuating Cloak]|h|r",
+"|HlootHistory:11|h[Loot]|h: |cff0070dd|Hitem:6472:0:0:0:0:0:0:0:17:104:0:1:0|h[Stinging Viper]|h|r",
+"|HlootHistory:11|h[Loot]|h: |cff0070dd|Hitem:88359:0:0:0:0:0:0:0:46:268:0:1:0|h[Incineration Belt]|h|r",
+"|HlootHistory:11|h[Loot]|h: |cff1eff00|Hitem:10090:0:0:0:0:0:-10:1446090496:48:263:0:1:0|h[Gothic Plate Helmet of the Gorilla]|h|r",
+"|HlootHistory:11|h[Loot]|h: |cff1eff00|Hitem:12662:0:0:0:0:0:0:0:46:66:0:0:0|h[Demonic Rune]|h|r",
+"|HlootHistory:11|h[Loot]|h: |cff1eff00|Hitem:14226:0:0:0:0:0:-19:1774295296:36:264:0:1:0|h[Embersilk Bracelets of Intellect]|h|r",
+"|HlootHistory:11|h[Loot]|h: |cff1eff00|Hitem:15380:0:0:0:0:0:-19:697542784:50:268:0:1:0|h[Rageclaw Bracers of Intellect]|h|r",
+"|HlootHistory:11|h[Loot]|h: |cff1eff00|Hitem:16248:0:0:0:0:0:0:0:53:268:0:1:0|h[Formula: Enchant Weapon - Unholy]|h|r",
+"|HlootHistory:11|h[Loot]|h: |cff1eff00|Hitem:24720:0:0:0:0:0:-19:1624965142:61:64:0:1:0|h[Dreghood Gloves of Intellect]|h|r",
+"|HlootHistory:11|h[Loot]|h: |cff1eff00|Hitem:6556:0:0:0:0:0:-78:158547968:16:73:0:1:0|h[Bard's Bracers of the Monkey]|h|r",
+"|HlootHistory:11|h[Loot]|h: |cff1eff00|Hitem:6612:0:0:0:0:0:-69:1853416064:29:104:0:1:0|h[Sage's Boots of the Eagle]|h|r",
+"|HlootHistory:11|h[Loot]|h: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:16:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:11|h[Loot]|h: Celvariel-Auchindoun (Greed - 86) Won: |cff1eff00|Hitem:16248:0:0:0:0:0:0:0:53:268:0:1:0|h[Formula: Enchant Weapon - Unholy]|h|r",
+"|HlootHistory:11|h[Loot]|h: Dudika-ChamberofAspects (Need - 11) Won: |cff1eff00|Hitem:6556:0:0:0:0:0:-78:158547968:16:73:0:1:0|h[Bard's Bracers of the Monkey]|h|r",
+"|HlootHistory:11|h[Loot]|h: Fennec (Greed - 96) Won: |cff1eff00|Hitem:10090:0:0:0:0:0:-10:1446090496:48:263:0:1:0|h[Gothic Plate Helmet of the Gorilla]|h|r",
+"|HlootHistory:11|h[Loot]|h: Fennec (Greed - 98) Won: |cff1eff00|Hitem:12662:0:0:0:0:0:0:0:46:66:0:0:0|h[Demonic Rune]|h|r",
+"|HlootHistory:11|h[Loot]|h: Lerona (Greed - 91) Won: |cff1eff00|Hitem:15380:0:0:0:0:0:-19:697542784:50:268:0:1:0|h[Rageclaw Bracers of Intellect]|h|r",
+"|HlootHistory:11|h[Loot]|h: Logus-ChamberofAspects (Need - 29) Won: |cff0070dd|Hitem:88359:0:0:0:0:0:0:0:46:268:0:1:0|h[Incineration Belt]|h|r",
+"|HlootHistory:11|h[Loot]|h: Maeneth (Greed - 71) Won: |cff0070dd|Hitem:18382:0:0:0:0:0:0:0:47:66:0:1:0|h[Fluctuating Cloak]|h|r",
+"|HlootHistory:11|h[Loot]|h: Mangoworm (Need - 40) Won: |cff0070dd|Hitem:6472:0:0:0:0:0:0:0:17:104:0:1:0|h[Stinging Viper]|h|r",
+"|HlootHistory:11|h[Loot]|h: Midorìko-Runetotem (Need - 9) Won: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:16:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:11|h[Loot]|h: Myssterios-Drak'thul (Greed - 85) Won: |cff1eff00|Hitem:14226:0:0:0:0:0:-19:1774295296:36:264:0:1:0|h[Embersilk Bracelets of Intellect]|h|r",
+"|HlootHistory:11|h[Loot]|h: Valhallir-Spinebreaker (Greed - 47) Won: |cff1eff00|Hitem:15216:0:0:0:0:0:-78:742236288:51:105:0:1:0|h[Rune Sword of the Monkey]|h|r",
+"|HlootHistory:11|h[Loot]|h: You (Greed - 72) Won: |cff1eff00|Hitem:24720:0:0:0:0:0:-19:1624965142:61:64:0:1:0|h[Dreghood Gloves of Intellect]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have rolled Greed - 22 for: |cff0070dd|Hitem:18382:0:0:0:0:0:0:0:47:66:0:1:0|h[Fluctuating Cloak]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have rolled Greed - 29 for: |cff1eff00|Hitem:15216:0:0:0:0:0:-78:742236288:51:105:0:1:0|h[Rune Sword of the Monkey]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have rolled Greed - 34 for: |cff1eff00|Hitem:12662:0:0:0:0:0:0:0:46:66:0:0:0|h[Demonic Rune]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have rolled Greed - 44 for: |cff1eff00|Hitem:16248:0:0:0:0:0:0:0:53:268:0:1:0|h[Formula: Enchant Weapon - Unholy]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have rolled Greed - 61 for: |cff1eff00|Hitem:15380:0:0:0:0:0:-19:697542784:50:268:0:1:0|h[Rageclaw Bracers of Intellect]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have rolled Greed - 79 for: |cff1eff00|Hitem:14226:0:0:0:0:0:-19:1774295296:36:264:0:1:0|h[Embersilk Bracelets of Intellect]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18382:0:0:0:0:0:0:0:47:66:0:1:0|h[Fluctuating Cloak]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88359:0:0:0:0:0:0:0:46:268:0:1:0|h[Incineration Belt]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12662:0:0:0:0:0:0:0:46:66:0:0:0|h[Demonic Rune]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14226:0:0:0:0:0:-19:1774295296:36:264:0:1:0|h[Embersilk Bracelets of Intellect]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15216:0:0:0:0:0:-78:742236288:51:105:0:1:0|h[Rune Sword of the Monkey]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15380:0:0:0:0:0:-19:697542784:50:268:0:1:0|h[Rageclaw Bracers of Intellect]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:16248:0:0:0:0:0:0:0:53:268:0:1:0|h[Formula: Enchant Weapon - Unholy]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24720:0:0:0:0:0:-19:1624965142:61:64:0:1:0|h[Dreghood Gloves of Intellect]|h|r",
+"|HlootHistory:11|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:16:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:11|h[Loot]|h: You passed on: |cff0070dd|Hitem:6472:0:0:0:0:0:0:0:17:104:0:1:0|h[Stinging Viper]|h|r",
+"|HlootHistory:11|h[Loot]|h: You passed on: |cff1eff00|Hitem:10090:0:0:0:0:0:-10:1446090496:48:263:0:1:0|h[Gothic Plate Helmet of the Gorilla]|h|r",
+"|HlootHistory:11|h[Loot]|h: You passed on: |cff1eff00|Hitem:6556:0:0:0:0:0:-78:158547968:16:73:0:1:0|h[Bard's Bracers of the Monkey]|h|r",
+"|HlootHistory:11|h[Loot]|h: You passed on: |cff1eff00|Hitem:6612:0:0:0:0:0:-69:1853416064:29:104:0:1:0|h[Sage's Boots of the Eagle]|h|r",
+"|HlootHistory:11|h[Loot]|h: Zarklo-ChamberofAspects (Greed - 90) Won: |cff1eff00|Hitem:6612:0:0:0:0:0:-69:1853416064:29:104:0:1:0|h[Sage's Boots of the Eagle]|h|r",
+"|HlootHistory:110|h[Loot]|h: |cff0070dd|Hitem:12466:0:0:0:0:0:0:0:54:263:0:1:0|h[Dawnspire Cord]|h|r",
+"|HlootHistory:110|h[Loot]|h: |cff0070dd|Hitem:24064:0:0:0:0:0:0:0:60:268:0:1:0|h[Ironsole Clompers]|h|r",
+"|HlootHistory:110|h[Loot]|h: You (Greed - 68) Won: |cff0070dd|Hitem:12466:0:0:0:0:0:0:0:54:263:0:1:0|h[Dawnspire Cord]|h|r",
+"|HlootHistory:110|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12466:0:0:0:0:0:0:0:54:263:0:1:0|h[Dawnspire Cord]|h|r",
+"|HlootHistory:110|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24064:0:0:0:0:0:0:0:60:268:0:1:0|h[Ironsole Clompers]|h|r",
+"|HlootHistory:111|h[Loot]|h: |cff1eff00|Hitem:10234:0:0:0:0:0:-81:1686056832:54:263:0:1:0|h[Engraved Boots of the Whale]|h|r",
+"|HlootHistory:111|h[Loot]|h: |cff1eff00|Hitem:24707:0:0:0:0:0:-6:1237188630:60:268:0:1:0|h[Haal'eshi Pauldrons of the Eagle]|h|r",
+"|HlootHistory:111|h[Loot]|h: Sanctisius (Greed - 58) Won: |cff1eff00|Hitem:10234:0:0:0:0:0:-81:1686056832:54:263:0:1:0|h[Engraved Boots of the Whale]|h|r",
+"|HlootHistory:111|h[Loot]|h: You (Greed - 93) Won: |cff1eff00|Hitem:24707:0:0:0:0:0:-6:1237188630:60:268:0:1:0|h[Haal'eshi Pauldrons of the Eagle]|h|r",
+"|HlootHistory:111|h[Loot]|h: You have rolled Greed - 8 for: |cff1eff00|Hitem:10234:0:0:0:0:0:-81:1686056832:54:263:0:1:0|h[Engraved Boots of the Whale]|h|r",
+"|HlootHistory:111|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10234:0:0:0:0:0:-81:1686056832:54:263:0:1:0|h[Engraved Boots of the Whale]|h|r",
+"|HlootHistory:111|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24707:0:0:0:0:0:-6:1237188630:60:268:0:1:0|h[Haal'eshi Pauldrons of the Eagle]|h|r",
+"|HlootHistory:112|h[Loot]|h: |cff0070dd|Hitem:10833:0:0:0:0:0:0:0:55:263:0:1:0|h[Horns of Eranikus]|h|r",
+"|HlootHistory:112|h[Loot]|h: |cff1eff00|Hitem:24607:0:0:0:0:0:-9:407896093:60:268:0:1:0|h[Laughing Skull Tunic of the Owl]|h|r",
+"|HlootHistory:112|h[Loot]|h: You (Greed - 76) Won: |cff1eff00|Hitem:24607:0:0:0:0:0:-9:407896093:60:268:0:1:0|h[Laughing Skull Tunic of the Owl]|h|r",
+"|HlootHistory:112|h[Loot]|h: You (Greed - 84) Won: |cff0070dd|Hitem:10833:0:0:0:0:0:0:0:55:263:0:1:0|h[Horns of Eranikus]|h|r",
+"|HlootHistory:112|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10833:0:0:0:0:0:0:0:55:263:0:1:0|h[Horns of Eranikus]|h|r",
+"|HlootHistory:112|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24607:0:0:0:0:0:-9:407896093:60:268:0:1:0|h[Laughing Skull Tunic of the Owl]|h|r",
+"|HlootHistory:113|h[Loot]|h: |cff0070dd|Hitem:10837:0:0:0:0:0:0:0:55:263:0:1:0|h[Tooth of Eranikus]|h|r",
+"|HlootHistory:113|h[Loot]|h: |cff0070dd|Hitem:24021:0:0:0:0:0:0:0:60:268:0:1:0|h[Light-Touched Breastplate]|h|r",
+"|HlootHistory:113|h[Loot]|h: Klrlto-Kazzak (Greed - 82) Won: |cff0070dd|Hitem:10837:0:0:0:0:0:0:0:55:263:0:1:0|h[Tooth of Eranikus]|h|r",
+"|HlootHistory:113|h[Loot]|h: Lerona (Need - 13) Won: |cff0070dd|Hitem:24021:0:0:0:0:0:0:0:60:268:0:1:0|h[Light-Touched Breastplate]|h|r",
+"|HlootHistory:113|h[Loot]|h: You have rolled Greed - 71 for: |cff0070dd|Hitem:10837:0:0:0:0:0:0:0:55:263:0:1:0|h[Tooth of Eranikus]|h|r",
+"|HlootHistory:113|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10837:0:0:0:0:0:0:0:55:263:0:1:0|h[Tooth of Eranikus]|h|r",
+"|HlootHistory:113|h[Loot]|h: You passed on: |cff0070dd|Hitem:24021:0:0:0:0:0:0:0:60:268:0:1:0|h[Light-Touched Breastplate]|h|r",
+"|HlootHistory:114|h[Loot]|h: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:60:268:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:114|h[Loot]|h: |cff1eff00|Hitem:13490:0:0:0:0:0:0:0:55:263:0:1:0|h[Recipe: Greater Stoneshield Potion]|h|r",
+"|HlootHistory:114|h[Loot]|h: Celvariel-Auchindoun (Greed - 81) Won: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:60:268:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:114|h[Loot]|h: Sanctisius (Greed - 96) Won: |cff1eff00|Hitem:13490:0:0:0:0:0:0:0:55:263:0:1:0|h[Recipe: Greater Stoneshield Potion]|h|r",
+"|HlootHistory:114|h[Loot]|h: You have rolled Greed - 44 for: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:60:268:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:114|h[Loot]|h: You have rolled Greed - 54 for: |cff1eff00|Hitem:13490:0:0:0:0:0:0:0:55:263:0:1:0|h[Recipe: Greater Stoneshield Potion]|h|r",
+"|HlootHistory:114|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:60:268:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:114|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:13490:0:0:0:0:0:0:0:55:263:0:1:0|h[Recipe: Greater Stoneshield Potion]|h|r",
+"|HlootHistory:115|h[Loot]|h: |cff0070dd|Hitem:24151:0:0:0:0:0:0:0:60:268:0:1:0|h[Mok'Nathal Clan Ring]|h|r",
+"|HlootHistory:115|h[Loot]|h: |cff1eff00|Hitem:5759:0:0:0:0:0:0:0:55:263:0:1:0|h[Thorium Lockbox]|h|r",
+"|HlootHistory:115|h[Loot]|h: Exaf-Frostwhisper (Greed - 93) Won: |cff1eff00|Hitem:5759:0:0:0:0:0:0:0:55:263:0:1:0|h[Thorium Lockbox]|h|r",
+"|HlootHistory:115|h[Loot]|h: You (Need - 37) Won: |cff0070dd|Hitem:24151:0:0:0:0:0:0:0:60:268:0:1:0|h[Mok'Nathal Clan Ring]|h|r",
+"|HlootHistory:115|h[Loot]|h: You have rolled Greed - 5 for: |cff1eff00|Hitem:5759:0:0:0:0:0:0:0:55:263:0:1:0|h[Thorium Lockbox]|h|r",
+"|HlootHistory:115|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:5759:0:0:0:0:0:0:0:55:263:0:1:0|h[Thorium Lockbox]|h|r",
+"|HlootHistory:115|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:24151:0:0:0:0:0:0:0:60:268:0:1:0|h[Mok'Nathal Clan Ring]|h|r",
+"|HlootHistory:116|h[Loot]|h: |cff0070dd|Hitem:13168:0:0:0:0:0:0:0:55:263:0:1:0|h[Plate of the Shaman King]|h|r",
+"|HlootHistory:116|h[Loot]|h: |cff0070dd|Hitem:24063:0:0:0:0:0:0:0:60:268:0:1:0|h[Shifting Sash of Midnight]|h|r",
+"|HlootHistory:116|h[Loot]|h: Exaf-Frostwhisper (Need - 54) Won: |cff0070dd|Hitem:13168:0:0:0:0:0:0:0:55:263:0:1:0|h[Plate of the Shaman King]|h|r",
+"|HlootHistory:116|h[Loot]|h: You (Need - 20) Won: |cff0070dd|Hitem:24063:0:0:0:0:0:0:0:60:268:0:1:0|h[Shifting Sash of Midnight]|h|r",
+"|HlootHistory:116|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13168:0:0:0:0:0:0:0:55:263:0:1:0|h[Plate of the Shaman King]|h|r",
+"|HlootHistory:116|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:24063:0:0:0:0:0:0:0:60:268:0:1:0|h[Shifting Sash of Midnight]|h|r",
+"|HlootHistory:117|h[Loot]|h: |cff0070dd|Hitem:13255:0:0:0:0:0:0:0:55:263:0:1:0|h[Trueaim Gauntlets]|h|r",
+"|HlootHistory:117|h[Loot]|h: You (Need - 44) Won: |cff0070dd|Hitem:13255:0:0:0:0:0:0:0:55:263:0:1:0|h[Trueaim Gauntlets]|h|r",
+"|HlootHistory:117|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:13255:0:0:0:0:0:0:0:55:263:0:1:0|h[Trueaim Gauntlets]|h|r",
+"|HlootHistory:118|h[Loot]|h: |cff0070dd|Hitem:12582:0:0:0:0:0:0:0:55:263:0:1:0|h[Keris of Zul'Serak]|h|r",
+"|HlootHistory:118|h[Loot]|h: Exaf-Frostwhisper (Greed - 92) Won: |cff0070dd|Hitem:12582:0:0:0:0:0:0:0:55:263:0:1:0|h[Keris of Zul'Serak]|h|r",
+"|HlootHistory:118|h[Loot]|h: You have rolled Greed - 26 for: |cff0070dd|Hitem:12582:0:0:0:0:0:0:0:55:263:0:1:0|h[Keris of Zul'Serak]|h|r",
+"|HlootHistory:118|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12582:0:0:0:0:0:0:0:55:263:0:1:0|h[Keris of Zul'Serak]|h|r",
+"|HlootHistory:119|h[Loot]|h: |cff1eff00|Hitem:8300:0:0:0:0:0:0:0:55:263:0:1:0|h[Traveler's Leggings]|h|r",
+"|HlootHistory:119|h[Loot]|h: Fennec (Greed - 77) Won: |cff1eff00|Hitem:8300:0:0:0:0:0:0:0:55:263:0:1:0|h[Traveler's Leggings]|h|r",
+"|HlootHistory:119|h[Loot]|h: You passed on: |cff1eff00|Hitem:8300:0:0:0:0:0:0:0:55:263:0:1:0|h[Traveler's Leggings]|h|r",
+"|HlootHistory:12|h[Loot]|h: |cff0070dd|Hitem:18375:0:0:0:0:0:0:0:47:66:0:1:0|h[Bracers of the Eclipse]|h|r",
+"|HlootHistory:12|h[Loot]|h: |cff0070dd|Hitem:5187:0:0:0:0:0:0:0:16:268:0:1:0|h[Foe Reaper]|h|r",
+"|HlootHistory:12|h[Loot]|h: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:53:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:12|h[Loot]|h: |cff1eff00|Hitem:14603:0:0:0:0:0:0:0:36:264:0:1:0|h[Warden's Mantle]|h|r",
+"|HlootHistory:12|h[Loot]|h: |cff1eff00|Hitem:15165:0:0:0:0:0:-78:720989824:46:66:0:1:0|h[Imposing Cape of the Monkey]|h|r",
+"|HlootHistory:12|h[Loot]|h: |cff1eff00|Hitem:15172:0:0:0:0:0:-84:745126400:50:268:0:1:0|h[Potent Bands of Stamina]|h|r",
+"|HlootHistory:12|h[Loot]|h: |cff1eff00|Hitem:24610:0:0:0:0:0:-6:1048969245:61:64:0:1:0|h[Laughing Skull Pants of the Eagle]|h|r",
+"|HlootHistory:12|h[Loot]|h: |cff1eff00|Hitem:4353:0:0:0:0:0:0:0:46:268:0:1:0|h[Pattern: Spider Belt]|h|r",
+"|HlootHistory:12|h[Loot]|h: |cff1eff00|Hitem:4733:0:0:0:0:0:0:0:48:263:0:1:0|h[Blackforge Pauldrons]|h|r",
+"|HlootHistory:12|h[Loot]|h: |cff1eff00|Hitem:6378:0:0:0:0:0:0:0:17:104:0:1:0|h[Seer's Cape]|h|r",
+"|HlootHistory:12|h[Loot]|h: |cff1eff00|Hitem:6389:0:0:0:0:0:0:0:30:104:0:1:0|h[Glimmering Mail Coif]|h|r",
+"|HlootHistory:12|h[Loot]|h: |cff1eff00|Hitem:774:0:0:0:0:0:0:0:16:73:0:0:0|h[Malachite]|h|r",
+"|HlootHistory:12|h[Loot]|h: Bowjack-ChamberofAspects (Greed - 53) Won: |cff1eff00|Hitem:774:0:0:0:0:0:0:0:16:73:0:0:0|h[Malachite]|h|r",
+"|HlootHistory:12|h[Loot]|h: Celvariel-Auchindoun (Greed - 67) Won: |cff1eff00|Hitem:15172:0:0:0:0:0:-84:745126400:50:268:0:1:0|h[Potent Bands of Stamina]|h|r",
+"|HlootHistory:12|h[Loot]|h: Fennec (Greed - 97) Won: |cff1eff00|Hitem:4733:0:0:0:0:0:0:0:48:263:0:1:0|h[Blackforge Pauldrons]|h|r",
+"|HlootHistory:12|h[Loot]|h: Kinkytree-Draenor (Need - 27) Won: |cff1eff00|Hitem:4353:0:0:0:0:0:0:0:46:268:0:1:0|h[Pattern: Spider Belt]|h|r",
+"|HlootHistory:12|h[Loot]|h: Larku-Magtheridon (Need - 74) Won: |cff0070dd|Hitem:18375:0:0:0:0:0:0:0:47:66:0:1:0|h[Bracers of the Eclipse]|h|r",
+"|HlootHistory:12|h[Loot]|h: Lerona-Jaedenar (Greed - 90) Won: |cff0070dd|Hitem:5187:0:0:0:0:0:0:0:16:268:0:1:0|h[Foe Reaper]|h|r",
+"|HlootHistory:12|h[Loot]|h: Maeneth (Greed - 95) Won: |cff1eff00|Hitem:15165:0:0:0:0:0:-78:720989824:46:66:0:1:0|h[Imposing Cape of the Monkey]|h|r",
+"|HlootHistory:12|h[Loot]|h: You (Greed - 55) Won: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:53:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:12|h[Loot]|h: You (Greed - 73) Won: |cff1eff00|Hitem:14603:0:0:0:0:0:0:0:36:264:0:1:0|h[Warden's Mantle]|h|r",
+"|HlootHistory:12|h[Loot]|h: You (Greed - 83) Won: |cff1eff00|Hitem:24610:0:0:0:0:0:-6:1048969245:61:64:0:1:0|h[Laughing Skull Pants of the Eagle]|h|r",
+"|HlootHistory:12|h[Loot]|h: You (Greed - 99) Won: |cff1eff00|Hitem:10127:0:0:0:0:0:-68:149069056:51:105:0:1:0|h[Revenant Bracers of the Bear]|h|r",
+"|HlootHistory:12|h[Loot]|h: You have rolled Greed - 10 for: |cff1eff00|Hitem:4733:0:0:0:0:0:0:0:48:263:0:1:0|h[Blackforge Pauldrons]|h|r",
+"|HlootHistory:12|h[Loot]|h: You have rolled Greed - 59 for: |cff0070dd|Hitem:5187:0:0:0:0:0:0:0:16:268:0:1:0|h[Foe Reaper]|h|r",
+"|HlootHistory:12|h[Loot]|h: You have rolled Greed - 76 for: |cff1eff00|Hitem:15165:0:0:0:0:0:-78:720989824:46:66:0:1:0|h[Imposing Cape of the Monkey]|h|r",
+"|HlootHistory:12|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18375:0:0:0:0:0:0:0:47:66:0:1:0|h[Bracers of the Eclipse]|h|r",
+"|HlootHistory:12|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:5187:0:0:0:0:0:0:0:16:268:0:1:0|h[Foe Reaper]|h|r",
+"|HlootHistory:12|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10127:0:0:0:0:0:-68:149069056:51:105:0:1:0|h[Revenant Bracers of the Bear]|h|r",
+"|HlootHistory:12|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:53:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:12|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14603:0:0:0:0:0:0:0:36:264:0:1:0|h[Warden's Mantle]|h|r",
+"|HlootHistory:12|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15165:0:0:0:0:0:-78:720989824:46:66:0:1:0|h[Imposing Cape of the Monkey]|h|r",
+"|HlootHistory:12|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24610:0:0:0:0:0:-6:1048969245:61:64:0:1:0|h[Laughing Skull Pants of the Eagle]|h|r",
+"|HlootHistory:12|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4353:0:0:0:0:0:0:0:46:268:0:1:0|h[Pattern: Spider Belt]|h|r",
+"|HlootHistory:12|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4733:0:0:0:0:0:0:0:48:263:0:1:0|h[Blackforge Pauldrons]|h|r",
+"|HlootHistory:12|h[Loot]|h: You passed on: |cff1eff00|Hitem:15172:0:0:0:0:0:-84:745126400:50:268:0:1:0|h[Potent Bands of Stamina]|h|r",
+"|HlootHistory:12|h[Loot]|h: You passed on: |cff1eff00|Hitem:6378:0:0:0:0:0:0:0:17:104:0:1:0|h[Seer's Cape]|h|r",
+"|HlootHistory:12|h[Loot]|h: You passed on: |cff1eff00|Hitem:6389:0:0:0:0:0:0:0:30:104:0:1:0|h[Glimmering Mail Coif]|h|r",
+"|HlootHistory:12|h[Loot]|h: You passed on: |cff1eff00|Hitem:774:0:0:0:0:0:0:0:16:73:0:0:0|h[Malachite]|h|r",
+"|HlootHistory:12|h[Loot]|h: Zarklo-ChamberofAspects (Greed - 96) Won: |cff1eff00|Hitem:6389:0:0:0:0:0:0:0:30:104:0:1:0|h[Glimmering Mail Coif]|h|r",
+"|HlootHistory:120|h[Loot]|h: |cff1eff00|Hitem:15749:0:0:0:0:0:0:0:55:263:0:1:0|h[Pattern: Volcanic Breastplate]|h|r",
+"|HlootHistory:120|h[Loot]|h: You (Greed - 97) Won: |cff1eff00|Hitem:15749:0:0:0:0:0:0:0:55:263:0:1:0|h[Pattern: Volcanic Breastplate]|h|r",
+"|HlootHistory:120|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15749:0:0:0:0:0:0:0:55:263:0:1:0|h[Pattern: Volcanic Breastplate]|h|r",
+"|HlootHistory:121|h[Loot]|h: |cff1eff00|Hitem:15749:0:0:0:0:0:0:0:55:263:0:1:0|h[Pattern: Volcanic Breastplate]|h|r",
+"|HlootHistory:121|h[Loot]|h: Fennec (Greed - 72) Won: |cff1eff00|Hitem:15749:0:0:0:0:0:0:0:55:263:0:1:0|h[Pattern: Volcanic Breastplate]|h|r",
+"|HlootHistory:121|h[Loot]|h: You have rolled Greed - 57 for: |cff1eff00|Hitem:15749:0:0:0:0:0:0:0:55:263:0:1:0|h[Pattern: Volcanic Breastplate]|h|r",
+"|HlootHistory:121|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15749:0:0:0:0:0:0:0:55:263:0:1:0|h[Pattern: Volcanic Breastplate]|h|r",
+"|HlootHistory:122|h[Loot]|h: |cff1eff00|Hitem:10101:0:0:0:0:0:-9:1129676800:55:263:0:1:0|h[Councillor's Pants of the Owl]|h|r",
+"|HlootHistory:122|h[Loot]|h: Fennec (Greed - 95) Won: |cff1eff00|Hitem:10101:0:0:0:0:0:-9:1129676800:55:263:0:1:0|h[Councillor's Pants of the Owl]|h|r",
+"|HlootHistory:122|h[Loot]|h: You have rolled Greed - 87 for: |cff1eff00|Hitem:10101:0:0:0:0:0:-9:1129676800:55:263:0:1:0|h[Councillor's Pants of the Owl]|h|r",
+"|HlootHistory:122|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10101:0:0:0:0:0:-9:1129676800:55:263:0:1:0|h[Councillor's Pants of the Owl]|h|r",
+"|HlootHistory:123|h[Loot]|h: |cff0070dd|Hitem:68673:0:0:0:0:0:0:0:55:263:0:1:0|h[Smolderweb Egg]|h|r",
+"|HlootHistory:123|h[Loot]|h: Regama-Frostwhisper (Need - 94) Won: |cff0070dd|Hitem:68673:0:0:0:0:0:0:0:55:263:0:1:0|h[Smolderweb Egg]|h|r",
+"|HlootHistory:123|h[Loot]|h: You have rolled Need - 7 for: |cff0070dd|Hitem:68673:0:0:0:0:0:0:0:55:263:0:1:0|h[Smolderweb Egg]|h|r",
+"|HlootHistory:123|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:68673:0:0:0:0:0:0:0:55:263:0:1:0|h[Smolderweb Egg]|h|r",
+"|HlootHistory:124|h[Loot]|h: |cff0070dd|Hitem:13213:0:0:0:0:0:0:0:55:263:0:1:0|h[Smolderweb's Eye]|h|r",
+"|HlootHistory:124|h[Loot]|h: Regama-Frostwhisper (Greed - 95) Won: |cff0070dd|Hitem:13213:0:0:0:0:0:0:0:55:263:0:1:0|h[Smolderweb's Eye]|h|r",
+"|HlootHistory:124|h[Loot]|h: You have rolled Greed - 45 for: |cff0070dd|Hitem:13213:0:0:0:0:0:0:0:55:263:0:1:0|h[Smolderweb's Eye]|h|r",
+"|HlootHistory:124|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13213:0:0:0:0:0:0:0:55:263:0:1:0|h[Smolderweb's Eye]|h|r",
+"|HlootHistory:125|h[Loot]|h: |cff0070dd|Hitem:13178:0:0:0:0:0:0:0:56:263:0:1:0|h[Rosewine Circle]|h|r",
+"|HlootHistory:125|h[Loot]|h: Regama-Frostwhisper (Greed - 78) Won: |cff0070dd|Hitem:13178:0:0:0:0:0:0:0:56:263:0:1:0|h[Rosewine Circle]|h|r",
+"|HlootHistory:125|h[Loot]|h: You have rolled Greed - 30 for: |cff0070dd|Hitem:13178:0:0:0:0:0:0:0:56:263:0:1:0|h[Rosewine Circle]|h|r",
+"|HlootHistory:125|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13178:0:0:0:0:0:0:0:56:263:0:1:0|h[Rosewine Circle]|h|r",
+"|HlootHistory:126|h[Loot]|h: |cff1eff00|Hitem:15256:0:0:0:0:0:-12:4369920:56:263:0:1:0|h[Massacre Sword of the Boar]|h|r",
+"|HlootHistory:126|h[Loot]|h: Fennec (Greed - 99) Won: |cff1eff00|Hitem:15256:0:0:0:0:0:-12:4369920:56:263:0:1:0|h[Massacre Sword of the Boar]|h|r",
+"|HlootHistory:126|h[Loot]|h: You have rolled Greed - 21 for: |cff1eff00|Hitem:15256:0:0:0:0:0:-12:4369920:56:263:0:1:0|h[Massacre Sword of the Boar]|h|r",
+"|HlootHistory:126|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15256:0:0:0:0:0:-12:4369920:56:263:0:1:0|h[Massacre Sword of the Boar]|h|r",
+"|HlootHistory:127|h[Loot]|h: |cff0070dd|Hitem:12264:0:0:0:0:0:0:0:56:263:0:1:0|h[Worg Carrier]|h|r",
+"|HlootHistory:127|h[Loot]|h: Regama-Frostwhisper (Need - 47) Won: |cff0070dd|Hitem:12264:0:0:0:0:0:0:0:56:263:0:1:0|h[Worg Carrier]|h|r",
+"|HlootHistory:127|h[Loot]|h: You passed on: |cff0070dd|Hitem:12264:0:0:0:0:0:0:0:56:263:0:1:0|h[Worg Carrier]|h|r",
+"|HlootHistory:128|h[Loot]|h: |cff0070dd|Hitem:13252:0:0:0:0:0:0:0:56:263:0:1:0|h[Cloudrunner Girdle]|h|r",
+"|HlootHistory:128|h[Loot]|h: You (Need - 10) Won: |cff0070dd|Hitem:13252:0:0:0:0:0:0:0:56:263:0:1:0|h[Cloudrunner Girdle]|h|r",
+"|HlootHistory:128|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:13252:0:0:0:0:0:0:0:56:263:0:1:0|h[Cloudrunner Girdle]|h|r",
+"|HlootHistory:129|h[Loot]|h: |cff0070dd|Hitem:13212:0:0:0:0:0:0:0:56:263:0:1:0|h[Halycon's Spiked Collar]|h|r",
+"|HlootHistory:129|h[Loot]|h: Fennec (Greed - 99) Won: |cff0070dd|Hitem:13212:0:0:0:0:0:0:0:56:263:0:1:0|h[Halycon's Spiked Collar]|h|r",
+"|HlootHistory:129|h[Loot]|h: You have rolled Greed - 37 for: |cff0070dd|Hitem:13212:0:0:0:0:0:0:0:56:263:0:1:0|h[Halycon's Spiked Collar]|h|r",
+"|HlootHistory:129|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13212:0:0:0:0:0:0:0:56:263:0:1:0|h[Halycon's Spiked Collar]|h|r",
+"|HlootHistory:13|h[Loot]|h: |cff0070dd|Hitem:10777:0:0:0:0:0:-78:1813341568:47:66:0:1:0|h[Arachnid Gloves of the Monkey]|h|r",
+"|HlootHistory:13|h[Loot]|h: |cff0070dd|Hitem:18312:0:0:0:0:0:0:0:46:66:0:1:0|h[Energized Chestplate]|h|r",
+"|HlootHistory:13|h[Loot]|h: |cff0070dd|Hitem:18740:0:0:0:0:0:0:0:53:268:0:1:0|h[Thuzadin Sash]|h|r",
+"|HlootHistory:13|h[Loot]|h: |cff0070dd|Hitem:24390:0:0:0:0:0:0:0:61:64:0:1:0|h[Auslese's Light Channeler]|h|r",
+"|HlootHistory:13|h[Loot]|h: |cff0070dd|Hitem:6460:0:0:0:0:0:0:0:18:104:0:1:0|h[Cobrahn's Grasp]|h|r",
+"|HlootHistory:13|h[Loot]|h: |cff0070dd|Hitem:9448:0:0:0:0:0:0:0:30:104:0:1:0|h[Spidertank Oilrag]|h|r",
+"|HlootHistory:13|h[Loot]|h: |cff0070dd|Hitem:9467:0:0:0:0:0:0:0:50:268:0:1:0|h[Gahz'rilla Fang]|h|r",
+"|HlootHistory:13|h[Loot]|h: |cff1eff00|Hitem:1210:0:0:0:0:0:0:0:16:268:0:0:0|h[Shadowgem]|h|r",
+"|HlootHistory:13|h[Loot]|h: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:46:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:13|h[Loot]|h: |cff1eff00|Hitem:16249:0:0:0:0:0:0:0:48:263:0:1:0|h[Formula: Enchant 2H Weapon - Major Intellect]|h|r",
+"|HlootHistory:13|h[Loot]|h: |cff1eff00|Hitem:4636:0:0:0:0:0:0:0:36:264:0:1:0|h[Strong Iron Lockbox]|h|r",
+"|HlootHistory:13|h[Loot]|h: |cff1eff00|Hitem:6344:0:0:0:0:0:0:0:16:73:0:1:0|h[Formula: Enchant Bracer - Minor Spirit]|h|r",
+"|HlootHistory:13|h[Loot]|h: Bowjack-ChamberofAspects (Greed - 96) Won: |cff1eff00|Hitem:6344:0:0:0:0:0:0:0:16:73:0:1:0|h[Formula: Enchant Bracer - Minor Spirit]|h|r",
+"|HlootHistory:13|h[Loot]|h: Celvariel-Auchindoun (Greed - 70) Won: |cff0070dd|Hitem:9467:0:0:0:0:0:0:0:50:268:0:1:0|h[Gahz'rilla Fang]|h|r",
+"|HlootHistory:13|h[Loot]|h: Celvariel-Auchindoun (Greed - 91) Won: |cff0070dd|Hitem:18740:0:0:0:0:0:0:0:53:268:0:1:0|h[Thuzadin Sash]|h|r",
+"|HlootHistory:13|h[Loot]|h: Élèméntz-Ragnaros (Need - 97) Won: |cff0070dd|Hitem:24390:0:0:0:0:0:0:0:61:64:0:1:0|h[Auslese's Light Channeler]|h|r",
+"|HlootHistory:13|h[Loot]|h: Evenworsecow-Draenor (Greed - 52) Won: |cff1eff00|Hitem:16249:0:0:0:0:0:0:0:48:263:0:1:0|h[Formula: Enchant 2H Weapon - Major Intellect]|h|r",
+"|HlootHistory:13|h[Loot]|h: Kinkytree-Draenor (Need - 99) Won: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:46:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:13|h[Loot]|h: Larku-Magtheridon (Need - 69) Won: |cff0070dd|Hitem:10777:0:0:0:0:0:-78:1813341568:47:66:0:1:0|h[Arachnid Gloves of the Monkey]|h|r",
+"|HlootHistory:13|h[Loot]|h: Midorìko-Runetotem (Need - 23) Won: |cff1eff00|Hitem:1210:0:0:0:0:0:0:0:16:268:0:0:0|h[Shadowgem]|h|r",
+"|HlootHistory:13|h[Loot]|h: Neubel-Draenor (Greed - 61) Won: |cff1eff00|Hitem:4636:0:0:0:0:0:0:0:36:264:0:1:0|h[Strong Iron Lockbox]|h|r",
+"|HlootHistory:13|h[Loot]|h: Smetot-Mazrigos (Need - 42) Won: |cff0070dd|Hitem:9448:0:0:0:0:0:0:0:30:104:0:1:0|h[Spidertank Oilrag]|h|r",
+"|HlootHistory:13|h[Loot]|h: Wydad-Draenor (Need - 36) Won: |cff0070dd|Hitem:6460:0:0:0:0:0:0:0:18:104:0:1:0|h[Cobrahn's Grasp]|h|r",
+"|HlootHistory:13|h[Loot]|h: You (Greed - 79) Won: |cff1eff00|Hitem:8256:0:0:0:0:0:0:0:51:105:0:1:0|h[Serpentskin Boots]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have rolled Greed - 3 for: |cff1eff00|Hitem:4636:0:0:0:0:0:0:0:36:264:0:1:0|h[Strong Iron Lockbox]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have rolled Greed - 42 for: |cff1eff00|Hitem:16249:0:0:0:0:0:0:0:48:263:0:1:0|h[Formula: Enchant 2H Weapon - Major Intellect]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have rolled Greed - 57 for: |cff0070dd|Hitem:9467:0:0:0:0:0:0:0:50:268:0:1:0|h[Gahz'rilla Fang]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have rolled Greed - 6 for: |cff0070dd|Hitem:18740:0:0:0:0:0:0:0:53:268:0:1:0|h[Thuzadin Sash]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10777:0:0:0:0:0:-78:1813341568:47:66:0:1:0|h[Arachnid Gloves of the Monkey]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18312:0:0:0:0:0:0:0:46:66:0:1:0|h[Energized Chestplate]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18740:0:0:0:0:0:0:0:53:268:0:1:0|h[Thuzadin Sash]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24390:0:0:0:0:0:0:0:61:64:0:1:0|h[Auslese's Light Channeler]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:9467:0:0:0:0:0:0:0:50:268:0:1:0|h[Gahz'rilla Fang]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:1210:0:0:0:0:0:0:0:16:268:0:0:0|h[Shadowgem]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:46:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:16249:0:0:0:0:0:0:0:48:263:0:1:0|h[Formula: Enchant 2H Weapon - Major Intellect]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4636:0:0:0:0:0:0:0:36:264:0:1:0|h[Strong Iron Lockbox]|h|r",
+"|HlootHistory:13|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8256:0:0:0:0:0:0:0:51:105:0:1:0|h[Serpentskin Boots]|h|r",
+"|HlootHistory:13|h[Loot]|h: You passed on: |cff0070dd|Hitem:6460:0:0:0:0:0:0:0:18:104:0:1:0|h[Cobrahn's Grasp]|h|r",
+"|HlootHistory:13|h[Loot]|h: You passed on: |cff0070dd|Hitem:9448:0:0:0:0:0:0:0:30:104:0:1:0|h[Spidertank Oilrag]|h|r",
+"|HlootHistory:13|h[Loot]|h: You passed on: |cff1eff00|Hitem:6344:0:0:0:0:0:0:0:16:73:0:1:0|h[Formula: Enchant Bracer - Minor Spirit]|h|r",
+"|HlootHistory:130|h[Loot]|h: |cff0070dd|Hitem:13205:0:0:0:0:0:0:0:56:263:0:1:0|h[Rhombeard Protector]|h|r",
+"|HlootHistory:130|h[Loot]|h: Fennec (Need - 16) Won: |cff0070dd|Hitem:13205:0:0:0:0:0:0:0:56:263:0:1:0|h[Rhombeard Protector]|h|r",
+"|HlootHistory:130|h[Loot]|h: You passed on: |cff0070dd|Hitem:13205:0:0:0:0:0:0:0:56:263:0:1:0|h[Rhombeard Protector]|h|r",
+"|HlootHistory:131|h[Loot]|h: |cff1eff00|Hitem:10275:0:0:0:0:0:-84:1657439232:56:263:0:1:0|h[Emerald Breastplate of Stamina]|h|r",
+"|HlootHistory:131|h[Loot]|h: You (Greed - 100) Won: |cff1eff00|Hitem:10275:0:0:0:0:0:-84:1657439232:56:263:0:1:0|h[Emerald Breastplate of Stamina]|h|r",
+"|HlootHistory:131|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10275:0:0:0:0:0:-84:1657439232:56:263:0:1:0|h[Emerald Breastplate of Stamina]|h|r",
+"|HlootHistory:132|h[Loot]|h: |cff1eff00|Hitem:8302:0:0:0:0:0:0:0:56:263:0:1:0|h[Hero's Bracers]|h|r",
+"|HlootHistory:132|h[Loot]|h: You (Greed - 65) Won: |cff1eff00|Hitem:8302:0:0:0:0:0:0:0:56:263:0:1:0|h[Hero's Bracers]|h|r",
+"|HlootHistory:132|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8302:0:0:0:0:0:0:0:56:263:0:1:0|h[Hero's Bracers]|h|r",
+"|HlootHistory:133|h[Loot]|h: |cff1eff00|Hitem:16250:0:0:0:0:0:0:0:56:263:0:1:0|h[Formula: Enchant Weapon - Superior Striking]|h|r",
+"|HlootHistory:133|h[Loot]|h: Fennec (Greed - 66) Won: |cff1eff00|Hitem:16250:0:0:0:0:0:0:0:56:263:0:1:0|h[Formula: Enchant Weapon - Superior Striking]|h|r",
+"|HlootHistory:133|h[Loot]|h: You have rolled Greed - 64 for: |cff1eff00|Hitem:16250:0:0:0:0:0:0:0:56:263:0:1:0|h[Formula: Enchant Weapon - Superior Striking]|h|r",
+"|HlootHistory:133|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:16250:0:0:0:0:0:0:0:56:263:0:1:0|h[Formula: Enchant Weapon - Superior Striking]|h|r",
+"|HlootHistory:134|h[Loot]|h: |cff1eff00|Hitem:10258:0:0:0:0:0:-69:1556889088:56:263:0:1:0|h[Adventurer's Cape of the Eagle]|h|r",
+"|HlootHistory:134|h[Loot]|h: Sanctisius (Greed - 82) Won: |cff1eff00|Hitem:10258:0:0:0:0:0:-69:1556889088:56:263:0:1:0|h[Adventurer's Cape of the Eagle]|h|r",
+"|HlootHistory:134|h[Loot]|h: You have rolled Greed - 12 for: |cff1eff00|Hitem:10258:0:0:0:0:0:-69:1556889088:56:263:0:1:0|h[Adventurer's Cape of the Eagle]|h|r",
+"|HlootHistory:134|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10258:0:0:0:0:0:-69:1556889088:56:263:0:1:0|h[Adventurer's Cape of the Eagle]|h|r",
+"|HlootHistory:135|h[Loot]|h: |cff1eff00|Hitem:10227:0:0:0:0:0:-68:1038669568:56:263:0:1:0|h[Nightshade Leggings of the Bear]|h|r",
+"|HlootHistory:135|h[Loot]|h: Regama-Frostwhisper (Greed - 90) Won: |cff1eff00|Hitem:10227:0:0:0:0:0:-68:1038669568:56:263:0:1:0|h[Nightshade Leggings of the Bear]|h|r",
+"|HlootHistory:135|h[Loot]|h: You have rolled Greed - 87 for: |cff1eff00|Hitem:10227:0:0:0:0:0:-68:1038669568:56:263:0:1:0|h[Nightshade Leggings of the Bear]|h|r",
+"|HlootHistory:135|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10227:0:0:0:0:0:-68:1038669568:56:263:0:1:0|h[Nightshade Leggings of the Bear]|h|r",
+"|HlootHistory:136|h[Loot]|h: |cffa335ee|Hitem:13143:0:0:0:0:0:0:0:56:263:0:1:0|h[Mark of the Dragon Lord]|h|r",
+"|HlootHistory:136|h[Loot]|h: Regama-Frostwhisper (Need - 78) Won: |cffa335ee|Hitem:13143:0:0:0:0:0:0:0:56:263:0:1:0|h[Mark of the Dragon Lord]|h|r",
+"|HlootHistory:136|h[Loot]|h: You passed on: |cffa335ee|Hitem:13143:0:0:0:0:0:0:0:56:263:0:1:0|h[Mark of the Dragon Lord]|h|r",
+"|HlootHistory:137|h[Loot]|h: |cffa335ee|Hitem:12462:0:0:0:0:0:0:0:56:263:0:1:0|h[Embrace of the Wind Serpent]|h|r",
+"|HlootHistory:137|h[Loot]|h: Dunstoak-Magtheridon (Greed - 99) Won: |cffa335ee|Hitem:12462:0:0:0:0:0:0:0:56:263:0:1:0|h[Embrace of the Wind Serpent]|h|r",
+"|HlootHistory:137|h[Loot]|h: You have rolled Greed - 42 for: |cffa335ee|Hitem:12462:0:0:0:0:0:0:0:56:263:0:1:0|h[Embrace of the Wind Serpent]|h|r",
+"|HlootHistory:137|h[Loot]|h: You have selected Greed for: |cffa335ee|Hitem:12462:0:0:0:0:0:0:0:56:263:0:1:0|h[Embrace of the Wind Serpent]|h|r",
+"|HlootHistory:138|h[Loot]|h: |cff0070dd|Hitem:10843:0:0:0:0:0:0:0:56:263:0:1:0|h[Featherskin Cape]|h|r",
+"|HlootHistory:138|h[Loot]|h: Fennec (Greed - 72) Won: |cff0070dd|Hitem:10843:0:0:0:0:0:0:0:56:263:0:1:0|h[Featherskin Cape]|h|r",
+"|HlootHistory:138|h[Loot]|h: You have rolled Greed - 53 for: |cff0070dd|Hitem:10843:0:0:0:0:0:0:0:56:263:0:1:0|h[Featherskin Cape]|h|r",
+"|HlootHistory:138|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10843:0:0:0:0:0:0:0:56:263:0:1:0|h[Featherskin Cape]|h|r",
+"|HlootHistory:139|h[Loot]|h: |cff0070dd|Hitem:10805:0:0:0:0:0:0:0:56:263:0:1:0|h[Eater of the Dead]|h|r",
+"|HlootHistory:139|h[Loot]|h: You (Need - 57) Won: |cff0070dd|Hitem:10805:0:0:0:0:0:0:0:56:263:0:1:0|h[Eater of the Dead]|h|r",
+"|HlootHistory:139|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:10805:0:0:0:0:0:0:0:56:263:0:1:0|h[Eater of the Dead]|h|r",
+"|HlootHistory:14|h[Loot]|h: |cff0070dd|Hitem:10770:0:0:0:0:0:0:0:47:66:0:1:0|h[Mordresh's Lifeless Skull]|h|r",
+"|HlootHistory:14|h[Loot]|h: |cff0070dd|Hitem:10777:0:0:0:0:0:-69:1991557248:50:268:0:1:0|h[Arachnid Gloves of the Eagle]|h|r",
+"|HlootHistory:14|h[Loot]|h: |cff0070dd|Hitem:17737:0:0:0:0:0:0:0:36:264:0:1:0|h[Cloud Stone]|h|r",
+"|HlootHistory:14|h[Loot]|h: |cff0070dd|Hitem:18318:0:0:0:0:0:0:0:46:66:0:1:0|h[Merciful Greaves]|h|r",
+"|HlootHistory:14|h[Loot]|h: |cff0070dd|Hitem:18397:0:0:0:0:0:0:0:46:268:0:1:0|h[Elder Magus Pendant]|h|r",
+"|HlootHistory:14|h[Loot]|h: |cff0070dd|Hitem:24394:0:0:0:0:0:0:0:61:64:0:1:0|h[Warsong Howling Axe]|h|r",
+"|HlootHistory:14|h[Loot]|h: |cff1eff00|Hitem:1206:0:0:0:0:0:0:0:18:104:0:0:0|h[Moss Agate]|h|r",
+"|HlootHistory:14|h[Loot]|h: |cff1eff00|Hitem:15252:0:0:0:0:0:-14:348778624:53:268:0:1:0|h[Tusker Sword of the Tiger]|h|r",
+"|HlootHistory:14|h[Loot]|h: |cff1eff00|Hitem:1705:0:0:0:0:0:0:0:30:104:0:0:0|h[Lesser Moonstone]|h|r",
+"|HlootHistory:14|h[Loot]|h: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:16:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:14|h[Loot]|h: |cff1eff00|Hitem:8199:0:0:0:0:0:-20:1294439808:48:263:0:1:0|h[Battlefield Destroyer of Power]|h|r",
+"|HlootHistory:14|h[Loot]|h: |cff1eff00|Hitem:9763:0:0:0:0:0:-78:1158583424:16:73:0:1:0|h[Cadet Leggings of the Monkey]|h|r",
+"|HlootHistory:14|h[Loot]|h: Anestadren (Greed - 74) Won: |cff1eff00|Hitem:9763:0:0:0:0:0:-78:1158583424:16:73:0:1:0|h[Cadet Leggings of the Monkey]|h|r",
+"|HlootHistory:14|h[Loot]|h: Celvariel-Auchindoun (Greed - 94) Won: |cff0070dd|Hitem:18397:0:0:0:0:0:0:0:46:268:0:1:0|h[Elder Magus Pendant]|h|r",
+"|HlootHistory:14|h[Loot]|h: Fennec (Greed - 94) Won: |cff1eff00|Hitem:8199:0:0:0:0:0:-20:1294439808:48:263:0:1:0|h[Battlefield Destroyer of Power]|h|r",
+"|HlootHistory:14|h[Loot]|h: Hardrider-Stormscale (Need - 90) Won: |cff0070dd|Hitem:24394:0:0:0:0:0:0:0:61:64:0:1:0|h[Warsong Howling Axe]|h|r",
+"|HlootHistory:14|h[Loot]|h: Jazziemyn-ChamberofAspects (Greed - 98) Won: |cff0070dd|Hitem:17737:0:0:0:0:0:0:0:36:264:0:1:0|h[Cloud Stone]|h|r",
+"|HlootHistory:14|h[Loot]|h: Jorelemental-Ragnaros (Greed - 73) Won: |cff1eff00|Hitem:1206:0:0:0:0:0:0:0:18:104:0:0:0|h[Moss Agate]|h|r",
+"|HlootHistory:14|h[Loot]|h: Joumän-Stormreaver (Greed - 94) Won: |cff0070dd|Hitem:18318:0:0:0:0:0:0:0:46:66:0:1:0|h[Merciful Greaves]|h|r",
+"|HlootHistory:14|h[Loot]|h: Maeneth (Greed - 63) Won: |cff0070dd|Hitem:10770:0:0:0:0:0:0:0:47:66:0:1:0|h[Mordresh's Lifeless Skull]|h|r",
+"|HlootHistory:14|h[Loot]|h: Midorìko-Runetotem (Need - 61) Won: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:16:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:14|h[Loot]|h: Saffirr-Outland (Need - 78) Won: |cff0070dd|Hitem:10777:0:0:0:0:0:-69:1991557248:50:268:0:1:0|h[Arachnid Gloves of the Eagle]|h|r",
+"|HlootHistory:14|h[Loot]|h: Vrc-Draenor (Need - 64) Won: |cff0070dd|Hitem:11805:0:0:0:0:0:0:0:51:105:0:1:0|h[Rubidium Hammer]|h|r",
+"|HlootHistory:14|h[Loot]|h: You (Greed - 95) Won: |cff1eff00|Hitem:15252:0:0:0:0:0:-14:348778624:53:268:0:1:0|h[Tusker Sword of the Tiger]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have rolled Greed - 32 for: |cff1eff00|Hitem:8199:0:0:0:0:0:-20:1294439808:48:263:0:1:0|h[Battlefield Destroyer of Power]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have rolled Greed - 57 for: |cff0070dd|Hitem:10770:0:0:0:0:0:0:0:47:66:0:1:0|h[Mordresh's Lifeless Skull]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have rolled Greed - 58 for: |cff0070dd|Hitem:18318:0:0:0:0:0:0:0:46:66:0:1:0|h[Merciful Greaves]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have rolled Greed - 64 for: |cff0070dd|Hitem:17737:0:0:0:0:0:0:0:36:264:0:1:0|h[Cloud Stone]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have rolled Greed - 89 for: |cff0070dd|Hitem:18397:0:0:0:0:0:0:0:46:268:0:1:0|h[Elder Magus Pendant]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10770:0:0:0:0:0:0:0:47:66:0:1:0|h[Mordresh's Lifeless Skull]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11805:0:0:0:0:0:0:0:51:105:0:1:0|h[Rubidium Hammer]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:17737:0:0:0:0:0:0:0:36:264:0:1:0|h[Cloud Stone]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18318:0:0:0:0:0:0:0:46:66:0:1:0|h[Merciful Greaves]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18397:0:0:0:0:0:0:0:46:268:0:1:0|h[Elder Magus Pendant]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24394:0:0:0:0:0:0:0:61:64:0:1:0|h[Warsong Howling Axe]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15252:0:0:0:0:0:-14:348778624:53:268:0:1:0|h[Tusker Sword of the Tiger]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:16:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:14|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8199:0:0:0:0:0:-20:1294439808:48:263:0:1:0|h[Battlefield Destroyer of Power]|h|r",
+"|HlootHistory:14|h[Loot]|h: You passed on: |cff0070dd|Hitem:10777:0:0:0:0:0:-69:1991557248:50:268:0:1:0|h[Arachnid Gloves of the Eagle]|h|r",
+"|HlootHistory:14|h[Loot]|h: You passed on: |cff1eff00|Hitem:1206:0:0:0:0:0:0:0:18:104:0:0:0|h[Moss Agate]|h|r",
+"|HlootHistory:14|h[Loot]|h: You passed on: |cff1eff00|Hitem:1705:0:0:0:0:0:0:0:30:104:0:0:0|h[Lesser Moonstone]|h|r",
+"|HlootHistory:14|h[Loot]|h: You passed on: |cff1eff00|Hitem:9763:0:0:0:0:0:-78:1158583424:16:73:0:1:0|h[Cadet Leggings of the Monkey]|h|r",
+"|HlootHistory:14|h[Loot]|h: Zarklo-ChamberofAspects (Greed - 50) Won: |cff1eff00|Hitem:1705:0:0:0:0:0:0:0:30:104:0:0:0|h[Lesser Moonstone]|h|r",
+"|HlootHistory:140|h[Loot]|h: |cff0070dd|Hitem:10807:0:0:0:0:0:0:0:56:263:0:1:0|h[Kilt of the Atal'ai Prophet]|h|r",
+"|HlootHistory:140|h[Loot]|h: Dunstoak-Magtheridon (Greed - 88) Won: |cff0070dd|Hitem:10807:0:0:0:0:0:0:0:56:263:0:1:0|h[Kilt of the Atal'ai Prophet]|h|r",
+"|HlootHistory:140|h[Loot]|h: You have rolled Greed - 58 for: |cff0070dd|Hitem:10807:0:0:0:0:0:0:0:56:263:0:1:0|h[Kilt of the Atal'ai Prophet]|h|r",
+"|HlootHistory:140|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10807:0:0:0:0:0:0:0:56:263:0:1:0|h[Kilt of the Atal'ai Prophet]|h|r",
+"|HlootHistory:141|h[Loot]|h: |cff1eff00|Hitem:10192:0:0:0:0:0:-13:843432704:56:263:0:1:0|h[Crusader's Boots of the Wolf]|h|r",
+"|HlootHistory:141|h[Loot]|h: Fennec (Greed - 93) Won: |cff1eff00|Hitem:10192:0:0:0:0:0:-13:843432704:56:263:0:1:0|h[Crusader's Boots of the Wolf]|h|r",
+"|HlootHistory:141|h[Loot]|h: You have rolled Greed - 27 for: |cff1eff00|Hitem:10192:0:0:0:0:0:-13:843432704:56:263:0:1:0|h[Crusader's Boots of the Wolf]|h|r",
+"|HlootHistory:141|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10192:0:0:0:0:0:-13:843432704:56:263:0:1:0|h[Crusader's Boots of the Wolf]|h|r",
+"|HlootHistory:142|h[Loot]|h: |cff0070dd|Hitem:12466:0:0:0:0:0:0:0:56:263:0:1:0|h[Dawnspire Cord]|h|r",
+"|HlootHistory:142|h[Loot]|h: Dunstoak-Magtheridon (Need - 64) Won: |cff0070dd|Hitem:12466:0:0:0:0:0:0:0:56:263:0:1:0|h[Dawnspire Cord]|h|r",
+"|HlootHistory:142|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12466:0:0:0:0:0:0:0:56:263:0:1:0|h[Dawnspire Cord]|h|r",
+"|HlootHistory:143|h[Loot]|h: |cff0070dd|Hitem:10835:0:0:0:0:0:0:0:57:263:0:1:0|h[Crest of Supremacy]|h|r",
+"|HlootHistory:143|h[Loot]|h: Fennec (Greed - 96) Won: |cff0070dd|Hitem:10835:0:0:0:0:0:0:0:57:263:0:1:0|h[Crest of Supremacy]|h|r",
+"|HlootHistory:143|h[Loot]|h: You have rolled Greed - 31 for: |cff0070dd|Hitem:10835:0:0:0:0:0:0:0:57:263:0:1:0|h[Crest of Supremacy]|h|r",
+"|HlootHistory:143|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10835:0:0:0:0:0:0:0:57:263:0:1:0|h[Crest of Supremacy]|h|r",
+"|HlootHistory:144|h[Loot]|h: |cff1eff00|Hitem:11977:0:0:0:0:0:-326:2120976512:57:263:0:1:0|h[Serpentine Loop of Fire Resistance]|h|r",
+"|HlootHistory:144|h[Loot]|h: Dunstoak-Magtheridon (Greed - 65) Won: |cff1eff00|Hitem:11977:0:0:0:0:0:-326:2120976512:57:263:0:1:0|h[Serpentine Loop of Fire Resistance]|h|r",
+"|HlootHistory:144|h[Loot]|h: You have rolled Greed - 28 for: |cff1eff00|Hitem:11977:0:0:0:0:0:-326:2120976512:57:263:0:1:0|h[Serpentine Loop of Fire Resistance]|h|r",
+"|HlootHistory:144|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11977:0:0:0:0:0:-326:2120976512:57:263:0:1:0|h[Serpentine Loop of Fire Resistance]|h|r",
+"|HlootHistory:145|h[Loot]|h: |cff0070dd|Hitem:10828:0:0:0:0:0:0:0:57:263:0:1:0|h[Dire Nail]|h|r",
+"|HlootHistory:145|h[Loot]|h: Dunstoak-Magtheridon (Greed - 94) Won: |cff0070dd|Hitem:10828:0:0:0:0:0:0:0:57:263:0:1:0|h[Dire Nail]|h|r",
+"|HlootHistory:145|h[Loot]|h: You have rolled Greed - 38 for: |cff0070dd|Hitem:10828:0:0:0:0:0:0:0:57:263:0:1:0|h[Dire Nail]|h|r",
+"|HlootHistory:145|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10828:0:0:0:0:0:0:0:57:263:0:1:0|h[Dire Nail]|h|r",
+"|HlootHistory:146|h[Loot]|h: |cff1eff00|Hitem:24940:0:0:0:0:0:-14:1549729814:57:263:0:1:0|h[Darkcrest Pauldrons of the Tiger]|h|r",
+"|HlootHistory:146|h[Loot]|h: Sanctisius (Need - 22) Won: |cff1eff00|Hitem:24940:0:0:0:0:0:-14:1549729814:57:263:0:1:0|h[Darkcrest Pauldrons of the Tiger]|h|r",
+"|HlootHistory:146|h[Loot]|h: You automatically passed on: |cff1eff00|Hitem:24940:0:0:0:0:0:-14:1549729814:57:263:0:1:0|h[Darkcrest Pauldrons of the Tiger]|h|r because you cannot loot that item.",
+"|HlootHistory:147|h[Loot]|h: |cff1eff00|Hitem:24599:0:0:0:0:0:-36:219152413:57:263:0:1:0|h[Starfire Vest of the Sorcerer]|h|r",
+"|HlootHistory:147|h[Loot]|h: Fennec (Greed - 88) Won: |cff1eff00|Hitem:24599:0:0:0:0:0:-36:219152413:57:263:0:1:0|h[Starfire Vest of the Sorcerer]|h|r",
+"|HlootHistory:147|h[Loot]|h: You automatically passed on: |cff1eff00|Hitem:24599:0:0:0:0:0:-36:219152413:57:263:0:1:0|h[Starfire Vest of the Sorcerer]|h|r because you cannot loot that item.",
+"|HlootHistory:148|h[Loot]|h: |cff0070dd|Hitem:24021:0:0:0:0:0:0:0:57:263:0:1:0|h[Light-Touched Breastplate]|h|r",
+"|HlootHistory:148|h[Loot]|h: Sanctisius (Need - 29) Won: |cff0070dd|Hitem:24021:0:0:0:0:0:0:0:57:263:0:1:0|h[Light-Touched Breastplate]|h|r",
+"|HlootHistory:148|h[Loot]|h: You passed on: |cff0070dd|Hitem:24021:0:0:0:0:0:0:0:57:263:0:1:0|h[Light-Touched Breastplate]|h|r",
+"|HlootHistory:149|h[Loot]|h: |cff0070dd|Hitem:24155:0:0:0:0:0:0:0:57:263:0:1:0|h[Ursol's Claw]|h|r",
+"|HlootHistory:149|h[Loot]|h: Fennec (Greed - 52) Won: |cff0070dd|Hitem:24155:0:0:0:0:0:0:0:57:263:0:1:0|h[Ursol's Claw]|h|r",
+"|HlootHistory:149|h[Loot]|h: You have rolled Greed - 2 for: |cff0070dd|Hitem:24155:0:0:0:0:0:0:0:57:263:0:1:0|h[Ursol's Claw]|h|r",
+"|HlootHistory:149|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24155:0:0:0:0:0:0:0:57:263:0:1:0|h[Ursol's Claw]|h|r",
+"|HlootHistory:15|h[Loot]|h: |cff0070dd|Hitem:10774:0:0:0:0:0:0:0:47:66:0:1:0|h[Fleshhide Shoulders]|h|r",
+"|HlootHistory:15|h[Loot]|h: |cff0070dd|Hitem:13245:0:0:0:0:0:0:0:18:104:0:1:0|h[Kresh's Back]|h|r",
+"|HlootHistory:15|h[Loot]|h: |cff0070dd|Hitem:13381:0:0:0:0:0:0:0:48:263:0:1:0|h[Master Cannoneer Boots]|h|r",
+"|HlootHistory:15|h[Loot]|h: |cff0070dd|Hitem:17713:0:0:0:0:0:0:0:37:264:0:1:0|h[Blackstone Ring]|h|r",
+"|HlootHistory:15|h[Loot]|h: |cff0070dd|Hitem:18347:0:0:0:0:0:0:0:46:268:0:1:0|h[Well Balanced Axe]|h|r",
+"|HlootHistory:15|h[Loot]|h: |cff1eff00|Hitem:10076:0:0:0:0:0:-11:1759846016:53:268:0:1:0|h[Lord's Armguards of the Falcon]|h|r",
+"|HlootHistory:15|h[Loot]|h: |cff1eff00|Hitem:14247:0:0:0:0:0:-69:1712428032:50:268:0:1:0|h[Lunar Mantle of the Eagle]|h|r",
+"|HlootHistory:15|h[Loot]|h: |cff1eff00|Hitem:15234:0:0:0:0:0:-81:1924514944:46:66:0:1:0|h[Greater Scythe of the Whale]|h|r",
+"|HlootHistory:15|h[Loot]|h: |cff1eff00|Hitem:25105:0:0:0:0:0:-44:691666958:61:64:0:1:0|h[Arachnid Dagger of the Elder]|h|r",
+"|HlootHistory:15|h[Loot]|h: |cff1eff00|Hitem:3036:0:0:0:0:0:0:0:16:73:0:1:0|h[Heavy Shortbow]|h|r",
+"|HlootHistory:15|h[Loot]|h: |cff1eff00|Hitem:6539:0:0:0:0:0:-9:1088167424:16:268:0:1:0|h[Willow Belt of the Owl]|h|r",
+"|HlootHistory:15|h[Loot]|h: |cff1eff00|Hitem:8183:0:0:0:0:0:0:0:30:104:0:1:0|h[Precision Bow]|h|r",
+"|HlootHistory:15|h[Loot]|h: Benniu-ChamberofAspects (Greed - 83) Won: |cff1eff00|Hitem:25105:0:0:0:0:0:-44:691666958:61:64:0:1:0|h[Arachnid Dagger of the Elder]|h|r",
+"|HlootHistory:15|h[Loot]|h: Bowjack-ChamberofAspects (Need - 97) Won: |cff1eff00|Hitem:3036:0:0:0:0:0:0:0:16:73:0:1:0|h[Heavy Shortbow]|h|r",
+"|HlootHistory:15|h[Loot]|h: Eternalwitch-Draenor (Greed - 92) Won: |cff1eff00|Hitem:10076:0:0:0:0:0:-11:1759846016:53:268:0:1:0|h[Lord's Armguards of the Falcon]|h|r",
+"|HlootHistory:15|h[Loot]|h: Evenworsecow-Draenor (Need - 86) Won: |cff0070dd|Hitem:13381:0:0:0:0:0:0:0:48:263:0:1:0|h[Master Cannoneer Boots]|h|r",
+"|HlootHistory:15|h[Loot]|h: Jazziemyn-ChamberofAspects (Need - 56) Won: |cff0070dd|Hitem:17713:0:0:0:0:0:0:0:37:264:0:1:0|h[Blackstone Ring]|h|r",
+"|HlootHistory:15|h[Loot]|h: Lerona (Greed - 21) Won: |cff1eff00|Hitem:14247:0:0:0:0:0:-69:1712428032:50:268:0:1:0|h[Lunar Mantle of the Eagle]|h|r",
+"|HlootHistory:15|h[Loot]|h: Mangoworm (Greed - 66) Won: |cff0070dd|Hitem:13245:0:0:0:0:0:0:0:18:104:0:1:0|h[Kresh's Back]|h|r",
+"|HlootHistory:15|h[Loot]|h: Midorìko-Runetotem (Need - 67) Won: |cff1eff00|Hitem:6539:0:0:0:0:0:-9:1088167424:16:268:0:1:0|h[Willow Belt of the Owl]|h|r",
+"|HlootHistory:15|h[Loot]|h: Nahj-Kazzak (Need - 56) Won: |cff0070dd|Hitem:10774:0:0:0:0:0:0:0:47:66:0:1:0|h[Fleshhide Shoulders]|h|r",
+"|HlootHistory:15|h[Loot]|h: Vrc-Draenor (Need - 40) Won: |cff0070dd|Hitem:11817:0:0:0:0:0:0:0:51:105:0:1:0|h[Lord General's Sword]|h|r",
+"|HlootHistory:15|h[Loot]|h: You (Greed - 100) Won: |cff0070dd|Hitem:18347:0:0:0:0:0:0:0:46:268:0:1:0|h[Well Balanced Axe]|h|r",
+"|HlootHistory:15|h[Loot]|h: You (Greed - 68) Won: |cff1eff00|Hitem:15234:0:0:0:0:0:-81:1924514944:46:66:0:1:0|h[Greater Scythe of the Whale]|h|r",
+"|HlootHistory:15|h[Loot]|h: You have rolled Greed - 32 for: |cff1eff00|Hitem:10076:0:0:0:0:0:-11:1759846016:53:268:0:1:0|h[Lord's Armguards of the Falcon]|h|r",
+"|HlootHistory:15|h[Loot]|h: You have rolled Greed - 35 for: |cff1eff00|Hitem:25105:0:0:0:0:0:-44:691666958:61:64:0:1:0|h[Arachnid Dagger of the Elder]|h|r",
+"|HlootHistory:15|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10774:0:0:0:0:0:0:0:47:66:0:1:0|h[Fleshhide Shoulders]|h|r",
+"|HlootHistory:15|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11817:0:0:0:0:0:0:0:51:105:0:1:0|h[Lord General's Sword]|h|r",
+"|HlootHistory:15|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13381:0:0:0:0:0:0:0:48:263:0:1:0|h[Master Cannoneer Boots]|h|r",
+"|HlootHistory:15|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:17713:0:0:0:0:0:0:0:37:264:0:1:0|h[Blackstone Ring]|h|r",
+"|HlootHistory:15|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18347:0:0:0:0:0:0:0:46:268:0:1:0|h[Well Balanced Axe]|h|r",
+"|HlootHistory:15|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10076:0:0:0:0:0:-11:1759846016:53:268:0:1:0|h[Lord's Armguards of the Falcon]|h|r",
+"|HlootHistory:15|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15234:0:0:0:0:0:-81:1924514944:46:66:0:1:0|h[Greater Scythe of the Whale]|h|r",
+"|HlootHistory:15|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25105:0:0:0:0:0:-44:691666958:61:64:0:1:0|h[Arachnid Dagger of the Elder]|h|r",
+"|HlootHistory:15|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:6539:0:0:0:0:0:-9:1088167424:16:268:0:1:0|h[Willow Belt of the Owl]|h|r",
+"|HlootHistory:15|h[Loot]|h: You passed on: |cff0070dd|Hitem:13245:0:0:0:0:0:0:0:18:104:0:1:0|h[Kresh's Back]|h|r",
+"|HlootHistory:15|h[Loot]|h: You passed on: |cff1eff00|Hitem:14247:0:0:0:0:0:-69:1712428032:50:268:0:1:0|h[Lunar Mantle of the Eagle]|h|r",
+"|HlootHistory:15|h[Loot]|h: You passed on: |cff1eff00|Hitem:3036:0:0:0:0:0:0:0:16:73:0:1:0|h[Heavy Shortbow]|h|r",
+"|HlootHistory:15|h[Loot]|h: You passed on: |cff1eff00|Hitem:8183:0:0:0:0:0:0:0:30:104:0:1:0|h[Precision Bow]|h|r",
+"|HlootHistory:15|h[Loot]|h: Zarklo-ChamberofAspects (Greed - 84) Won: |cff1eff00|Hitem:8183:0:0:0:0:0:0:0:30:104:0:1:0|h[Precision Bow]|h|r",
+"|HlootHistory:150|h[Loot]|h: |cff0070dd|Hitem:24044:0:0:0:0:0:0:0:57:263:0:1:0|h[Hellreaver]|h|r",
+"|HlootHistory:150|h[Loot]|h: Fennec (Greed - 98) Won: |cff0070dd|Hitem:24044:0:0:0:0:0:0:0:57:263:0:1:0|h[Hellreaver]|h|r",
+"|HlootHistory:150|h[Loot]|h: You have rolled Greed - 81 for: |cff0070dd|Hitem:24044:0:0:0:0:0:0:0:57:263:0:1:0|h[Hellreaver]|h|r",
+"|HlootHistory:150|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24044:0:0:0:0:0:0:0:57:263:0:1:0|h[Hellreaver]|h|r",
+"|HlootHistory:151|h[Loot]|h: |cff0070dd|Hitem:24073:0:0:0:0:0:0:0:57:263:0:1:0|h[Garrote-String Necklace]|h|r",
+"|HlootHistory:151|h[Loot]|h: You (Greed - 94) Won: |cff0070dd|Hitem:24073:0:0:0:0:0:0:0:57:263:0:1:0|h[Garrote-String Necklace]|h|r",
+"|HlootHistory:151|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24073:0:0:0:0:0:0:0:57:263:0:1:0|h[Garrote-String Necklace]|h|r",
+"|HlootHistory:152|h[Loot]|h: |cff1eff00|Hitem:25044:0:0:0:0:0:-39:852754448:57:263:0:1:0|h[Rubellite Ring of the Invoker]|h|r",
+"|HlootHistory:152|h[Loot]|h: Fennec (Greed - 86) Won: |cff1eff00|Hitem:25044:0:0:0:0:0:-39:852754448:58:263:0:1:0|h[Rubellite Ring of the Invoker]|h|r",
+"|HlootHistory:152|h[Loot]|h: You have rolled Greed - 47 for: |cff1eff00|Hitem:25044:0:0:0:0:0:-39:852754448:58:263:0:1:0|h[Rubellite Ring of the Invoker]|h|r",
+"|HlootHistory:152|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25044:0:0:0:0:0:-39:852754448:57:263:0:1:0|h[Rubellite Ring of the Invoker]|h|r",
+"|HlootHistory:153|h[Loot]|h: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:57:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:153|h[Loot]|h: Celvariel-Auchindoun (Greed - 56) Won: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:58:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:153|h[Loot]|h: You have rolled Greed - 36 for: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:58:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:153|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:58:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:154|h[Loot]|h: |cff1eff00|Hitem:24591:0:0:0:0:0:-32:202506269:58:263:0:1:0|h[Fireheart Chestpiece of Fire Protection]|h|r",
+"|HlootHistory:154|h[Loot]|h: You (Greed - 80) Won: |cff1eff00|Hitem:24591:0:0:0:0:0:-32:202506269:58:263:0:1:0|h[Fireheart Chestpiece of Fire Protection]|h|r",
+"|HlootHistory:154|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24591:0:0:0:0:0:-32:202506269:58:263:0:1:0|h[Fireheart Chestpiece of Fire Protection]|h|r",
+"|HlootHistory:155|h[Loot]|h: |cff1eff00|Hitem:24604:0:0:0:0:0:-19:1997864976:58:263:0:1:0|h[Starfire Wristwraps of Intellect]|h|r",
+"|HlootHistory:155|h[Loot]|h: Sanctisius (Greed - 78) Won: |cff1eff00|Hitem:24604:0:0:0:0:0:-19:1997864976:58:263:0:1:0|h[Starfire Wristwraps of Intellect]|h|r",
+"|HlootHistory:155|h[Loot]|h: You have rolled Greed - 32 for: |cff1eff00|Hitem:24604:0:0:0:0:0:-19:1997864976:58:263:0:1:0|h[Starfire Wristwraps of Intellect]|h|r",
+"|HlootHistory:155|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24604:0:0:0:0:0:-19:1997864976:58:263:0:1:0|h[Starfire Wristwraps of Intellect]|h|r",
+"|HlootHistory:156|h[Loot]|h: |cff1eff00|Hitem:24713:0:0:0:0:0:-27:326762525:58:263:0:1:0|h[Vengeance Helm of Nimbleness]|h|r",
+"|HlootHistory:156|h[Loot]|h: You (Greed - 41) Won: |cff1eff00|Hitem:24713:0:0:0:0:0:-27:326762525:58:263:0:1:0|h[Vengeance Helm of Nimbleness]|h|r",
+"|HlootHistory:156|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24713:0:0:0:0:0:-27:326762525:58:263:0:1:0|h[Vengeance Helm of Nimbleness]|h|r",
+"|HlootHistory:157|h[Loot]|h: |cff0070dd|Hitem:24021:0:0:0:0:0:0:0:58:263:0:1:0|h[Light-Touched Breastplate]|h|r",
+"|HlootHistory:157|h[Loot]|h: Sanctisius (Greed - 81) Won: |cff0070dd|Hitem:24021:0:0:0:0:0:0:0:58:263:0:1:0|h[Light-Touched Breastplate]|h|r",
+"|HlootHistory:157|h[Loot]|h: You have rolled Greed - 53 for: |cff0070dd|Hitem:24021:0:0:0:0:0:0:0:58:263:0:1:0|h[Light-Touched Breastplate]|h|r",
+"|HlootHistory:157|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24021:0:0:0:0:0:0:0:58:263:0:1:0|h[Light-Touched Breastplate]|h|r",
+"|HlootHistory:158|h[Loot]|h: |cff1eff00|Hitem:24924:0:0:0:0:0:-45:1678704662:58:263:0:1:0|h[Grimscale Pauldrons of the Champion]|h|r",
+"|HlootHistory:158|h[Loot]|h: Sanctisius (Need - 62) Won: |cff1eff00|Hitem:24924:0:0:0:0:0:-45:1678704662:58:263:0:1:0|h[Grimscale Pauldrons of the Champion]|h|r",
+"|HlootHistory:158|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24924:0:0:0:0:0:-45:1678704662:58:263:0:1:0|h[Grimscale Pauldrons of the Champion]|h|r",
+"|HlootHistory:159|h[Loot]|h: |cff1eff00|Hitem:24948:0:0:0:0:0:-41:1440022550:58:263:0:1:0|h[Bloodscale Pauldrons of the Beast]|h|r",
+"|HlootHistory:159|h[Loot]|h: Sanctisius (Need - 92) Won: |cff1eff00|Hitem:24948:0:0:0:0:0:-41:1440022550:58:263:0:1:0|h[Bloodscale Pauldrons of the Beast]|h|r",
+"|HlootHistory:159|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24948:0:0:0:0:0:-41:1440022550:58:263:0:1:0|h[Bloodscale Pauldrons of the Beast]|h|r",
+"|HlootHistory:16|h[Loot]|h: |cff0070dd|Hitem:10758:0:0:0:0:0:0:0:50:268:0:1:0|h[X'caliboar]|h|r",
+"|HlootHistory:16|h[Loot]|h: |cff0070dd|Hitem:17710:0:0:0:0:0:0:0:37:264:0:1:0|h[Charstone Dirk]|h|r",
+"|HlootHistory:16|h[Loot]|h: |cff0070dd|Hitem:18352:0:0:0:0:0:0:0:46:268:0:1:0|h[Petrified Bark Shield]|h|r",
+"|HlootHistory:16|h[Loot]|h: |cff0070dd|Hitem:22405:0:0:0:0:0:0:0:48:263:0:1:0|h[Mantle of the Scarlet Crusade]|h|r",
+"|HlootHistory:16|h[Loot]|h: |cff1eff00|Hitem:11995:0:0:0:0:0:-84:49355392:30:104:0:1:0|h[Ivory Band of Stamina]|h|r",
+"|HlootHistory:16|h[Loot]|h: |cff1eff00|Hitem:24941:0:0:0:0:0:-19:972685328:61:64:0:1:0|h[Darkcrest Bracers of Intellect]|h|r",
+"|HlootHistory:16|h[Loot]|h: |cff1eff00|Hitem:3430:0:0:0:0:0:-69:467935744:47:66:0:1:0|h[Sniper Rifle of the Eagle]|h|r",
+"|HlootHistory:16|h[Loot]|h: |cff1eff00|Hitem:6558:0:0:0:0:0:-81:848493184:16:73:0:1:0|h[Bard's Belt of the Whale]|h|r",
+"|HlootHistory:16|h[Loot]|h: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:16:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:16|h[Loot]|h: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:18:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:16|h[Loot]|h: |cff1eff00|Hitem:8249:0:0:0:0:0:0:0:53:268:0:1:0|h[Imperial Red Gloves]|h|r",
+"|HlootHistory:16|h[Loot]|h: Anestadren (Greed - 37) Won: |cff1eff00|Hitem:6558:0:0:0:0:0:-81:848493184:16:73:0:1:0|h[Bard's Belt of the Whale]|h|r",
+"|HlootHistory:16|h[Loot]|h: Atmøsfear-TarrenMill (Greed - 35) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:16|h[Loot]|h: Fennec (Greed - 86) Won: |cff1eff00|Hitem:3430:0:0:0:0:0:-69:467935744:47:66:0:1:0|h[Sniper Rifle of the Eagle]|h|r",
+"|HlootHistory:16|h[Loot]|h: Helionkleijn-Hellscream (Greed - 82) Won: |cff1eff00|Hitem:24941:0:0:0:0:0:-19:972685328:61:64:0:1:0|h[Darkcrest Bracers of Intellect]|h|r",
+"|HlootHistory:16|h[Loot]|h: Jorelemental-Ragnaros (Greed - 91) Won: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:18:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:16|h[Loot]|h: Kinkytree-Draenor (Greed - 75) Won: |cff0070dd|Hitem:18352:0:0:0:0:0:0:0:46:268:0:1:0|h[Petrified Bark Shield]|h|r",
+"|HlootHistory:16|h[Loot]|h: Lerona (Greed - 80) Won: |cff1eff00|Hitem:8249:0:0:0:0:0:0:0:53:268:0:1:0|h[Imperial Red Gloves]|h|r",
+"|HlootHistory:16|h[Loot]|h: Lerona (Need - 60) Won: |cff0070dd|Hitem:10758:0:0:0:0:0:0:0:50:268:0:1:0|h[X'caliboar]|h|r",
+"|HlootHistory:16|h[Loot]|h: Mangoworm (Greed - 76) Won: |cff1eff00|Hitem:11995:0:0:0:0:0:-84:49355392:30:104:0:1:0|h[Ivory Band of Stamina]|h|r",
+"|HlootHistory:16|h[Loot]|h: Midorìko-Runetotem (Need - 7) Won: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:16:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:16|h[Loot]|h: Neubel-Draenor (Need - 38) Won: |cff0070dd|Hitem:17710:0:0:0:0:0:0:0:37:264:0:1:0|h[Charstone Dirk]|h|r",
+"|HlootHistory:16|h[Loot]|h: Sanctisius (Greed - 52) Won: |cff0070dd|Hitem:22405:0:0:0:0:0:0:0:48:263:0:1:0|h[Mantle of the Scarlet Crusade]|h|r",
+"|HlootHistory:16|h[Loot]|h: You have rolled Greed - 16 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:16|h[Loot]|h: You have rolled Greed - 22 for: |cff1eff00|Hitem:24941:0:0:0:0:0:-19:972685328:61:64:0:1:0|h[Darkcrest Bracers of Intellect]|h|r",
+"|HlootHistory:16|h[Loot]|h: You have rolled Greed - 23 for: |cff0070dd|Hitem:18352:0:0:0:0:0:0:0:46:268:0:1:0|h[Petrified Bark Shield]|h|r",
+"|HlootHistory:16|h[Loot]|h: You have rolled Greed - 48 for: |cff0070dd|Hitem:22405:0:0:0:0:0:0:0:48:263:0:1:0|h[Mantle of the Scarlet Crusade]|h|r",
+"|HlootHistory:16|h[Loot]|h: You have rolled Greed - 58 for: |cff1eff00|Hitem:3430:0:0:0:0:0:-69:467935744:47:66:0:1:0|h[Sniper Rifle of the Eagle]|h|r",
+"|HlootHistory:16|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10758:0:0:0:0:0:0:0:50:268:0:1:0|h[X'caliboar]|h|r",
+"|HlootHistory:16|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:17710:0:0:0:0:0:0:0:37:264:0:1:0|h[Charstone Dirk]|h|r",
+"|HlootHistory:16|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18352:0:0:0:0:0:0:0:46:268:0:1:0|h[Petrified Bark Shield]|h|r",
+"|HlootHistory:16|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22405:0:0:0:0:0:0:0:48:263:0:1:0|h[Mantle of the Scarlet Crusade]|h|r",
+"|HlootHistory:16|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:16|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24941:0:0:0:0:0:-19:972685328:61:64:0:1:0|h[Darkcrest Bracers of Intellect]|h|r",
+"|HlootHistory:16|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:3430:0:0:0:0:0:-69:467935744:47:66:0:1:0|h[Sniper Rifle of the Eagle]|h|r",
+"|HlootHistory:16|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:16:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:16|h[Loot]|h: You passed on: |cff1eff00|Hitem:11995:0:0:0:0:0:-84:49355392:30:104:0:1:0|h[Ivory Band of Stamina]|h|r",
+"|HlootHistory:16|h[Loot]|h: You passed on: |cff1eff00|Hitem:6558:0:0:0:0:0:-81:848493184:16:73:0:1:0|h[Bard's Belt of the Whale]|h|r",
+"|HlootHistory:16|h[Loot]|h: You passed on: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:18:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:16|h[Loot]|h: You passed on: |cff1eff00|Hitem:8249:0:0:0:0:0:0:0:53:268:0:1:0|h[Imperial Red Gloves]|h|r",
+"|HlootHistory:160|h[Loot]|h: |cff1eff00|Hitem:25100:0:0:0:0:0:-11:960167948:58:263:0:1:0|h[Liege Blade of the Falcon]|h|r",
+"|HlootHistory:160|h[Loot]|h: You (Greed - 73) Won: |cff1eff00|Hitem:25100:0:0:0:0:0:-11:960167948:58:263:0:1:0|h[Liege Blade of the Falcon]|h|r",
+"|HlootHistory:160|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25100:0:0:0:0:0:-11:960167948:58:263:0:1:0|h[Liege Blade of the Falcon]|h|r",
+"|HlootHistory:161|h[Loot]|h: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:58:263:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:161|h[Loot]|h: Fennec (Greed - 98) Won: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:58:263:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:161|h[Loot]|h: You have rolled Greed - 1 for: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:58:263:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:161|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:58:263:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:162|h[Loot]|h: |cff0070dd|Hitem:24150:0:0:0:0:0:0:0:58:263:0:1:0|h[Mok'Nathal Wildercloak]|h|r",
+"|HlootHistory:162|h[Loot]|h: Sanctisius (Greed - 93) Won: |cff0070dd|Hitem:24150:0:0:0:0:0:0:0:58:263:0:1:0|h[Mok'Nathal Wildercloak]|h|r",
+"|HlootHistory:162|h[Loot]|h: You have rolled Greed - 71 for: |cff0070dd|Hitem:24150:0:0:0:0:0:0:0:58:263:0:1:0|h[Mok'Nathal Wildercloak]|h|r",
+"|HlootHistory:162|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24150:0:0:0:0:0:0:0:58:263:0:1:0|h[Mok'Nathal Wildercloak]|h|r",
+"|HlootHistory:163|h[Loot]|h: |cff0070dd|Hitem:24046:0:0:0:0:0:0:0:58:263:0:1:0|h[Kilt of Rolling Thunders]|h|r",
+"|HlootHistory:163|h[Loot]|h: You (Need - 24) Won: |cff0070dd|Hitem:24046:0:0:0:0:0:0:0:58:263:0:1:0|h[Kilt of Rolling Thunders]|h|r",
+"|HlootHistory:163|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:24046:0:0:0:0:0:0:0:58:263:0:1:0|h[Kilt of Rolling Thunders]|h|r",
+"|HlootHistory:164|h[Loot]|h: |cff0070dd|Hitem:24384:0:0:0:0:0:0:0:58:263:0:1:0|h[Diamond-Core Sledgemace]|h|r",
+"|HlootHistory:164|h[Loot]|h: Sanctisius (Need - 85) Won: |cff0070dd|Hitem:24384:0:0:0:0:0:0:0:58:263:0:1:0|h[Diamond-Core Sledgemace]|h|r",
+"|HlootHistory:164|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24384:0:0:0:0:0:0:0:58:263:0:1:0|h[Diamond-Core Sledgemace]|h|r",
+"|HlootHistory:165|h[Loot]|h: |cff1eff00|Hitem:24710:0:0:0:0:0:-5:1650655254:59:263:0:1:0|h[Vengeance Boots of the Monkey]|h|r",
+"|HlootHistory:165|h[Loot]|h: Celvariel-Auchindoun (Greed - 95) Won: |cff1eff00|Hitem:24710:0:0:0:0:0:-5:1650655254:59:263:0:1:0|h[Vengeance Boots of the Monkey]|h|r",
+"|HlootHistory:165|h[Loot]|h: You have rolled Greed - 50 for: |cff1eff00|Hitem:24710:0:0:0:0:0:-5:1650655254:59:263:0:1:0|h[Vengeance Boots of the Monkey]|h|r",
+"|HlootHistory:165|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24710:0:0:0:0:0:-5:1650655254:59:263:0:1:0|h[Vengeance Boots of the Monkey]|h|r",
+"|HlootHistory:166|h[Loot]|h: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:59:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:166|h[Loot]|h: You (Greed - 95) Won: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:59:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:166|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:59:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:167|h[Loot]|h: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:59:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:167|h[Loot]|h: You (Greed - 56) Won: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:59:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:167|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:59:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:168|h[Loot]|h: |cff1eff00|Hitem:25046:0:0:0:0:0:-40:1747386384:59:263:0:1:0|h[Spined Ring of the Bandit]|h|r",
+"|HlootHistory:168|h[Loot]|h: You (Greed - 88) Won: |cff1eff00|Hitem:25046:0:0:0:0:0:-40:1747386384:59:263:0:1:0|h[Spined Ring of the Bandit]|h|r",
+"|HlootHistory:168|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25046:0:0:0:0:0:-40:1747386384:59:263:0:1:0|h[Spined Ring of the Bandit]|h|r",
+"|HlootHistory:169|h[Loot]|h: |cff1eff00|Hitem:25213:0:0:0:0:0:-41:576323613:59:263:0:1:0|h[Fel-Touched Axe of the Beast]|h|r",
+"|HlootHistory:169|h[Loot]|h: You (Greed - 99) Won: |cff1eff00|Hitem:25213:0:0:0:0:0:-41:576323613:59:263:0:1:0|h[Fel-Touched Axe of the Beast]|h|r",
+"|HlootHistory:169|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25213:0:0:0:0:0:-41:576323613:59:263:0:1:0|h[Fel-Touched Axe of the Beast]|h|r",
+"|HlootHistory:17|h[Loot]|h: |cff0070dd|Hitem:10768:0:0:0:0:0:0:0:47:66:0:1:0|h[Boar Champion's Belt]|h|r",
+"|HlootHistory:17|h[Loot]|h: |cff0070dd|Hitem:10770:0:0:0:0:0:0:0:50:268:0:1:0|h[Mordresh's Lifeless Skull]|h|r",
+"|HlootHistory:17|h[Loot]|h: |cff0070dd|Hitem:17732:0:0:0:0:0:0:0:37:264:0:1:0|h[Rotgrip Mantle]|h|r",
+"|HlootHistory:17|h[Loot]|h: |cff0070dd|Hitem:18372:0:0:0:0:0:0:0:47:268:0:1:0|h[Blade of the New Moon]|h|r",
+"|HlootHistory:17|h[Loot]|h: |cff0070dd|Hitem:1951:0:0:0:0:0:0:0:16:268:0:1:0|h[Blackwater Cutlass]|h|r",
+"|HlootHistory:17|h[Loot]|h: |cff0070dd|Hitem:24360:0:0:0:0:0:0:0:61:64:0:1:0|h[Tracker's Belt]|h|r",
+"|HlootHistory:17|h[Loot]|h: |cff0070dd|Hitem:2911:0:0:0:0:0:0:0:18:104:0:1:0|h[Keller's Girdle]|h|r",
+"|HlootHistory:17|h[Loot]|h: |cff1eff00|Hitem:10301:0:0:0:0:0:0:0:48:263:0:1:0|h[Pattern: White Bandit Mask]|h|r",
+"|HlootHistory:17|h[Loot]|h: |cff1eff00|Hitem:15245:0:0:0:0:0:-84:1080578048:53:268:0:1:0|h[Vorpal Dagger of Stamina]|h|r",
+"|HlootHistory:17|h[Loot]|h: |cff1eff00|Hitem:6560:0:0:0:0:0:-10:1964260736:16:73:0:1:0|h[Soldier's Shield of the Gorilla]|h|r",
+"|HlootHistory:17|h[Loot]|h: |cff1eff00|Hitem:6605:0:0:0:0:0:-11:58635904:31:104:0:1:0|h[Dervish Gloves of the Falcon]|h|r",
+"|HlootHistory:17|h[Loot]|h: Aramago-Drak'thul (Need - 50) Won: |cff0070dd|Hitem:2911:0:0:0:0:0:0:0:18:104:0:1:0|h[Keller's Girdle]|h|r",
+"|HlootHistory:17|h[Loot]|h: Arathoas-Draenor (Need - 39) Won: |cff0070dd|Hitem:24360:0:0:0:0:0:0:0:61:64:0:1:0|h[Tracker's Belt]|h|r",
+"|HlootHistory:17|h[Loot]|h: Bowjack-ChamberofAspects (Greed - 76) Won: |cff1eff00|Hitem:6560:0:0:0:0:0:-10:1964260736:16:73:0:1:0|h[Soldier's Shield of the Gorilla]|h|r",
+"|HlootHistory:17|h[Loot]|h: Celvariel-Auchindoun (Greed - 82) Won: |cff1eff00|Hitem:15245:0:0:0:0:0:-84:1080578048:53:268:0:1:0|h[Vorpal Dagger of Stamina]|h|r",
+"|HlootHistory:17|h[Loot]|h: Kinkytree-Draenor (Greed - 99) Won: |cff0070dd|Hitem:18372:0:0:0:0:0:0:0:47:268:0:1:0|h[Blade of the New Moon]|h|r",
+"|HlootHistory:17|h[Loot]|h: Lerona-Jaedenar (Greed - 70) Won: |cff0070dd|Hitem:1951:0:0:0:0:0:0:0:16:268:0:1:0|h[Blackwater Cutlass]|h|r",
+"|HlootHistory:17|h[Loot]|h: Nahj-Kazzak (Need - 87) Won: |cff0070dd|Hitem:10768:0:0:0:0:0:0:0:47:66:0:1:0|h[Boar Champion's Belt]|h|r",
+"|HlootHistory:17|h[Loot]|h: Sanctisius (Greed - 89) Won: |cff1eff00|Hitem:10301:0:0:0:0:0:0:0:48:263:0:1:0|h[Pattern: White Bandit Mask]|h|r",
+"|HlootHistory:17|h[Loot]|h: You (Greed - 90) Won: |cff0070dd|Hitem:10770:0:0:0:0:0:0:0:50:268:0:1:0|h[Mordresh's Lifeless Skull]|h|r",
+"|HlootHistory:17|h[Loot]|h: You (Greed - 99) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:17|h[Loot]|h: You (Need - 96) Won: |cff1eff00|Hitem:6605:0:0:0:0:0:-11:58635904:31:104:0:1:0|h[Dervish Gloves of the Falcon]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have rolled Greed - 22 for: |cff1eff00|Hitem:10301:0:0:0:0:0:0:0:48:263:0:1:0|h[Pattern: White Bandit Mask]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have rolled Greed - 28 for: |cff0070dd|Hitem:1951:0:0:0:0:0:0:0:16:268:0:1:0|h[Blackwater Cutlass]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have rolled Greed - 57 for: |cff1eff00|Hitem:15245:0:0:0:0:0:-84:1080578048:53:268:0:1:0|h[Vorpal Dagger of Stamina]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have rolled Greed - 67 for: |cff0070dd|Hitem:18372:0:0:0:0:0:0:0:47:268:0:1:0|h[Blade of the New Moon]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10768:0:0:0:0:0:0:0:47:66:0:1:0|h[Boar Champion's Belt]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10770:0:0:0:0:0:0:0:50:268:0:1:0|h[Mordresh's Lifeless Skull]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:17732:0:0:0:0:0:0:0:37:264:0:1:0|h[Rotgrip Mantle]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18372:0:0:0:0:0:0:0:47:268:0:1:0|h[Blade of the New Moon]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:1951:0:0:0:0:0:0:0:16:268:0:1:0|h[Blackwater Cutlass]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24360:0:0:0:0:0:0:0:61:64:0:1:0|h[Tracker's Belt]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10301:0:0:0:0:0:0:0:48:263:0:1:0|h[Pattern: White Bandit Mask]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15245:0:0:0:0:0:-84:1080578048:53:268:0:1:0|h[Vorpal Dagger of Stamina]|h|r",
+"|HlootHistory:17|h[Loot]|h: You have selected Need for: |cff1eff00|Hitem:6605:0:0:0:0:0:-11:58635904:31:104:0:1:0|h[Dervish Gloves of the Falcon]|h|r",
+"|HlootHistory:17|h[Loot]|h: You passed on: |cff0070dd|Hitem:2911:0:0:0:0:0:0:0:18:104:0:1:0|h[Keller's Girdle]|h|r",
+"|HlootHistory:17|h[Loot]|h: You passed on: |cff1eff00|Hitem:6560:0:0:0:0:0:-10:1964260736:16:73:0:1:0|h[Soldier's Shield of the Gorilla]|h|r",
+"|HlootHistory:170|h[Loot]|h: |cff0070dd|Hitem:24393:0:0:0:0:0:0:0:59:263:0:1:0|h[Bloody Surgeon's Mitts]|h|r",
+"|HlootHistory:170|h[Loot]|h: Fennec (Greed - 82) Won: |cff0070dd|Hitem:24393:0:0:0:0:0:0:0:59:263:0:1:0|h[Bloody Surgeon's Mitts]|h|r",
+"|HlootHistory:170|h[Loot]|h: You have rolled Greed - 81 for: |cff0070dd|Hitem:24393:0:0:0:0:0:0:0:59:263:0:1:0|h[Bloody Surgeon's Mitts]|h|r",
+"|HlootHistory:170|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24393:0:0:0:0:0:0:0:59:263:0:1:0|h[Bloody Surgeon's Mitts]|h|r",
+"|HlootHistory:171|h[Loot]|h: |cff1eff00|Hitem:24719:0:0:0:0:0:-40:1844707357:59:263:0:1:0|h[Dreghood Chestpiece of the Bandit]|h|r",
+"|HlootHistory:171|h[Loot]|h: Fennec (Greed - 99) Won: |cff1eff00|Hitem:24719:0:0:0:0:0:-40:1844707357:59:263:0:1:0|h[Dreghood Chestpiece of the Bandit]|h|r",
+"|HlootHistory:171|h[Loot]|h: You have rolled Greed - 14 for: |cff1eff00|Hitem:24719:0:0:0:0:0:-40:1844707357:59:263:0:1:0|h[Dreghood Chestpiece of the Bandit]|h|r",
+"|HlootHistory:171|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24719:0:0:0:0:0:-40:1844707357:59:263:0:1:0|h[Dreghood Chestpiece of the Bandit]|h|r",
+"|HlootHistory:172|h[Loot]|h: |cff0070dd|Hitem:24396:0:0:0:0:0:0:0:59:263:0:1:0|h[Vest of Vengeance]|h|r",
+"|HlootHistory:172|h[Loot]|h: You (Greed - 69) Won: |cff0070dd|Hitem:24396:0:0:0:0:0:0:0:59:263:0:1:0|h[Vest of Vengeance]|h|r",
+"|HlootHistory:172|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24396:0:0:0:0:0:0:0:59:263:0:1:0|h[Vest of Vengeance]|h|r",
+"|HlootHistory:173|h[Loot]|h: |cff1eff00|Hitem:24818:0:0:0:0:0:-19:2086404125:59:263:0:1:0|h[Felstone Helm of Intellect]|h|r",
+"|HlootHistory:173|h[Loot]|h: You (Greed - 50) Won: |cff1eff00|Hitem:24818:0:0:0:0:0:-19:2086404125:59:263:0:1:0|h[Felstone Helm of Intellect]|h|r",
+"|HlootHistory:173|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24818:0:0:0:0:0:-19:2086404125:59:263:0:1:0|h[Felstone Helm of Intellect]|h|r",
+"|HlootHistory:174|h[Loot]|h: |cff0070dd|Hitem:24388:0:0:0:0:0:0:0:59:263:0:1:0|h[Girdle of the Gale Storm]|h|r",
+"|HlootHistory:174|h[Loot]|h: You (Greed - 86) Won: |cff0070dd|Hitem:24388:0:0:0:0:0:0:0:59:263:0:1:0|h[Girdle of the Gale Storm]|h|r",
+"|HlootHistory:174|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24388:0:0:0:0:0:0:0:59:263:0:1:0|h[Girdle of the Gale Storm]|h|r",
+"|HlootHistory:175|h[Loot]|h: |cff0070dd|Hitem:24393:0:0:0:0:0:0:0:59:263:0:1:0|h[Bloody Surgeon's Mitts]|h|r",
+"|HlootHistory:175|h[Loot]|h: Celvariel-Auchindoun (Greed - 86) Won: |cff0070dd|Hitem:24393:0:0:0:0:0:0:0:59:263:0:1:0|h[Bloody Surgeon's Mitts]|h|r",
+"|HlootHistory:175|h[Loot]|h: You have rolled Greed - 39 for: |cff0070dd|Hitem:24393:0:0:0:0:0:0:0:59:263:0:1:0|h[Bloody Surgeon's Mitts]|h|r",
+"|HlootHistory:175|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24393:0:0:0:0:0:0:0:59:263:0:1:0|h[Bloody Surgeon's Mitts]|h|r",
+"|HlootHistory:176|h[Loot]|h: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:59:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:176|h[Loot]|h: Celvariel-Auchindoun (Greed - 62) Won: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:59:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:176|h[Loot]|h: You have rolled Greed - 47 for: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:59:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:176|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:59:263:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:177|h[Loot]|h: |cff0070dd|Hitem:24396:0:0:0:0:0:0:0:60:263:0:1:0|h[Vest of Vengeance]|h|r",
+"|HlootHistory:177|h[Loot]|h: Celvariel-Auchindoun (Greed - 96) Won: |cff0070dd|Hitem:24396:0:0:0:0:0:0:0:60:263:0:1:0|h[Vest of Vengeance]|h|r",
+"|HlootHistory:177|h[Loot]|h: You have rolled Greed - 38 for: |cff0070dd|Hitem:24396:0:0:0:0:0:0:0:60:263:0:1:0|h[Vest of Vengeance]|h|r",
+"|HlootHistory:177|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24396:0:0:0:0:0:0:0:60:263:0:1:0|h[Vest of Vengeance]|h|r",
+"|HlootHistory:18|h[Loot]|h: |cff0070dd|Hitem:10764:0:0:0:0:0:0:0:47:66:0:1:0|h[Deathchill Armor]|h|r",
+"|HlootHistory:18|h[Loot]|h: |cff0070dd|Hitem:10772:0:0:0:0:0:0:0:50:268:0:1:0|h[Glutton's Cleaver]|h|r",
+"|HlootHistory:18|h[Loot]|h: |cff0070dd|Hitem:18370:0:0:0:0:0:0:0:47:268:0:1:0|h[Vigilance Charm]|h|r",
+"|HlootHistory:18|h[Loot]|h: |cff0070dd|Hitem:1951:0:0:0:0:0:0:0:16:268:0:1:0|h[Blackwater Cutlass]|h|r",
+"|HlootHistory:18|h[Loot]|h: |cff0070dd|Hitem:5196:0:0:0:0:0:0:0:16:73:0:1:0|h[Smite's Reaver]|h|r",
+"|HlootHistory:18|h[Loot]|h: |cff0070dd|Hitem:9458:0:0:0:0:0:0:0:31:104:0:1:0|h[Thermaplugg's Central Core]|h|r",
+"|HlootHistory:18|h[Loot]|h: |cff1eff00|Hitem:10061:0:0:0:0:0:-9:233335936:53:268:0:1:0|h[Duskwoven Turban of the Owl]|h|r",
+"|HlootHistory:18|h[Loot]|h: |cff1eff00|Hitem:14729:0:0:0:0:0:0:0:18:104:0:1:0|h[War Paint Shield]|h|r",
+"|HlootHistory:18|h[Loot]|h: |cff1eff00|Hitem:16249:0:0:0:0:0:0:0:48:263:0:1:0|h[Formula: Enchant 2H Weapon - Major Intellect]|h|r",
+"|HlootHistory:18|h[Loot]|h: |cff1eff00|Hitem:24822:0:0:0:0:0:-43:1085931542:62:64:0:1:0|h[Netherstalker Belt of the Soldier]|h|r",
+"|HlootHistory:18|h[Loot]|h: |cff1eff00|Hitem:3864:0:0:0:0:0:0:0:37:264:0:0:0|h[Citrine]|h|r",
+"|HlootHistory:18|h[Loot]|h: Alehara (Greed - 48) Won: |cff0070dd|Hitem:5196:0:0:0:0:0:0:0:16:73:0:1:0|h[Smite's Reaver]|h|r",
+"|HlootHistory:18|h[Loot]|h: Celvariel-Auchindoun (Greed - 53) Won: |cff0070dd|Hitem:10772:0:0:0:0:0:0:0:50:268:0:1:0|h[Glutton's Cleaver]|h|r",
+"|HlootHistory:18|h[Loot]|h: Celvariel-Auchindoun (Greed - 96) Won: |cff1eff00|Hitem:10061:0:0:0:0:0:-9:233335936:53:268:0:1:0|h[Duskwoven Turban of the Owl]|h|r",
+"|HlootHistory:18|h[Loot]|h: Celvariel-Auchindoun (Greed - 98) Won: |cff0070dd|Hitem:1951:0:0:0:0:0:0:0:16:268:0:1:0|h[Blackwater Cutlass]|h|r",
+"|HlootHistory:18|h[Loot]|h: Jorelemental-Ragnaros (Greed - 57) Won: |cff1eff00|Hitem:14729:0:0:0:0:0:0:0:18:104:0:1:0|h[War Paint Shield]|h|r",
+"|HlootHistory:18|h[Loot]|h: Kinkytree-Draenor (Need - 67) Won: |cff0070dd|Hitem:18370:0:0:0:0:0:0:0:47:268:0:1:0|h[Vigilance Charm]|h|r",
+"|HlootHistory:18|h[Loot]|h: Koenig-Kazzak (Greed - 71) Won: |cff1eff00|Hitem:24822:0:0:0:0:0:-43:1085931542:62:64:0:1:0|h[Netherstalker Belt of the Soldier]|h|r",
+"|HlootHistory:18|h[Loot]|h: Lizac-Spinebreaker (Greed - 86) Won: |cff0070dd|Hitem:9458:0:0:0:0:0:0:0:31:104:0:1:0|h[Thermaplugg's Central Core]|h|r",
+"|HlootHistory:18|h[Loot]|h: Maeneth (Need - 2) Won: |cff0070dd|Hitem:10764:0:0:0:0:0:0:0:47:66:0:1:0|h[Deathchill Armor]|h|r",
+"|HlootHistory:18|h[Loot]|h: Valhallir-Spinebreaker (Greed - 92) Won: |cff0070dd|Hitem:11819:0:0:0:0:0:0:0:51:105:0:1:0|h[Second Wind]|h|r",
+"|HlootHistory:18|h[Loot]|h: You (Greed - 79) Won: |cff1eff00|Hitem:3864:0:0:0:0:0:0:0:37:264:0:0:0|h[Citrine]|h|r",
+"|HlootHistory:18|h[Loot]|h: You (Greed - 96) Won: |cff1eff00|Hitem:16249:0:0:0:0:0:0:0:49:263:0:1:0|h[Formula: Enchant 2H Weapon - Major Intellect]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have rolled Greed - 17 for: |cff1eff00|Hitem:24822:0:0:0:0:0:-43:1085931542:62:64:0:1:0|h[Netherstalker Belt of the Soldier]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have rolled Greed - 29 for: |cff0070dd|Hitem:11819:0:0:0:0:0:0:0:51:105:0:1:0|h[Second Wind]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have rolled Greed - 39 for: |cff0070dd|Hitem:10772:0:0:0:0:0:0:0:50:268:0:1:0|h[Glutton's Cleaver]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have rolled Greed - 65 for: |cff1eff00|Hitem:10061:0:0:0:0:0:-9:233335936:53:268:0:1:0|h[Duskwoven Turban of the Owl]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have rolled Greed - 88 for: |cff0070dd|Hitem:1951:0:0:0:0:0:0:0:16:268:0:1:0|h[Blackwater Cutlass]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10764:0:0:0:0:0:0:0:47:66:0:1:0|h[Deathchill Armor]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10772:0:0:0:0:0:0:0:50:268:0:1:0|h[Glutton's Cleaver]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11819:0:0:0:0:0:0:0:51:105:0:1:0|h[Second Wind]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18370:0:0:0:0:0:0:0:47:268:0:1:0|h[Vigilance Charm]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:1951:0:0:0:0:0:0:0:16:268:0:1:0|h[Blackwater Cutlass]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10061:0:0:0:0:0:-9:233335936:53:268:0:1:0|h[Duskwoven Turban of the Owl]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:16249:0:0:0:0:0:0:0:49:263:0:1:0|h[Formula: Enchant 2H Weapon - Major Intellect]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24822:0:0:0:0:0:-43:1085931542:62:64:0:1:0|h[Netherstalker Belt of the Soldier]|h|r",
+"|HlootHistory:18|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:3864:0:0:0:0:0:0:0:37:264:0:0:0|h[Citrine]|h|r",
+"|HlootHistory:18|h[Loot]|h: You passed on: |cff0070dd|Hitem:5196:0:0:0:0:0:0:0:16:73:0:1:0|h[Smite's Reaver]|h|r",
+"|HlootHistory:18|h[Loot]|h: You passed on: |cff0070dd|Hitem:9458:0:0:0:0:0:0:0:31:104:0:1:0|h[Thermaplugg's Central Core]|h|r",
+"|HlootHistory:18|h[Loot]|h: You passed on: |cff1eff00|Hitem:14729:0:0:0:0:0:0:0:18:104:0:1:0|h[War Paint Shield]|h|r",
+"|HlootHistory:19|h[Loot]|h: |cff0070dd|Hitem:10761:0:0:0:0:0:0:0:47:66:0:1:0|h[Coldrage Dagger]|h|r",
+"|HlootHistory:19|h[Loot]|h: |cff0070dd|Hitem:13375:0:0:0:0:0:0:0:53:268:0:1:0|h[Crest of Retribution]|h|r",
+"|HlootHistory:19|h[Loot]|h: |cff0070dd|Hitem:18380:0:0:0:0:0:0:0:47:268:0:1:0|h[Eldritch Reinforced Legplates]|h|r",
+"|HlootHistory:19|h[Loot]|h: |cff0070dd|Hitem:5197:0:0:0:0:0:0:0:17:73:0:1:0|h[Cookie's Tenderizer]|h|r",
+"|HlootHistory:19|h[Loot]|h: |cff0070dd|Hitem:6449:0:0:0:0:0:0:0:18:104:0:1:0|h[Glowing Lizardscale Cloak]|h|r",
+"|HlootHistory:19|h[Loot]|h: |cff1eff00|Hitem:15270:0:0:0:0:0:-84:1490465152:48:263:0:1:0|h[Gigantic War Axe of Stamina]|h|r",
+"|HlootHistory:19|h[Loot]|h: |cff1eff00|Hitem:15370:0:0:0:0:0:-18:512217344:50:268:0:1:0|h[Wolf Rider's Boots of Agility]|h|r",
+"|HlootHistory:19|h[Loot]|h: |cff1eff00|Hitem:3864:0:0:0:0:0:0:0:37:264:0:0:0|h[Citrine]|h|r",
+"|HlootHistory:19|h[Loot]|h: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:62:64:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:19|h[Loot]|h: |cff1eff00|Hitem:6554:0:0:0:0:0:-325:2024254592:16:268:0:1:0|h[Bard's Gloves of Dodge]|h|r",
+"|HlootHistory:19|h[Loot]|h: |cff1eff00|Hitem:6594:0:0:0:0:0:-69:592595968:31:104:0:1:0|h[Battleforge Girdle of the Eagle]|h|r",
+"|HlootHistory:19|h[Loot]|h: Alehara (Greed - 82) Won: |cff0070dd|Hitem:5197:0:0:0:0:0:0:0:17:73:0:1:0|h[Cookie's Tenderizer]|h|r",
+"|HlootHistory:19|h[Loot]|h: Benniu-ChamberofAspects (Greed - 95) Won: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:62:64:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:19|h[Loot]|h: Celvariel-Auchindoun (Greed - 54) Won: |cff1eff00|Hitem:15370:0:0:0:0:0:-18:512217344:50:268:0:1:0|h[Wolf Rider's Boots of Agility]|h|r",
+"|HlootHistory:19|h[Loot]|h: Immox-Doomhammer (Greed - 97) Won: |cff1eff00|Hitem:6594:0:0:0:0:0:-69:592595968:31:104:0:1:0|h[Battleforge Girdle of the Eagle]|h|r",
+"|HlootHistory:19|h[Loot]|h: Lerona (Need - 36) Won: |cff0070dd|Hitem:18380:0:0:0:0:0:0:0:47:268:0:1:0|h[Eldritch Reinforced Legplates]|h|r",
+"|HlootHistory:19|h[Loot]|h: Lerona (Need - 48) Won: |cff0070dd|Hitem:13375:0:0:0:0:0:0:0:53:268:0:1:0|h[Crest of Retribution]|h|r",
+"|HlootHistory:19|h[Loot]|h: Myssterios-Drak'thul (Greed - 84) Won: |cff1eff00|Hitem:3864:0:0:0:0:0:0:0:37:264:0:0:0|h[Citrine]|h|r",
+"|HlootHistory:19|h[Loot]|h: Nahj-Kazzak (Need - 57) Won: |cff0070dd|Hitem:10761:0:0:0:0:0:0:0:47:66:0:1:0|h[Coldrage Dagger]|h|r",
+"|HlootHistory:19|h[Loot]|h: Sanctisius (Greed - 74) Won: |cff1eff00|Hitem:15270:0:0:0:0:0:-84:1490465152:49:263:0:1:0|h[Gigantic War Axe of Stamina]|h|r",
+"|HlootHistory:19|h[Loot]|h: Valhallir-Spinebreaker (Greed - 43) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:19|h[Loot]|h: Wydad-Draenor (Need - 93) Won: |cff0070dd|Hitem:6449:0:0:0:0:0:0:0:18:104:0:1:0|h[Glowing Lizardscale Cloak]|h|r",
+"|HlootHistory:19|h[Loot]|h: You (Greed - 97) Won: |cff1eff00|Hitem:6554:0:0:0:0:0:-325:2024254592:16:268:0:1:0|h[Bard's Gloves of Dodge]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have rolled Greed - 26 for: |cff1eff00|Hitem:15270:0:0:0:0:0:-84:1490465152:49:263:0:1:0|h[Gigantic War Axe of Stamina]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have rolled Greed - 39 for: |cff1eff00|Hitem:15370:0:0:0:0:0:-18:512217344:50:268:0:1:0|h[Wolf Rider's Boots of Agility]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have rolled Greed - 43 for: |cff1eff00|Hitem:3864:0:0:0:0:0:0:0:37:264:0:0:0|h[Citrine]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have rolled Greed - 43 for: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:62:64:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have rolled Greed - 5 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10761:0:0:0:0:0:0:0:47:66:0:1:0|h[Coldrage Dagger]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13375:0:0:0:0:0:0:0:53:268:0:1:0|h[Crest of Retribution]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18380:0:0:0:0:0:0:0:47:268:0:1:0|h[Eldritch Reinforced Legplates]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6449:0:0:0:0:0:0:0:18:104:0:1:0|h[Glowing Lizardscale Cloak]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15270:0:0:0:0:0:-84:1490465152:49:263:0:1:0|h[Gigantic War Axe of Stamina]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15370:0:0:0:0:0:-18:512217344:50:268:0:1:0|h[Wolf Rider's Boots of Agility]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:3864:0:0:0:0:0:0:0:37:264:0:0:0|h[Citrine]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:62:64:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:19|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:6554:0:0:0:0:0:-325:2024254592:16:268:0:1:0|h[Bard's Gloves of Dodge]|h|r",
+"|HlootHistory:19|h[Loot]|h: You passed on: |cff0070dd|Hitem:5197:0:0:0:0:0:0:0:17:73:0:1:0|h[Cookie's Tenderizer]|h|r",
+"|HlootHistory:19|h[Loot]|h: You passed on: |cff1eff00|Hitem:6594:0:0:0:0:0:-69:592595968:31:104:0:1:0|h[Battleforge Girdle of the Eagle]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff0070dd|Hitem:10775:0:0:0:0:0:0:0:44:270:0:1:0|h[Carapace of Tuten'kash]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff0070dd|Hitem:17755:0:0:0:0:0:0:0:34:264:0:1:0|h[Satyrmane Sash]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff0070dd|Hitem:88337:0:0:0:0:0:0:0:45:268:0:1:0|h[Shadow Puppet Bracers]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff0070dd|Hitem:9482:0:0:0:0:0:0:0:48:268:0:1:0|h[Witch Doctor's Cane]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff1eff00|Hitem:12382:0:0:0:0:0:0:0:52:268:0:0:0|h[Key to the City]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:45:66:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:48:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff1eff00|Hitem:14238:0:0:0:0:0:-11:2080685184:46:66:0:1:0|h[Darkmist Boots of the Falcon]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff1eff00|Hitem:24777:0:0:0:0:0:-42:671612965:100:250:0:22:0|h[Boneshredder Skullcap of the Elder]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff1eff00|Hitem:25311:0:0:0:0:0:-6:1302265868:60:64:0:1:0|h[Revitalizing Hammer of the Eagle]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff1eff00|Hitem:3036:0:0:0:0:0:0:0:15:104:0:1:0|h[Heavy Shortbow]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff1eff00|Hitem:4713:0:0:0:0:0:0:0:28:104:0:1:0|h[Silver-Thread Cloak]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff1eff00|Hitem:5069:0:0:0:0:0:0:0:10:73:0:0:0|h[Fire Wand]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff1eff00|Hitem:6511:0:0:0:0:0:0:0:13:268:0:0:0|h[Journeyman's Robe]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:11:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:2|h[Loot]|h: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:15:73:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:2|h[Loot]|h: Alehara (Greed - 89) Won: |cff1eff00|Hitem:5069:0:0:0:0:0:0:0:10:73:0:0:0|h[Fire Wand]|h|r",
+"|HlootHistory:2|h[Loot]|h: Aramago-Drak'thul (Need - 39) Won: |cff1eff00|Hitem:3036:0:0:0:0:0:0:0:15:104:0:1:0|h[Heavy Shortbow]|h|r",
+"|HlootHistory:2|h[Loot]|h: Bowjack-ChamberofAspects (Need - 22) Won: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:15:73:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:2|h[Loot]|h: Dopelius-Stormreaver (Greed - 88) Won: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:45:66:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:2|h[Loot]|h: Eternalwitch-Draenor (Greed - 87) Won: |cff1eff00|Hitem:12382:0:0:0:0:0:0:0:52:268:0:0:0|h[Key to the City]|h|r",
+"|HlootHistory:2|h[Loot]|h: Kaneky-Magtheridon (Greed - 54) Won: |cff1eff00|Hitem:25311:0:0:0:0:0:-6:1302265868:60:64:0:1:0|h[Revitalizing Hammer of the Eagle]|h|r",
+"|HlootHistory:2|h[Loot]|h: Lerona (Greed - 91) Won: |cff0070dd|Hitem:88337:0:0:0:0:0:0:0:45:268:0:1:0|h[Shadow Puppet Bracers]|h|r",
+"|HlootHistory:2|h[Loot]|h: Lethalundead-Outland (Greed - 100) Won: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:48:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:2|h[Loot]|h: Morte-Moonglade (Disenchant - 100) Won: |cff1eff00|Hitem:24777:0:0:0:0:0:-42:671612965:100:250:0:22:0|h[Boneshredder Skullcap of the Elder]|h|r",
+"|HlootHistory:2|h[Loot]|h: Patraulea-Hellscream (Greed - 70) Won: |cff0070dd|Hitem:10775:0:0:0:0:0:0:0:44:270:0:1:0|h[Carapace of Tuten'kash]|h|r",
+"|HlootHistory:2|h[Loot]|h: Selskab-Moonglade (Need - 68) Won: |cff0070dd|Hitem:17755:0:0:0:0:0:0:0:34:264:0:1:0|h[Satyrmane Sash]|h|r",
+"|HlootHistory:2|h[Loot]|h: Vrc-Draenor (Need - 64) Won: |cff1eff00|Hitem:15216:0:0:0:0:0:-20:444388224:50:105:0:1:0|h[Rune Sword of Power]|h|r",
+"|HlootHistory:2|h[Loot]|h: You (Greed - 81) Won: |cff1eff00|Hitem:6511:0:0:0:0:0:0:0:13:268:0:0:0|h[Journeyman's Robe]|h|r",
+"|HlootHistory:2|h[Loot]|h: You (Greed - 84) Won: |cff1eff00|Hitem:14238:0:0:0:0:0:-11:2080685184:46:66:0:1:0|h[Darkmist Boots of the Falcon]|h|r",
+"|HlootHistory:2|h[Loot]|h: You (Greed - 84) Won: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:11:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:2|h[Loot]|h: You (Greed - 91) Won: |cff0070dd|Hitem:9482:0:0:0:0:0:0:0:48:268:0:1:0|h[Witch Doctor's Cane]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have rolled Greed - 1 for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:48:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have rolled Greed - 40 for: |cff1eff00|Hitem:25311:0:0:0:0:0:-6:1302265868:60:64:0:1:0|h[Revitalizing Hammer of the Eagle]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have rolled Greed - 43 for: |cff0070dd|Hitem:88337:0:0:0:0:0:0:0:45:268:0:1:0|h[Shadow Puppet Bracers]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have rolled Greed - 51 for: |cff0070dd|Hitem:10775:0:0:0:0:0:0:0:44:270:0:1:0|h[Carapace of Tuten'kash]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have rolled Greed - 53 for: |cff1eff00|Hitem:24777:0:0:0:0:0:-42:671612965:100:250:0:22:0|h[Boneshredder Skullcap of the Elder]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have rolled Greed - 87 for: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:45:66:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10775:0:0:0:0:0:0:0:44:270:0:1:0|h[Carapace of Tuten'kash]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:17755:0:0:0:0:0:0:0:34:264:0:1:0|h[Satyrmane Sash]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88337:0:0:0:0:0:0:0:45:268:0:1:0|h[Shadow Puppet Bracers]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:9482:0:0:0:0:0:0:0:48:268:0:1:0|h[Witch Doctor's Cane]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:45:66:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:48:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14238:0:0:0:0:0:-11:2080685184:46:66:0:1:0|h[Darkmist Boots of the Falcon]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15216:0:0:0:0:0:-20:444388224:50:105:0:1:0|h[Rune Sword of Power]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24777:0:0:0:0:0:-42:671612965:100:250:0:22:0|h[Boneshredder Skullcap of the Elder]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25311:0:0:0:0:0:-6:1302265868:60:64:0:1:0|h[Revitalizing Hammer of the Eagle]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:6511:0:0:0:0:0:0:0:13:268:0:0:0|h[Journeyman's Robe]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:11:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:2|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:15:73:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:2|h[Loot]|h: You passed on: |cff1eff00|Hitem:12382:0:0:0:0:0:0:0:52:268:0:0:0|h[Key to the City]|h|r",
+"|HlootHistory:2|h[Loot]|h: You passed on: |cff1eff00|Hitem:3036:0:0:0:0:0:0:0:15:104:0:1:0|h[Heavy Shortbow]|h|r",
+"|HlootHistory:2|h[Loot]|h: You passed on: |cff1eff00|Hitem:4713:0:0:0:0:0:0:0:28:104:0:1:0|h[Silver-Thread Cloak]|h|r",
+"|HlootHistory:2|h[Loot]|h: You passed on: |cff1eff00|Hitem:5069:0:0:0:0:0:0:0:10:73:0:0:0|h[Fire Wand]|h|r",
+"|HlootHistory:2|h[Loot]|h: Zarklo-ChamberofAspects (Greed - 100) Won: |cff1eff00|Hitem:4713:0:0:0:0:0:0:0:28:104:0:1:0|h[Silver-Thread Cloak]|h|r",
+"|HlootHistory:20|h[Loot]|h: |cff0070dd|Hitem:10758:0:0:0:0:0:0:0:50:268:0:1:0|h[X'caliboar]|h|r",
+"|HlootHistory:20|h[Loot]|h: |cff0070dd|Hitem:18395:0:0:0:0:0:0:0:47:268:0:1:0|h[Emerald Flame Ring]|h|r",
+"|HlootHistory:20|h[Loot]|h: |cff0070dd|Hitem:18497:0:0:0:0:0:0:0:48:66:0:1:0|h[Sublime Wristguards]|h|r",
+"|HlootHistory:20|h[Loot]|h: |cff0070dd|Hitem:22408:0:0:0:0:0:0:0:53:268:0:1:0|h[Ritssyn's Wand of Bad Mojo]|h|r",
+"|HlootHistory:20|h[Loot]|h: |cff0070dd|Hitem:24378:0:0:0:0:0:0:0:62:64:0:1:0|h[Coilfang Hammer of Renewal]|h|r",
+"|HlootHistory:20|h[Loot]|h: |cff0070dd|Hitem:5196:0:0:0:0:0:0:0:16:268:0:1:0|h[Smite's Reaver]|h|r",
+"|HlootHistory:20|h[Loot]|h: |cff0070dd|Hitem:6459:0:0:0:0:0:0:0:18:104:0:1:0|h[Savage Trodders]|h|r",
+"|HlootHistory:20|h[Loot]|h: |cff0070dd|Hitem:88267:0:0:0:0:0:0:0:31:104:0:1:0|h[Commanding Bracers]|h|r",
+"|HlootHistory:20|h[Loot]|h: |cff0070dd|Hitem:9388:0:0:0:0:0:-9:1738047360:37:264:0:1:0|h[Revelosh's Armguards of the Owl]|h|r",
+"|HlootHistory:20|h[Loot]|h: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:49:263:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:20|h[Loot]|h: |cff1eff00|Hitem:15011:0:0:0:0:0:-69:740778880:18:73:0:1:0|h[Lupine Cord of the Eagle]|h|r",
+"|HlootHistory:20|h[Loot]|h: Bönés-Draenor (Need - 54) Won: |cff0070dd|Hitem:18395:0:0:0:0:0:0:0:47:268:0:1:0|h[Emerald Flame Ring]|h|r",
+"|HlootHistory:20|h[Loot]|h: Celvariel-Auchindoun (Greed - 92) Won: |cff0070dd|Hitem:22408:0:0:0:0:0:0:0:53:268:0:1:0|h[Ritssyn's Wand of Bad Mojo]|h|r",
+"|HlootHistory:20|h[Loot]|h: Hantarro-EmeraldDream (Greed - 59) Won: |cff1eff00|Hitem:10077:0:0:0:0:0:-78:726902144:51:105:0:1:0|h[Lord's Breastplate of the Monkey]|h|r",
+"|HlootHistory:20|h[Loot]|h: Helionkleijn-Hellscream (Need - 73) Won: |cff0070dd|Hitem:24378:0:0:0:0:0:0:0:62:64:0:1:0|h[Coilfang Hammer of Renewal]|h|r",
+"|HlootHistory:20|h[Loot]|h: Mirse-Anachronos (Need - 31) Won: |cff0070dd|Hitem:18497:0:0:0:0:0:0:0:48:66:0:1:0|h[Sublime Wristguards]|h|r",
+"|HlootHistory:20|h[Loot]|h: Onaix-Magtheridon (Greed - 90) Won: |cff0070dd|Hitem:5196:0:0:0:0:0:0:0:16:268:0:1:0|h[Smite's Reaver]|h|r",
+"|HlootHistory:20|h[Loot]|h: Sanctisius (Greed - 93) Won: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:49:263:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:20|h[Loot]|h: Sjalg-Draenor (Greed - 94) Won: |cff0070dd|Hitem:9388:0:0:0:0:0:-9:1738047360:37:264:0:1:0|h[Revelosh's Armguards of the Owl]|h|r",
+"|HlootHistory:20|h[Loot]|h: Wydad-Draenor (Need - 93) Won: |cff0070dd|Hitem:6459:0:0:0:0:0:0:0:18:104:0:1:0|h[Savage Trodders]|h|r",
+"|HlootHistory:20|h[Loot]|h: You (Greed - 66) Won: |cff0070dd|Hitem:10758:0:0:0:0:0:0:0:50:268:0:1:0|h[X'caliboar]|h|r",
+"|HlootHistory:20|h[Loot]|h: You (Greed - 89) Won: |cff0070dd|Hitem:88267:0:0:0:0:0:0:0:31:104:0:1:0|h[Commanding Bracers]|h|r",
+"|HlootHistory:20|h[Loot]|h: You (Need - 89) Won: |cff1eff00|Hitem:15011:0:0:0:0:0:-69:740778880:18:73:0:1:0|h[Lupine Cord of the Eagle]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have rolled Greed - 15 for: |cff0070dd|Hitem:22408:0:0:0:0:0:0:0:53:268:0:1:0|h[Ritssyn's Wand of Bad Mojo]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have rolled Greed - 34 for: |cff0070dd|Hitem:5196:0:0:0:0:0:0:0:16:268:0:1:0|h[Smite's Reaver]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have rolled Greed - 44 for: |cff1eff00|Hitem:10077:0:0:0:0:0:-78:726902144:51:105:0:1:0|h[Lord's Breastplate of the Monkey]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have rolled Greed - 59 for: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:49:263:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have rolled Greed - 66 for: |cff0070dd|Hitem:9388:0:0:0:0:0:-9:1738047360:37:264:0:1:0|h[Revelosh's Armguards of the Owl]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10758:0:0:0:0:0:0:0:50:268:0:1:0|h[X'caliboar]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18395:0:0:0:0:0:0:0:47:268:0:1:0|h[Emerald Flame Ring]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18497:0:0:0:0:0:0:0:48:66:0:1:0|h[Sublime Wristguards]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22408:0:0:0:0:0:0:0:53:268:0:1:0|h[Ritssyn's Wand of Bad Mojo]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24378:0:0:0:0:0:0:0:62:64:0:1:0|h[Coilfang Hammer of Renewal]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:5196:0:0:0:0:0:0:0:16:268:0:1:0|h[Smite's Reaver]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6459:0:0:0:0:0:0:0:18:104:0:1:0|h[Savage Trodders]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88267:0:0:0:0:0:0:0:31:104:0:1:0|h[Commanding Bracers]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:9388:0:0:0:0:0:-9:1738047360:37:264:0:1:0|h[Revelosh's Armguards of the Owl]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10077:0:0:0:0:0:-78:726902144:51:105:0:1:0|h[Lord's Breastplate of the Monkey]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:49:263:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:20|h[Loot]|h: You have selected Need for: |cff1eff00|Hitem:15011:0:0:0:0:0:-69:740778880:18:73:0:1:0|h[Lupine Cord of the Eagle]|h|r",
+"|HlootHistory:21|h[Loot]|h: |cff0070dd|Hitem:10765:0:0:0:0:0:0:0:50:268:0:1:0|h[Bonefingers]|h|r",
+"|HlootHistory:21|h[Loot]|h: |cff0070dd|Hitem:13349:0:0:0:0:0:0:0:53:268:0:1:0|h[Scepter of the Unholy]|h|r",
+"|HlootHistory:21|h[Loot]|h: |cff0070dd|Hitem:13386:0:0:0:0:0:0:0:49:263:0:1:0|h[Archivist Cape]|h|r",
+"|HlootHistory:21|h[Loot]|h: |cff0070dd|Hitem:5193:0:0:0:0:0:0:0:17:268:0:1:0|h[Cape of the Brotherhood]|h|r",
+"|HlootHistory:21|h[Loot]|h: |cff0070dd|Hitem:6629:0:0:0:0:0:0:0:19:104:0:1:0|h[Sporid Cape]|h|r",
+"|HlootHistory:21|h[Loot]|h: |cff1eff00|Hitem:1207:0:0:0:0:0:-68:204649728:37:264:0:1:0|h[Murphstar of the Bear]|h|r",
+"|HlootHistory:21|h[Loot]|h: |cff1eff00|Hitem:14910:0:0:0:0:0:-14:2012822912:48:66:0:1:0|h[Brutish Armguards of the Tiger]|h|r",
+"|HlootHistory:21|h[Loot]|h: |cff1eff00|Hitem:15602:0:0:0:0:0:-9:642137216:47:268:0:1:0|h[Ancient Crown of the Owl]|h|r",
+"|HlootHistory:21|h[Loot]|h: |cff1eff00|Hitem:24969:0:0:0:0:0:-45:586088474:62:64:0:1:0|h[Talonguard Gloves of the Champion]|h|r",
+"|HlootHistory:21|h[Loot]|h: |cff1eff00|Hitem:2632:0:0:0:0:0:-20:496159232:18:73:0:1:0|h[Curved Dagger of Power]|h|r",
+"|HlootHistory:21|h[Loot]|h: |cff1eff00|Hitem:6599:0:0:0:0:0:-78:1824196864:31:104:0:1:0|h[Battleforge Shield of the Monkey]|h|r",
+"|HlootHistory:21|h[Loot]|h: Atmøsfear-TarrenMill (Greed - 77) Won: |cff1eff00|Hitem:7078:0:0:0:0:0:0:0:51:105:0:0:0|h[Essence of Fire]|h|r",
+"|HlootHistory:21|h[Loot]|h: Benniu-ChamberofAspects (Need - 37) Won: |cff1eff00|Hitem:24969:0:0:0:0:0:-45:586088474:62:64:0:1:0|h[Talonguard Gloves of the Champion]|h|r",
+"|HlootHistory:21|h[Loot]|h: Bowjack-ChamberofAspects (Greed - 68) Won: |cff1eff00|Hitem:2632:0:0:0:0:0:-20:496159232:18:73:0:1:0|h[Curved Dagger of Power]|h|r",
+"|HlootHistory:21|h[Loot]|h: Celvariel-Auchindoun (Greed - 76) Won: |cff0070dd|Hitem:13349:0:0:0:0:0:0:0:53:268:0:1:0|h[Scepter of the Unholy]|h|r",
+"|HlootHistory:21|h[Loot]|h: Celvariel-Auchindoun (Greed - 88) Won: |cff1eff00|Hitem:15602:0:0:0:0:0:-9:642137216:47:268:0:1:0|h[Ancient Crown of the Owl]|h|r",
+"|HlootHistory:21|h[Loot]|h: Celvariel-Auchindoun (Greed - 89) Won: |cff0070dd|Hitem:10765:0:0:0:0:0:0:0:50:268:0:1:0|h[Bonefingers]|h|r",
+"|HlootHistory:21|h[Loot]|h: Jorelemental-Ragnaros (Greed - 80) Won: |cff0070dd|Hitem:6629:0:0:0:0:0:0:0:19:104:0:1:0|h[Sporid Cape]|h|r",
+"|HlootHistory:21|h[Loot]|h: Maeneth (Greed - 93) Won: |cff1eff00|Hitem:14910:0:0:0:0:0:-14:2012822912:48:66:0:1:0|h[Brutish Armguards of the Tiger]|h|r",
+"|HlootHistory:21|h[Loot]|h: Mangoworm (Greed - 60) Won: |cff1eff00|Hitem:6599:0:0:0:0:0:-78:1824196864:31:104:0:1:0|h[Battleforge Shield of the Monkey]|h|r",
+"|HlootHistory:21|h[Loot]|h: Myssterios-Drak'thul (Greed - 100) Won: |cff1eff00|Hitem:1207:0:0:0:0:0:-68:204649728:37:264:0:1:0|h[Murphstar of the Bear]|h|r",
+"|HlootHistory:21|h[Loot]|h: You (Greed - 79) Won: |cff0070dd|Hitem:5193:0:0:0:0:0:0:0:17:268:0:1:0|h[Cape of the Brotherhood]|h|r",
+"|HlootHistory:21|h[Loot]|h: You (Greed - 96) Won: |cff0070dd|Hitem:13386:0:0:0:0:0:0:0:49:263:0:1:0|h[Archivist Cape]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have rolled Greed - 23 for: |cff0070dd|Hitem:10765:0:0:0:0:0:0:0:50:268:0:1:0|h[Bonefingers]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have rolled Greed - 31 for: |cff0070dd|Hitem:13349:0:0:0:0:0:0:0:53:268:0:1:0|h[Scepter of the Unholy]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have rolled Greed - 33 for: |cff1eff00|Hitem:7078:0:0:0:0:0:0:0:51:105:0:0:0|h[Essence of Fire]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have rolled Greed - 45 for: |cff0070dd|Hitem:6629:0:0:0:0:0:0:0:19:104:0:1:0|h[Sporid Cape]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have rolled Greed - 65 for: |cff1eff00|Hitem:14910:0:0:0:0:0:-14:2012822912:48:66:0:1:0|h[Brutish Armguards of the Tiger]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have rolled Greed - 76 for: |cff1eff00|Hitem:1207:0:0:0:0:0:-68:204649728:37:264:0:1:0|h[Murphstar of the Bear]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10765:0:0:0:0:0:0:0:50:268:0:1:0|h[Bonefingers]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13349:0:0:0:0:0:0:0:53:268:0:1:0|h[Scepter of the Unholy]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13386:0:0:0:0:0:0:0:49:263:0:1:0|h[Archivist Cape]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:5193:0:0:0:0:0:0:0:17:268:0:1:0|h[Cape of the Brotherhood]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6629:0:0:0:0:0:0:0:19:104:0:1:0|h[Sporid Cape]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:1207:0:0:0:0:0:-68:204649728:37:264:0:1:0|h[Murphstar of the Bear]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14910:0:0:0:0:0:-14:2012822912:48:66:0:1:0|h[Brutish Armguards of the Tiger]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24969:0:0:0:0:0:-45:586088474:62:64:0:1:0|h[Talonguard Gloves of the Champion]|h|r",
+"|HlootHistory:21|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7078:0:0:0:0:0:0:0:51:105:0:0:0|h[Essence of Fire]|h|r",
+"|HlootHistory:21|h[Loot]|h: You passed on: |cff1eff00|Hitem:15602:0:0:0:0:0:-9:642137216:47:268:0:1:0|h[Ancient Crown of the Owl]|h|r",
+"|HlootHistory:21|h[Loot]|h: You passed on: |cff1eff00|Hitem:2632:0:0:0:0:0:-20:496159232:18:73:0:1:0|h[Curved Dagger of Power]|h|r",
+"|HlootHistory:21|h[Loot]|h: You passed on: |cff1eff00|Hitem:6599:0:0:0:0:0:-78:1824196864:31:104:0:1:0|h[Battleforge Shield of the Monkey]|h|r",
+"|HlootHistory:22|h[Loot]|h: |cff0070dd|Hitem:10412:0:0:0:0:0:0:0:18:268:0:1:0|h[Belt of the Fang]|h|r",
+"|HlootHistory:22|h[Loot]|h: |cff0070dd|Hitem:10762:0:0:0:0:0:0:0:50:268:0:1:0|h[Robes of the Lich]|h|r",
+"|HlootHistory:22|h[Loot]|h: |cff0070dd|Hitem:13358:0:0:0:0:0:0:0:49:263:0:1:0|h[Wyrmtongue Shoulders]|h|r",
+"|HlootHistory:22|h[Loot]|h: |cff0070dd|Hitem:18425:0:0:0:0:0:0:0:48:66:0:1:0|h[Kreeg's Mug]|h|r",
+"|HlootHistory:22|h[Loot]|h: |cff0070dd|Hitem:18494:0:0:0:0:0:0:0:47:268:0:1:0|h[Denwatcher's Shoulders]|h|r",
+"|HlootHistory:22|h[Loot]|h: |cff0070dd|Hitem:82772:0:0:0:0:0:0:0:18:73:0:1:0|h[Snarlmouth Leggings]|h|r",
+"|HlootHistory:22|h[Loot]|h: |cff0070dd|Hitem:88271:0:0:0:0:0:0:0:31:104:0:1:0|h[Harlan's Shoulders]|h|r",
+"|HlootHistory:22|h[Loot]|h: |cff0070dd|Hitem:9409:0:0:0:0:0:-11:669136256:37:264:0:1:0|h[Ironaya's Bracers of the Falcon]|h|r",
+"|HlootHistory:22|h[Loot]|h: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:54:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:22|h[Loot]|h: |cff1eff00|Hitem:25048:0:0:0:0:0:-9:1342963729:62:64:0:1:0|h[Smoky Quartz Ring of the Owl]|h|r",
+"|HlootHistory:22|h[Loot]|h: |cff1eff00|Hitem:9768:0:0:0:0:0:-19:1024337792:19:104:0:1:0|h[Greenweave Bracers of Intellect]|h|r",
+"|HlootHistory:22|h[Loot]|h: Anestadren (Greed - 35) Won: |cff0070dd|Hitem:82772:0:0:0:0:0:0:0:18:73:0:1:0|h[Snarlmouth Leggings]|h|r",
+"|HlootHistory:22|h[Loot]|h: Celvariel-Auchindoun (Need - 75) Won: |cff0070dd|Hitem:18494:0:0:0:0:0:0:0:47:268:0:1:0|h[Denwatcher's Shoulders]|h|r",
+"|HlootHistory:22|h[Loot]|h: Dadcia-Stormscale (Greed - 76) Won: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:54:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:22|h[Loot]|h: Hantarro-EmeraldDream (Greed - 97) Won: |cff0070dd|Hitem:22275:0:0:0:0:0:0:0:51:105:0:1:0|h[Firemoss Boots]|h|r",
+"|HlootHistory:22|h[Loot]|h: Helionkleijn-Hellscream (Greed - 32) Won: |cff1eff00|Hitem:25048:0:0:0:0:0:-9:1342963729:62:64:0:1:0|h[Smoky Quartz Ring of the Owl]|h|r",
+"|HlootHistory:22|h[Loot]|h: Immox-Doomhammer (Greed - 73) Won: |cff0070dd|Hitem:88271:0:0:0:0:0:0:0:31:104:0:1:0|h[Harlan's Shoulders]|h|r",
+"|HlootHistory:22|h[Loot]|h: Lethalundead-Outland (Need - 10) Won: |cff0070dd|Hitem:13358:0:0:0:0:0:0:0:49:263:0:1:0|h[Wyrmtongue Shoulders]|h|r",
+"|HlootHistory:22|h[Loot]|h: Mangoworm (Need - 79) Won: |cff1eff00|Hitem:9768:0:0:0:0:0:-19:1024337792:19:104:0:1:0|h[Greenweave Bracers of Intellect]|h|r",
+"|HlootHistory:22|h[Loot]|h: Mirse-Anachronos (Greed - 79) Won: |cff0070dd|Hitem:18425:0:0:0:0:0:0:0:48:66:0:1:0|h[Kreeg's Mug]|h|r",
+"|HlootHistory:22|h[Loot]|h: Myssterios-Drak'thul (Greed - 86) Won: |cff0070dd|Hitem:9409:0:0:0:0:0:-11:669136256:37:264:0:1:0|h[Ironaya's Bracers of the Falcon]|h|r",
+"|HlootHistory:22|h[Loot]|h: You (Greed - 80) Won: |cff0070dd|Hitem:10762:0:0:0:0:0:0:0:50:268:0:1:0|h[Robes of the Lich]|h|r",
+"|HlootHistory:22|h[Loot]|h: You (Need - 96) Won: |cff0070dd|Hitem:10412:0:0:0:0:0:0:0:18:268:0:1:0|h[Belt of the Fang]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have rolled Greed - 21 for: |cff0070dd|Hitem:18425:0:0:0:0:0:0:0:48:66:0:1:0|h[Kreeg's Mug]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have rolled Greed - 22 for: |cff1eff00|Hitem:25048:0:0:0:0:0:-9:1342963729:62:64:0:1:0|h[Smoky Quartz Ring of the Owl]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have rolled Greed - 25 for: |cff0070dd|Hitem:22275:0:0:0:0:0:0:0:51:105:0:1:0|h[Firemoss Boots]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have rolled Greed - 67 for: |cff0070dd|Hitem:9409:0:0:0:0:0:-11:669136256:37:264:0:1:0|h[Ironaya's Bracers of the Falcon]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have rolled Greed - 8 for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:54:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10762:0:0:0:0:0:0:0:50:268:0:1:0|h[Robes of the Lich]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13358:0:0:0:0:0:0:0:49:263:0:1:0|h[Wyrmtongue Shoulders]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18425:0:0:0:0:0:0:0:48:66:0:1:0|h[Kreeg's Mug]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22275:0:0:0:0:0:0:0:51:105:0:1:0|h[Firemoss Boots]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:9409:0:0:0:0:0:-11:669136256:37:264:0:1:0|h[Ironaya's Bracers of the Falcon]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:54:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25048:0:0:0:0:0:-9:1342963729:62:64:0:1:0|h[Smoky Quartz Ring of the Owl]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9768:0:0:0:0:0:-19:1024337792:19:104:0:1:0|h[Greenweave Bracers of Intellect]|h|r",
+"|HlootHistory:22|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:10412:0:0:0:0:0:0:0:18:268:0:1:0|h[Belt of the Fang]|h|r",
+"|HlootHistory:22|h[Loot]|h: You passed on: |cff0070dd|Hitem:18494:0:0:0:0:0:0:0:47:268:0:1:0|h[Denwatcher's Shoulders]|h|r",
+"|HlootHistory:22|h[Loot]|h: You passed on: |cff0070dd|Hitem:82772:0:0:0:0:0:0:0:18:73:0:1:0|h[Snarlmouth Leggings]|h|r",
+"|HlootHistory:22|h[Loot]|h: You passed on: |cff0070dd|Hitem:88271:0:0:0:0:0:0:0:31:104:0:1:0|h[Harlan's Shoulders]|h|r",
+"|HlootHistory:23|h[Loot]|h: |cff0070dd|Hitem:12103:0:0:0:0:0:0:0:49:263:0:1:0|h[Star of Mystaria]|h|r",
+"|HlootHistory:23|h[Loot]|h: |cff0070dd|Hitem:24366:0:0:0:0:0:0:0:62:64:0:1:0|h[Scorpid-Sting Mantle]|h|r",
+"|HlootHistory:23|h[Loot]|h: |cff0070dd|Hitem:82877:0:0:0:0:0:0:0:18:73:0:1:0|h[Grasp of the Broken Totem]|h|r",
+"|HlootHistory:23|h[Loot]|h: |cff1eff00|Hitem:12019:0:0:0:0:0:-9:1606804608:31:104:0:1:0|h[Cerulean Talisman of the Owl]|h|r",
+"|HlootHistory:23|h[Loot]|h: |cff1eff00|Hitem:12382:0:0:0:0:0:0:0:54:268:0:0:0|h[Key to the City]|h|r",
+"|HlootHistory:23|h[Loot]|h: |cff1eff00|Hitem:14124:0:0:0:0:0:-69:207534464:19:104:0:1:0|h[Ritual Gloves of the Eagle]|h|r",
+"|HlootHistory:23|h[Loot]|h: |cff1eff00|Hitem:14257:0:0:0:0:0:-9:1996731264:47:268:0:1:0|h[Lunar Leggings of the Owl]|h|r",
+"|HlootHistory:23|h[Loot]|h: |cff1eff00|Hitem:14782:0:0:0:0:0:0:0:48:66:0:1:0|h[Khan's Gloves]|h|r",
+"|HlootHistory:23|h[Loot]|h: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:18:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:23|h[Loot]|h: |cff1eff00|Hitem:9898:0:0:0:0:0:-68:1734135040:37:264:0:1:0|h[Jazeraint Cloak of the Bear]|h|r",
+"|HlootHistory:23|h[Loot]|h: |cff1eff00|Hitem:9917:0:0:0:0:0:-81:164045824:50:268:0:1:0|h[Tracker's Boots of the Whale]|h|r",
+"|HlootHistory:23|h[Loot]|h: Atmøsfear-TarrenMill (Greed - 83) Won: |cff0070dd|Hitem:11612:0:0:0:0:0:0:0:51:105:0:1:0|h[Plans: Dark Iron Plate]|h|r",
+"|HlootHistory:23|h[Loot]|h: Celvariel-Auchindoun (Greed - 51) Won: |cff1eff00|Hitem:9917:0:0:0:0:0:-81:164045824:50:268:0:1:0|h[Tracker's Boots of the Whale]|h|r",
+"|HlootHistory:23|h[Loot]|h: Celvariel-Auchindoun (Greed - 87) Won: |cff1eff00|Hitem:14257:0:0:0:0:0:-9:1996731264:47:268:0:1:0|h[Lunar Leggings of the Owl]|h|r",
+"|HlootHistory:23|h[Loot]|h: Dadcia-Stormscale (Need - 1) Won: |cff1eff00|Hitem:12382:0:0:0:0:0:0:0:54:268:0:0:0|h[Key to the City]|h|r",
+"|HlootHistory:23|h[Loot]|h: Fennec (Greed - 91) Won: |cff1eff00|Hitem:14782:0:0:0:0:0:0:0:48:66:0:1:0|h[Khan's Gloves]|h|r",
+"|HlootHistory:23|h[Loot]|h: Mangoworm (Greed - 39) Won: |cff1eff00|Hitem:12019:0:0:0:0:0:-9:1606804608:31:104:0:1:0|h[Cerulean Talisman of the Owl]|h|r",
+"|HlootHistory:23|h[Loot]|h: Mangoworm (Need - 70) Won: |cff1eff00|Hitem:14124:0:0:0:0:0:-69:207534464:19:104:0:1:0|h[Ritual Gloves of the Eagle]|h|r",
+"|HlootHistory:23|h[Loot]|h: Midorìko-Runetotem (Need - 66) Won: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:18:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:23|h[Loot]|h: Nyloos-Aggra(Português) (Greed - 92) Won: |cff1eff00|Hitem:9898:0:0:0:0:0:-68:1734135040:37:264:0:1:0|h[Jazeraint Cloak of the Bear]|h|r",
+"|HlootHistory:23|h[Loot]|h: Sanctisius (Greed - 73) Won: |cff0070dd|Hitem:12103:0:0:0:0:0:0:0:49:263:0:1:0|h[Star of Mystaria]|h|r",
+"|HlootHistory:23|h[Loot]|h: You (Greed - 97) Won: |cff0070dd|Hitem:82877:0:0:0:0:0:0:0:18:73:0:1:0|h[Grasp of the Broken Totem]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have rolled Greed - 22 for: |cff1eff00|Hitem:14257:0:0:0:0:0:-9:1996731264:47:268:0:1:0|h[Lunar Leggings of the Owl]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have rolled Greed - 44 for: |cff0070dd|Hitem:11612:0:0:0:0:0:0:0:51:105:0:1:0|h[Plans: Dark Iron Plate]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have rolled Greed - 54 for: |cff1eff00|Hitem:14782:0:0:0:0:0:0:0:48:66:0:1:0|h[Khan's Gloves]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have rolled Greed - 58 for: |cff1eff00|Hitem:9898:0:0:0:0:0:-68:1734135040:37:264:0:1:0|h[Jazeraint Cloak of the Bear]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have rolled Greed - 66 for: |cff0070dd|Hitem:12103:0:0:0:0:0:0:0:49:263:0:1:0|h[Star of Mystaria]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11612:0:0:0:0:0:0:0:51:105:0:1:0|h[Plans: Dark Iron Plate]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12103:0:0:0:0:0:0:0:49:263:0:1:0|h[Star of Mystaria]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24366:0:0:0:0:0:0:0:62:64:0:1:0|h[Scorpid-Sting Mantle]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:82877:0:0:0:0:0:0:0:18:73:0:1:0|h[Grasp of the Broken Totem]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14124:0:0:0:0:0:-69:207534464:19:104:0:1:0|h[Ritual Gloves of the Eagle]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14257:0:0:0:0:0:-9:1996731264:47:268:0:1:0|h[Lunar Leggings of the Owl]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14782:0:0:0:0:0:0:0:48:66:0:1:0|h[Khan's Gloves]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:18:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:23|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9898:0:0:0:0:0:-68:1734135040:37:264:0:1:0|h[Jazeraint Cloak of the Bear]|h|r",
+"|HlootHistory:23|h[Loot]|h: You passed on: |cff1eff00|Hitem:12019:0:0:0:0:0:-9:1606804608:31:104:0:1:0|h[Cerulean Talisman of the Owl]|h|r",
+"|HlootHistory:23|h[Loot]|h: You passed on: |cff1eff00|Hitem:12382:0:0:0:0:0:0:0:54:268:0:0:0|h[Key to the City]|h|r",
+"|HlootHistory:23|h[Loot]|h: You passed on: |cff1eff00|Hitem:9917:0:0:0:0:0:-81:164045824:50:268:0:1:0|h[Tracker's Boots of the Whale]|h|r",
+"|HlootHistory:24|h[Loot]|h: |cff0070dd|Hitem:18425:0:0:0:0:0:0:0:47:268:0:1:0|h[Kreeg's Mug]|h|r",
+"|HlootHistory:24|h[Loot]|h: |cff0070dd|Hitem:18463:0:0:0:0:0:0:0:48:66:0:1:0|h[Ogre Pocket Knife]|h|r",
+"|HlootHistory:24|h[Loot]|h: |cff0070dd|Hitem:18722:0:0:0:0:0:0:0:54:268:0:1:0|h[Death Grips]|h|r",
+"|HlootHistory:24|h[Loot]|h: |cff0070dd|Hitem:24356:0:0:0:0:0:0:0:62:64:0:1:0|h[Wastewalker Shiv]|h|r",
+"|HlootHistory:24|h[Loot]|h: |cff0070dd|Hitem:6447:0:0:0:0:0:0:0:18:268:0:1:0|h[Worn Turtle Shell Shield]|h|r",
+"|HlootHistory:24|h[Loot]|h: |cff0070dd|Hitem:6627:0:0:0:0:0:0:0:20:104:0:1:0|h[Mutant Scale Breastplate]|h|r",
+"|HlootHistory:24|h[Loot]|h: |cff0070dd|Hitem:82884:0:0:0:0:0:0:0:18:73:0:1:0|h[Chitonous Bracers]|h|r",
+"|HlootHistory:24|h[Loot]|h: |cff1eff00|Hitem:15383:0:0:0:0:0:-78:801710848:49:263:0:1:0|h[Rageclaw Gloves of the Monkey]|h|r",
+"|HlootHistory:24|h[Loot]|h: |cff1eff00|Hitem:1705:0:0:0:0:0:0:0:31:104:0:0:0|h[Lesser Moonstone]|h|r",
+"|HlootHistory:24|h[Loot]|h: |cff1eff00|Hitem:4059:0:0:0:0:0:0:0:38:264:0:1:0|h[Glyphed Bracers]|h|r",
+"|HlootHistory:24|h[Loot]|h: |cff1eff00|Hitem:8144:0:0:0:0:0:0:0:50:268:0:1:0|h[Chromite Pauldrons]|h|r",
+"|HlootHistory:24|h[Loot]|h: Dartaar-Vek'nilash (Need - 12) Won: |cff0070dd|Hitem:6627:0:0:0:0:0:0:0:20:104:0:1:0|h[Mutant Scale Breastplate]|h|r",
+"|HlootHistory:24|h[Loot]|h: Dudika-ChamberofAspects (Need - 99) Won: |cff0070dd|Hitem:82884:0:0:0:0:0:0:0:18:73:0:1:0|h[Chitonous Bracers]|h|r",
+"|HlootHistory:24|h[Loot]|h: Elrawiel-Drak'thul (Greed - 83) Won: |cff0070dd|Hitem:24356:0:0:0:0:0:0:0:62:64:0:1:0|h[Wastewalker Shiv]|h|r",
+"|HlootHistory:24|h[Loot]|h: Lerona (Greed - 91) Won: |cff1eff00|Hitem:8144:0:0:0:0:0:0:0:50:268:0:1:0|h[Chromite Pauldrons]|h|r",
+"|HlootHistory:24|h[Loot]|h: Mangoworm (Greed - 64) Won: |cff1eff00|Hitem:1705:0:0:0:0:0:0:0:31:104:0:0:0|h[Lesser Moonstone]|h|r",
+"|HlootHistory:24|h[Loot]|h: Midorìko-Runetotem (Greed - 88) Won: |cff0070dd|Hitem:6447:0:0:0:0:0:0:0:18:268:0:1:0|h[Worn Turtle Shell Shield]|h|r",
+"|HlootHistory:24|h[Loot]|h: Mirse-Anachronos (Greed - 97) Won: |cff0070dd|Hitem:18463:0:0:0:0:0:0:0:48:66:0:1:0|h[Ogre Pocket Knife]|h|r",
+"|HlootHistory:24|h[Loot]|h: Myssterios-Drak'thul (Greed - 93) Won: |cff1eff00|Hitem:4059:0:0:0:0:0:0:0:38:264:0:1:0|h[Glyphed Bracers]|h|r",
+"|HlootHistory:24|h[Loot]|h: Sanctisius (Greed - 85) Won: |cff1eff00|Hitem:15383:0:0:0:0:0:-78:801710848:49:263:0:1:0|h[Rageclaw Gloves of the Monkey]|h|r",
+"|HlootHistory:24|h[Loot]|h: Valhallir-Spinebreaker (Greed - 97) Won: |cff1eff00|Hitem:9913:0:0:0:0:0:-69:760907392:51:105:0:1:0|h[Royal Gown of the Eagle]|h|r",
+"|HlootHistory:24|h[Loot]|h: Wumpsham-TarrenMill (Greed - 73) Won: |cff0070dd|Hitem:18722:0:0:0:0:0:0:0:54:268:0:1:0|h[Death Grips]|h|r",
+"|HlootHistory:24|h[Loot]|h: You (Greed - 85) Won: |cff0070dd|Hitem:18425:0:0:0:0:0:0:0:47:268:0:1:0|h[Kreeg's Mug]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have rolled Greed - 13 for: |cff1eff00|Hitem:15383:0:0:0:0:0:-78:801710848:49:263:0:1:0|h[Rageclaw Gloves of the Monkey]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have rolled Greed - 28 for: |cff0070dd|Hitem:24356:0:0:0:0:0:0:0:62:64:0:1:0|h[Wastewalker Shiv]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have rolled Greed - 43 for: |cff1eff00|Hitem:4059:0:0:0:0:0:0:0:38:264:0:1:0|h[Glyphed Bracers]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have rolled Greed - 44 for: |cff0070dd|Hitem:6447:0:0:0:0:0:0:0:18:268:0:1:0|h[Worn Turtle Shell Shield]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have rolled Greed - 67 for: |cff0070dd|Hitem:18722:0:0:0:0:0:0:0:54:268:0:1:0|h[Death Grips]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have rolled Greed - 81 for: |cff1eff00|Hitem:9913:0:0:0:0:0:-69:760907392:51:105:0:1:0|h[Royal Gown of the Eagle]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have rolled Greed - 90 for: |cff0070dd|Hitem:18463:0:0:0:0:0:0:0:48:66:0:1:0|h[Ogre Pocket Knife]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18425:0:0:0:0:0:0:0:47:268:0:1:0|h[Kreeg's Mug]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18463:0:0:0:0:0:0:0:48:66:0:1:0|h[Ogre Pocket Knife]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18722:0:0:0:0:0:0:0:54:268:0:1:0|h[Death Grips]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24356:0:0:0:0:0:0:0:62:64:0:1:0|h[Wastewalker Shiv]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6447:0:0:0:0:0:0:0:18:268:0:1:0|h[Worn Turtle Shell Shield]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6627:0:0:0:0:0:0:0:20:104:0:1:0|h[Mutant Scale Breastplate]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15383:0:0:0:0:0:-78:801710848:49:263:0:1:0|h[Rageclaw Gloves of the Monkey]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4059:0:0:0:0:0:0:0:38:264:0:1:0|h[Glyphed Bracers]|h|r",
+"|HlootHistory:24|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9913:0:0:0:0:0:-69:760907392:51:105:0:1:0|h[Royal Gown of the Eagle]|h|r",
+"|HlootHistory:24|h[Loot]|h: You passed on: |cff0070dd|Hitem:82884:0:0:0:0:0:0:0:18:73:0:1:0|h[Chitonous Bracers]|h|r",
+"|HlootHistory:24|h[Loot]|h: You passed on: |cff1eff00|Hitem:1705:0:0:0:0:0:0:0:31:104:0:0:0|h[Lesser Moonstone]|h|r",
+"|HlootHistory:24|h[Loot]|h: You passed on: |cff1eff00|Hitem:8144:0:0:0:0:0:0:0:50:268:0:1:0|h[Chromite Pauldrons]|h|r",
+"|HlootHistory:25|h[Loot]|h: |cff0070dd|Hitem:18498:0:0:0:0:0:0:0:48:66:0:1:0|h[Hedgecutter]|h|r",
+"|HlootHistory:25|h[Loot]|h: |cff0070dd|Hitem:88277:0:0:0:0:0:0:0:32:104:0:1:0|h[Pyretic Legguards]|h|r",
+"|HlootHistory:25|h[Loot]|h: |cff0070dd|Hitem:9418:0:0:0:0:0:0:0:38:264:0:1:0|h[Stoneslayer]|h|r",
+"|HlootHistory:25|h[Loot]|h: |cff0070dd|Hitem:9483:0:0:0:0:0:0:0:49:263:0:1:0|h[Flaming Incinerator]|h|r",
+"|HlootHistory:25|h[Loot]|h: |cff1eff00|Hitem:10071:0:0:0:0:0:-78:461318784:54:268:0:1:0|h[Righteous Cloak of the Monkey]|h|r",
+"|HlootHistory:25|h[Loot]|h: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:25|h[Loot]|h: |cff1eff00|Hitem:14270:0:0:0:0:0:-19:1411940864:47:268:0:1:0|h[Gaea's Cloak of Intellect]|h|r",
+"|HlootHistory:25|h[Loot]|h: |cff1eff00|Hitem:15305:0:0:0:0:0:-9:52427904:18:268:0:1:0|h[Feral Shoes of the Owl]|h|r",
+"|HlootHistory:25|h[Loot]|h: |cff1eff00|Hitem:24720:0:0:0:0:0:-16:1155596310:62:64:0:1:0|h[Dreghood Gloves of Stamina]|h|r",
+"|HlootHistory:25|h[Loot]|h: |cff1eff00|Hitem:4564:0:0:0:0:0:-69:133874688:18:73:0:1:0|h[Spiked Club of the Eagle]|h|r",
+"|HlootHistory:25|h[Loot]|h: |cff1eff00|Hitem:6574:0:0:0:0:0:-17:1483469056:20:104:0:1:0|h[Defender Bracers of Strength]|h|r",
+"|HlootHistory:25|h[Loot]|h: Alehara (Greed - 40) Won: |cff1eff00|Hitem:4564:0:0:0:0:0:-69:133874688:18:73:0:1:0|h[Spiked Club of the Eagle]|h|r",
+"|HlootHistory:25|h[Loot]|h: Beldain-ChamberofAspects (Greed - 78) Won: |cff1eff00|Hitem:14270:0:0:0:0:0:-19:1411940864:47:268:0:1:0|h[Gaea's Cloak of Intellect]|h|r",
+"|HlootHistory:25|h[Loot]|h: Dartaar-Vek'nilash (Need - 40) Won: |cff1eff00|Hitem:6574:0:0:0:0:0:-17:1483469056:20:104:0:1:0|h[Defender Bracers of Strength]|h|r",
+"|HlootHistory:25|h[Loot]|h: Lerona (Greed - 85) Won: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:25|h[Loot]|h: Lerona (Greed - 91) Won: |cff1eff00|Hitem:10071:0:0:0:0:0:-78:461318784:54:268:0:1:0|h[Righteous Cloak of the Monkey]|h|r",
+"|HlootHistory:25|h[Loot]|h: Mirse-Anachronos (Greed - 73) Won: |cff0070dd|Hitem:18498:0:0:0:0:0:0:0:48:66:0:1:0|h[Hedgecutter]|h|r",
+"|HlootHistory:25|h[Loot]|h: Onaix-Magtheridon (Greed - 78) Won: |cff1eff00|Hitem:15305:0:0:0:0:0:-9:52427904:18:268:0:1:0|h[Feral Shoes of the Owl]|h|r",
+"|HlootHistory:25|h[Loot]|h: Poesy-Stormscale (Greed - 63) Won: |cff0070dd|Hitem:88277:0:0:0:0:0:0:0:32:104:0:1:0|h[Pyretic Legguards]|h|r",
+"|HlootHistory:25|h[Loot]|h: Sanctisius (Greed - 81) Won: |cff0070dd|Hitem:9483:0:0:0:0:0:0:0:49:263:0:1:0|h[Flaming Incinerator]|h|r",
+"|HlootHistory:25|h[Loot]|h: Sjalg-Draenor (Greed - 65) Won: |cff0070dd|Hitem:9418:0:0:0:0:0:0:0:39:264:0:1:0|h[Stoneslayer]|h|r",
+"|HlootHistory:25|h[Loot]|h: Snotter-ArgentDawn (Greed - 39) Won: |cff1eff00|Hitem:24720:0:0:0:0:0:-16:1155596310:62:64:0:1:0|h[Dreghood Gloves of Stamina]|h|r",
+"|HlootHistory:25|h[Loot]|h: You (Greed - 73) Won: |cff1eff00|Hitem:18653:0:0:0:0:0:0:0:51:105:0:1:0|h[Schematic: Goblin Jumper Cables XL]|h|r",
+"|HlootHistory:25|h[Loot]|h: You automatically passed on: |cff1eff00|Hitem:10071:0:0:0:0:0:-78:461318784:54:268:0:1:0|h[Righteous Cloak of the Monkey]|h|r because you cannot loot that item.",
+"|HlootHistory:25|h[Loot]|h: You have rolled Greed - 19 for: |cff0070dd|Hitem:18498:0:0:0:0:0:0:0:48:66:0:1:0|h[Hedgecutter]|h|r",
+"|HlootHistory:25|h[Loot]|h: You have rolled Greed - 31 for: |cff1eff00|Hitem:24720:0:0:0:0:0:-16:1155596310:62:64:0:1:0|h[Dreghood Gloves of Stamina]|h|r",
+"|HlootHistory:25|h[Loot]|h: You have rolled Greed - 4 for: |cff1eff00|Hitem:15305:0:0:0:0:0:-9:52427904:18:268:0:1:0|h[Feral Shoes of the Owl]|h|r",
+"|HlootHistory:25|h[Loot]|h: You have rolled Greed - 45 for: |cff0070dd|Hitem:9418:0:0:0:0:0:0:0:39:264:0:1:0|h[Stoneslayer]|h|r",
+"|HlootHistory:25|h[Loot]|h: You have rolled Greed - 54 for: |cff0070dd|Hitem:88277:0:0:0:0:0:0:0:32:104:0:1:0|h[Pyretic Legguards]|h|r",
+"|HlootHistory:25|h[Loot]|h: You have rolled Greed - 76 for: |cff1eff00|Hitem:14270:0:0:0:0:0:-19:1411940864:47:268:0:1:0|h[Gaea's Cloak of Intellect]|h|r",
+"|HlootHistory:25|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18498:0:0:0:0:0:0:0:48:66:0:1:0|h[Hedgecutter]|h|r",
+"|HlootHistory:25|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88277:0:0:0:0:0:0:0:32:104:0:1:0|h[Pyretic Legguards]|h|r",
+"|HlootHistory:25|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:9418:0:0:0:0:0:0:0:38:264:0:1:0|h[Stoneslayer]|h|r",
+"|HlootHistory:25|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14270:0:0:0:0:0:-19:1411940864:47:268:0:1:0|h[Gaea's Cloak of Intellect]|h|r",
+"|HlootHistory:25|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15305:0:0:0:0:0:-9:52427904:18:268:0:1:0|h[Feral Shoes of the Owl]|h|r",
+"|HlootHistory:25|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:18653:0:0:0:0:0:0:0:51:105:0:1:0|h[Schematic: Goblin Jumper Cables XL]|h|r",
+"|HlootHistory:25|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24720:0:0:0:0:0:-16:1155596310:62:64:0:1:0|h[Dreghood Gloves of Stamina]|h|r",
+"|HlootHistory:25|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:6574:0:0:0:0:0:-17:1483469056:20:104:0:1:0|h[Defender Bracers of Strength]|h|r",
+"|HlootHistory:25|h[Loot]|h: You passed on: |cff0070dd|Hitem:9483:0:0:0:0:0:0:0:49:263:0:1:0|h[Flaming Incinerator]|h|r",
+"|HlootHistory:25|h[Loot]|h: You passed on: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:25|h[Loot]|h: You passed on: |cff1eff00|Hitem:4564:0:0:0:0:0:-69:133874688:18:73:0:1:0|h[Spiked Club of the Eagle]|h|r",
+"|HlootHistory:26|h[Loot]|h: |cff0070dd|Hitem:18502:0:0:0:0:0:0:0:48:66:0:1:0|h[Monstrous Glaive]|h|r",
+"|HlootHistory:26|h[Loot]|h: |cff0070dd|Hitem:6448:0:0:0:0:0:0:0:18:268:0:1:0|h[Tail Spike]|h|r",
+"|HlootHistory:26|h[Loot]|h: |cff0070dd|Hitem:82883:0:0:0:0:0:0:0:18:73:0:1:0|h[Bloodcursed Felblade]|h|r",
+"|HlootHistory:26|h[Loot]|h: |cff0070dd|Hitem:88283:0:0:0:0:0:0:0:32:104:0:1:0|h[Bradbury's Entropic Legguards]|h|r",
+"|HlootHistory:26|h[Loot]|h: |cff0070dd|Hitem:9639:0:0:0:0:0:0:0:49:263:0:1:0|h[The Hand of Antu'sul]|h|r",
+"|HlootHistory:26|h[Loot]|h: |cff1eff00|Hitem:10068:0:0:0:0:0:-20:958309888:54:268:0:1:0|h[Righteous Boots of Power]|h|r",
+"|HlootHistory:26|h[Loot]|h: |cff1eff00|Hitem:24832:0:0:0:0:0:-18:1793982493:62:64:0:1:0|h[Nexus-Strider Breastplate of Agility]|h|r",
+"|HlootHistory:26|h[Loot]|h: |cff1eff00|Hitem:3187:0:0:0:0:0:-78:348536192:50:268:0:1:0|h[Sacrificial Kris of the Monkey]|h|r",
+"|HlootHistory:26|h[Loot]|h: |cff1eff00|Hitem:4637:0:0:0:0:0:0:0:47:268:0:1:0|h[Steel Lockbox]|h|r",
+"|HlootHistory:26|h[Loot]|h: |cff1eff00|Hitem:6378:0:0:0:0:0:0:0:20:104:0:1:0|h[Seer's Cape]|h|r",
+"|HlootHistory:26|h[Loot]|h: |cff1eff00|Hitem:8387:0:0:0:0:0:0:0:39:264:0:1:0|h[Pattern: Big Voodoo Mask]|h|r",
+"|HlootHistory:26|h[Loot]|h: Anestadren (Greed - 84) Won: |cff0070dd|Hitem:82883:0:0:0:0:0:0:0:18:73:0:1:0|h[Bloodcursed Felblade]|h|r",
+"|HlootHistory:26|h[Loot]|h: Celvariel-Auchindoun (Greed - 46) Won: |cff1eff00|Hitem:3187:0:0:0:0:0:-78:348536192:50:268:0:1:0|h[Sacrificial Kris of the Monkey]|h|r",
+"|HlootHistory:26|h[Loot]|h: Celvariel-Auchindoun (Greed - 95) Won: |cff1eff00|Hitem:4637:0:0:0:0:0:0:0:47:268:0:1:0|h[Steel Lockbox]|h|r",
+"|HlootHistory:26|h[Loot]|h: Dadcia-Stormscale (Greed - 69) Won: |cff1eff00|Hitem:10068:0:0:0:0:0:-20:958309888:54:268:0:1:0|h[Righteous Boots of Power]|h|r",
+"|HlootHistory:26|h[Loot]|h: Fennec (Greed - 70) Won: |cff0070dd|Hitem:9639:0:0:0:0:0:0:0:49:263:0:1:0|h[The Hand of Antu'sul]|h|r",
+"|HlootHistory:26|h[Loot]|h: Heisenberrg-TheVentureCo (Need - 34) Won: |cff0070dd|Hitem:18502:0:0:0:0:0:0:0:48:66:0:1:0|h[Monstrous Glaive]|h|r",
+"|HlootHistory:26|h[Loot]|h: Lerona-Jaedenar (Greed - 99) Won: |cff0070dd|Hitem:6448:0:0:0:0:0:0:0:18:268:0:1:0|h[Tail Spike]|h|r",
+"|HlootHistory:26|h[Loot]|h: Mangoworm (Greed - 92) Won: |cff1eff00|Hitem:6378:0:0:0:0:0:0:0:20:104:0:1:0|h[Seer's Cape]|h|r",
+"|HlootHistory:26|h[Loot]|h: Mangoworm (Greed - 98) Won: |cff0070dd|Hitem:88283:0:0:0:0:0:0:0:32:104:0:1:0|h[Bradbury's Entropic Legguards]|h|r",
+"|HlootHistory:26|h[Loot]|h: Snotter-ArgentDawn (Need - 60) Won: |cff1eff00|Hitem:24832:0:0:0:0:0:-18:1793982493:62:64:0:1:0|h[Nexus-Strider Breastplate of Agility]|h|r",
+"|HlootHistory:26|h[Loot]|h: Vrc-Draenor (Need - 48) Won: |cff0070dd|Hitem:11745:0:0:0:0:0:0:0:51:105:0:1:0|h[Fists of Phalanx]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have rolled Greed - 30 for: |cff1eff00|Hitem:10068:0:0:0:0:0:-20:958309888:54:268:0:1:0|h[Righteous Boots of Power]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have rolled Greed - 5 for: |cff0070dd|Hitem:82883:0:0:0:0:0:0:0:18:73:0:1:0|h[Bloodcursed Felblade]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have rolled Greed - 54 for: |cff0070dd|Hitem:6448:0:0:0:0:0:0:0:18:268:0:1:0|h[Tail Spike]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have rolled Greed - 57 for: |cff0070dd|Hitem:9639:0:0:0:0:0:0:0:49:263:0:1:0|h[The Hand of Antu'sul]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have rolled Greed - 65 for: |cff0070dd|Hitem:88283:0:0:0:0:0:0:0:32:104:0:1:0|h[Bradbury's Entropic Legguards]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have rolled Greed - 80 for: |cff1eff00|Hitem:4637:0:0:0:0:0:0:0:47:268:0:1:0|h[Steel Lockbox]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11745:0:0:0:0:0:0:0:51:105:0:1:0|h[Fists of Phalanx]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18502:0:0:0:0:0:0:0:48:66:0:1:0|h[Monstrous Glaive]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6448:0:0:0:0:0:0:0:18:268:0:1:0|h[Tail Spike]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:82883:0:0:0:0:0:0:0:18:73:0:1:0|h[Bloodcursed Felblade]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88283:0:0:0:0:0:0:0:32:104:0:1:0|h[Bradbury's Entropic Legguards]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:9639:0:0:0:0:0:0:0:49:263:0:1:0|h[The Hand of Antu'sul]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10068:0:0:0:0:0:-20:958309888:54:268:0:1:0|h[Righteous Boots of Power]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24832:0:0:0:0:0:-18:1793982493:62:64:0:1:0|h[Nexus-Strider Breastplate of Agility]|h|r",
+"|HlootHistory:26|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4637:0:0:0:0:0:0:0:47:268:0:1:0|h[Steel Lockbox]|h|r",
+"|HlootHistory:26|h[Loot]|h: You passed on: |cff1eff00|Hitem:3187:0:0:0:0:0:-78:348536192:50:268:0:1:0|h[Sacrificial Kris of the Monkey]|h|r",
+"|HlootHistory:26|h[Loot]|h: You passed on: |cff1eff00|Hitem:6378:0:0:0:0:0:0:0:20:104:0:1:0|h[Seer's Cape]|h|r",
+"|HlootHistory:27|h[Loot]|h: |cff0070dd|Hitem:18083:0:0:0:0:0:0:0:49:263:0:1:0|h[Jumanza Grips]|h|r",
+"|HlootHistory:27|h[Loot]|h: |cff0070dd|Hitem:18484:0:0:0:0:0:0:0:48:66:0:1:0|h[Cho'Rush's Blade]|h|r",
+"|HlootHistory:27|h[Loot]|h: |cff0070dd|Hitem:18738:0:0:0:0:0:0:0:54:268:0:1:0|h[Carapace Spine Crossbow]|h|r",
+"|HlootHistory:27|h[Loot]|h: |cff0070dd|Hitem:24381:0:0:0:0:0:0:0:62:64:0:1:0|h[Coilfang Needler]|h|r",
+"|HlootHistory:27|h[Loot]|h: |cff0070dd|Hitem:6446:0:0:0:0:0:0:0:19:73:0:0:0|h[Snakeskin Bag]|h|r",
+"|HlootHistory:27|h[Loot]|h: |cff0070dd|Hitem:88286:0:0:0:0:0:0:0:32:104:0:1:0|h[Legguards of the Crimson Magus]|h|r",
+"|HlootHistory:27|h[Loot]|h: |cff1eff00|Hitem:14124:0:0:0:0:0:-9:1414429184:19:268:0:1:0|h[Ritual Gloves of the Owl]|h|r",
+"|HlootHistory:27|h[Loot]|h: |cff1eff00|Hitem:15215:0:0:0:0:0:-14:343805184:50:268:0:1:0|h[Furious Falchion of the Tiger]|h|r",
+"|HlootHistory:27|h[Loot]|h: |cff1eff00|Hitem:7534:0:0:0:0:0:-9:398285440:39:264:0:1:0|h[Cabalist Bracers of the Owl]|h|r",
+"|HlootHistory:27|h[Loot]|h: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:20:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:27|h[Loot]|h: |cff1eff00|Hitem:8387:0:0:0:0:0:0:0:47:268:0:1:0|h[Pattern: Big Voodoo Mask]|h|r",
+"|HlootHistory:27|h[Loot]|h: Beldain-ChamberofAspects (Greed - 91) Won: |cff1eff00|Hitem:8387:0:0:0:0:0:0:0:47:268:0:1:0|h[Pattern: Big Voodoo Mask]|h|r",
+"|HlootHistory:27|h[Loot]|h: Clawfíngers-ChamberofAspects (Need - 73) Won: |cff0070dd|Hitem:18083:0:0:0:0:0:0:0:49:263:0:1:0|h[Jumanza Grips]|h|r",
+"|HlootHistory:27|h[Loot]|h: Heisenberrg-TheVentureCo (Disenchant - 94) Won: |cff0070dd|Hitem:18484:0:0:0:0:0:0:0:48:66:0:1:0|h[Cho'Rush's Blade]|h|r",
+"|HlootHistory:27|h[Loot]|h: Lerona (Greed - 87) Won: |cff0070dd|Hitem:18738:0:0:0:0:0:0:0:54:268:0:1:0|h[Carapace Spine Crossbow]|h|r",
+"|HlootHistory:27|h[Loot]|h: Mangoworm (Greed - 56) Won: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:20:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:27|h[Loot]|h: Mangoworm (Greed - 77) Won: |cff0070dd|Hitem:88286:0:0:0:0:0:0:0:32:104:0:1:0|h[Legguards of the Crimson Magus]|h|r",
+"|HlootHistory:27|h[Loot]|h: Midorìko-Runetotem (Need - 46) Won: |cff1eff00|Hitem:14124:0:0:0:0:0:-9:1414429184:19:268:0:1:0|h[Ritual Gloves of the Owl]|h|r",
+"|HlootHistory:27|h[Loot]|h: Snotter-ArgentDawn (Need - 24) Won: |cff0070dd|Hitem:24381:0:0:0:0:0:0:0:62:64:0:1:0|h[Coilfang Needler]|h|r",
+"|HlootHistory:27|h[Loot]|h: Vrc-Draenor (Need - 13) Won: |cff0070dd|Hitem:11809:0:0:0:0:0:0:0:51:105:0:1:0|h[Flame Wrath]|h|r",
+"|HlootHistory:27|h[Loot]|h: You (Need - 72) Won: |cff0070dd|Hitem:6446:0:0:0:0:0:0:0:19:73:0:0:0|h[Snakeskin Bag]|h|r",
+"|HlootHistory:27|h[Loot]|h: You have rolled Greed - 14 for: |cff0070dd|Hitem:18738:0:0:0:0:0:0:0:54:268:0:1:0|h[Carapace Spine Crossbow]|h|r",
+"|HlootHistory:27|h[Loot]|h: You have rolled Greed - 16 for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:20:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:27|h[Loot]|h: You have rolled Greed - 41 for: |cff1eff00|Hitem:8387:0:0:0:0:0:0:0:47:268:0:1:0|h[Pattern: Big Voodoo Mask]|h|r",
+"|HlootHistory:27|h[Loot]|h: You have rolled Greed - 44 for: |cff0070dd|Hitem:18484:0:0:0:0:0:0:0:48:66:0:1:0|h[Cho'Rush's Blade]|h|r",
+"|HlootHistory:27|h[Loot]|h: You have rolled Greed - 47 for: |cff0070dd|Hitem:88286:0:0:0:0:0:0:0:32:104:0:1:0|h[Legguards of the Crimson Magus]|h|r",
+"|HlootHistory:27|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11809:0:0:0:0:0:0:0:51:105:0:1:0|h[Flame Wrath]|h|r",
+"|HlootHistory:27|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18484:0:0:0:0:0:0:0:48:66:0:1:0|h[Cho'Rush's Blade]|h|r",
+"|HlootHistory:27|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18738:0:0:0:0:0:0:0:54:268:0:1:0|h[Carapace Spine Crossbow]|h|r",
+"|HlootHistory:27|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24381:0:0:0:0:0:0:0:62:64:0:1:0|h[Coilfang Needler]|h|r",
+"|HlootHistory:27|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88286:0:0:0:0:0:0:0:32:104:0:1:0|h[Legguards of the Crimson Magus]|h|r",
+"|HlootHistory:27|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:20:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:27|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8387:0:0:0:0:0:0:0:47:268:0:1:0|h[Pattern: Big Voodoo Mask]|h|r",
+"|HlootHistory:27|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:6446:0:0:0:0:0:0:0:19:73:0:0:0|h[Snakeskin Bag]|h|r",
+"|HlootHistory:27|h[Loot]|h: You passed on: |cff0070dd|Hitem:18083:0:0:0:0:0:0:0:49:263:0:1:0|h[Jumanza Grips]|h|r",
+"|HlootHistory:27|h[Loot]|h: You passed on: |cff1eff00|Hitem:14124:0:0:0:0:0:-9:1414429184:19:268:0:1:0|h[Ritual Gloves of the Owl]|h|r",
+"|HlootHistory:28|h[Loot]|h: |cff0070dd|Hitem:17734:0:0:0:0:0:0:0:39:264:0:1:0|h[Helm of the Mountain]|h|r",
+"|HlootHistory:28|h[Loot]|h: |cff0070dd|Hitem:18459:0:0:0:0:0:0:0:47:268:0:1:0|h[Gallant's Wristguards]|h|r",
+"|HlootHistory:28|h[Loot]|h: |cff0070dd|Hitem:18520:0:0:0:0:0:0:0:48:66:0:1:0|h[Barbarous Blade]|h|r",
+"|HlootHistory:28|h[Loot]|h: |cff0070dd|Hitem:9473:0:0:0:0:0:0:0:49:263:0:1:0|h[Jinxed Hoodoo Skin]|h|r",
+"|HlootHistory:28|h[Loot]|h: |cff1eff00|Hitem:14364:0:0:0:0:0:0:0:19:268:0:1:0|h[Mystic's Slippers]|h|r",
+"|HlootHistory:28|h[Loot]|h: |cff1eff00|Hitem:15114:0:0:0:0:0:-84:672083456:19:73:0:1:0|h[Rigid Cape of Stamina]|h|r",
+"|HlootHistory:28|h[Loot]|h: |cff1eff00|Hitem:15250:0:0:0:0:0:-78:1314780544:32:104:0:1:0|h[Glimmering Flamberge of the Monkey]|h|r",
+"|HlootHistory:28|h[Loot]|h: |cff1eff00|Hitem:25216:0:0:0:0:0:-18:980287519:62:64:0:1:0|h[Ogre Splitting Axe of Agility]|h|r",
+"|HlootHistory:28|h[Loot]|h: |cff1eff00|Hitem:4733:0:0:0:0:0:0:0:50:268:0:1:0|h[Blackforge Pauldrons]|h|r",
+"|HlootHistory:28|h[Loot]|h: |cff1eff00|Hitem:6558:0:0:0:0:0:-13:874876800:20:104:0:1:0|h[Bard's Belt of the Wolf]|h|r",
+"|HlootHistory:28|h[Loot]|h: |cff1eff00|Hitem:7990:0:0:0:0:0:0:0:54:268:0:1:0|h[Plans: Heavy Mithril Helm]|h|r",
+"|HlootHistory:28|h[Loot]|h: Alehara (Greed - 83) Won: |cff1eff00|Hitem:15114:0:0:0:0:0:-84:672083456:19:73:0:1:0|h[Rigid Cape of Stamina]|h|r",
+"|HlootHistory:28|h[Loot]|h: Croen-Zenedar (Greed - 43) Won: |cff0070dd|Hitem:17734:0:0:0:0:0:0:0:39:264:0:1:0|h[Helm of the Mountain]|h|r",
+"|HlootHistory:28|h[Loot]|h: Elrawiel-Drak'thul (Greed - 79) Won: |cff1eff00|Hitem:25216:0:0:0:0:0:-18:980287519:62:64:0:1:0|h[Ogre Splitting Axe of Agility]|h|r",
+"|HlootHistory:28|h[Loot]|h: Heisenberrg-TheVentureCo (Need - 20) Won: |cff0070dd|Hitem:18520:0:0:0:0:0:0:0:48:66:0:1:0|h[Barbarous Blade]|h|r",
+"|HlootHistory:28|h[Loot]|h: Immox-Doomhammer (Greed - 86) Won: |cff1eff00|Hitem:15250:0:0:0:0:0:-78:1314780544:32:104:0:1:0|h[Glimmering Flamberge of the Monkey]|h|r",
+"|HlootHistory:28|h[Loot]|h: Lerona (Greed - 85) Won: |cff1eff00|Hitem:7990:0:0:0:0:0:0:0:54:268:0:1:0|h[Plans: Heavy Mithril Helm]|h|r",
+"|HlootHistory:28|h[Loot]|h: Lerona (Need - 40) Won: |cff0070dd|Hitem:18459:0:0:0:0:0:0:0:47:268:0:1:0|h[Gallant's Wristguards]|h|r",
+"|HlootHistory:28|h[Loot]|h: Midorìko-Runetotem (Need - 7) Won: |cff1eff00|Hitem:14364:0:0:0:0:0:0:0:19:268:0:1:0|h[Mystic's Slippers]|h|r",
+"|HlootHistory:28|h[Loot]|h: Sanctisius (Greed - 74) Won: |cff0070dd|Hitem:9473:0:0:0:0:0:0:0:49:263:0:1:0|h[Jinxed Hoodoo Skin]|h|r",
+"|HlootHistory:28|h[Loot]|h: Vrc-Draenor (Need - 36) Won: |cff0070dd|Hitem:11785:0:0:0:0:0:0:0:51:105:0:1:0|h[Rock Golem Bulwark]|h|r",
+"|HlootHistory:28|h[Loot]|h: You (Need - 84) Won: |cff1eff00|Hitem:6558:0:0:0:0:0:-13:874876800:20:104:0:1:0|h[Bard's Belt of the Wolf]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have rolled Greed - 12 for: |cff1eff00|Hitem:25216:0:0:0:0:0:-18:980287519:62:64:0:1:0|h[Ogre Splitting Axe of Agility]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have rolled Greed - 14 for: |cff1eff00|Hitem:7990:0:0:0:0:0:0:0:54:268:0:1:0|h[Plans: Heavy Mithril Helm]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have rolled Greed - 28 for: |cff0070dd|Hitem:17734:0:0:0:0:0:0:0:39:264:0:1:0|h[Helm of the Mountain]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have rolled Greed - 49 for: |cff0070dd|Hitem:9473:0:0:0:0:0:0:0:49:263:0:1:0|h[Jinxed Hoodoo Skin]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have rolled Greed - 69 for: |cff1eff00|Hitem:15250:0:0:0:0:0:-78:1314780544:32:104:0:1:0|h[Glimmering Flamberge of the Monkey]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11785:0:0:0:0:0:0:0:51:105:0:1:0|h[Rock Golem Bulwark]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:17734:0:0:0:0:0:0:0:39:264:0:1:0|h[Helm of the Mountain]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18459:0:0:0:0:0:0:0:47:268:0:1:0|h[Gallant's Wristguards]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18520:0:0:0:0:0:0:0:48:66:0:1:0|h[Barbarous Blade]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:9473:0:0:0:0:0:0:0:49:263:0:1:0|h[Jinxed Hoodoo Skin]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14364:0:0:0:0:0:0:0:19:268:0:1:0|h[Mystic's Slippers]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15250:0:0:0:0:0:-78:1314780544:32:104:0:1:0|h[Glimmering Flamberge of the Monkey]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25216:0:0:0:0:0:-18:980287519:62:64:0:1:0|h[Ogre Splitting Axe of Agility]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7990:0:0:0:0:0:0:0:54:268:0:1:0|h[Plans: Heavy Mithril Helm]|h|r",
+"|HlootHistory:28|h[Loot]|h: You have selected Need for: |cff1eff00|Hitem:6558:0:0:0:0:0:-13:874876800:20:104:0:1:0|h[Bard's Belt of the Wolf]|h|r",
+"|HlootHistory:28|h[Loot]|h: You passed on: |cff1eff00|Hitem:15114:0:0:0:0:0:-84:672083456:19:73:0:1:0|h[Rigid Cape of Stamina]|h|r",
+"|HlootHistory:29|h[Loot]|h: |cff0070dd|Hitem:12471:0:0:0:0:0:0:0:49:263:0:1:0|h[Desertwalker Cane]|h|r",
+"|HlootHistory:29|h[Loot]|h: |cff0070dd|Hitem:18493:0:0:0:0:0:0:0:47:268:0:1:0|h[Bulky Iron Spaulders]|h|r",
+"|HlootHistory:29|h[Loot]|h: |cff0070dd|Hitem:18527:0:0:0:0:0:0:0:48:66:0:1:0|h[Harmonious Gauntlets]|h|r",
+"|HlootHistory:29|h[Loot]|h: |cff0070dd|Hitem:18729:0:0:0:0:0:0:0:54:268:0:1:0|h[Screeching Bow]|h|r",
+"|HlootHistory:29|h[Loot]|h: |cff0070dd|Hitem:5195:0:0:0:0:0:0:0:20:104:0:1:0|h[Gold-Flecked Gloves]|h|r",
+"|HlootHistory:29|h[Loot]|h: |cff0070dd|Hitem:6469:0:0:0:0:0:0:0:19:268:0:1:0|h[Venomstrike]|h|r",
+"|HlootHistory:29|h[Loot]|h: |cff0070dd|Hitem:88292:0:0:0:0:0:0:0:32:104:0:1:0|h[Helm of Rising Flame]|h|r",
+"|HlootHistory:29|h[Loot]|h: |cff1eff00|Hitem:14159:0:0:0:0:0:-69:1995440128:19:73:0:1:0|h[Pagan Shoes of the Eagle]|h|r",
+"|HlootHistory:29|h[Loot]|h: |cff1eff00|Hitem:15215:0:0:0:0:0:-14:343805184:50:268:0:1:0|h[Furious Falchion of the Tiger]|h|r",
+"|HlootHistory:29|h[Loot]|h: |cff1eff00|Hitem:25216:0:0:0:0:0:-43:1361772575:62:64:0:1:0|h[Ogre Splitting Axe of the Soldier]|h|r",
+"|HlootHistory:29|h[Loot]|h: |cff1eff00|Hitem:8188:0:0:0:0:0:0:0:39:264:0:1:0|h[Explosive Shotgun]|h|r",
+"|HlootHistory:29|h[Loot]|h: Celvariel-Auchindoun (Need - 37) Won: |cff0070dd|Hitem:6469:0:0:0:0:0:0:0:19:268:0:1:0|h[Venomstrike]|h|r",
+"|HlootHistory:29|h[Loot]|h: Croen-Zenedar (Greed - 99) Won: |cff1eff00|Hitem:8188:0:0:0:0:0:0:0:39:264:0:1:0|h[Explosive Shotgun]|h|r",
+"|HlootHistory:29|h[Loot]|h: Dadcia-Stormscale (Greed - 68) Won: |cff0070dd|Hitem:18729:0:0:0:0:0:0:0:54:268:0:1:0|h[Screeching Bow]|h|r",
+"|HlootHistory:29|h[Loot]|h: Fennec (Greed - 94) Won: |cff0070dd|Hitem:18527:0:0:0:0:0:0:0:48:66:0:1:0|h[Harmonious Gauntlets]|h|r",
+"|HlootHistory:29|h[Loot]|h: Fennec (Need - 38) Won: |cff0070dd|Hitem:12471:0:0:0:0:0:0:0:49:263:0:1:0|h[Desertwalker Cane]|h|r",
+"|HlootHistory:29|h[Loot]|h: Lerona (Greed - 44) Won: |cff1eff00|Hitem:15215:0:0:0:0:0:-14:343805184:50:268:0:1:0|h[Furious Falchion of the Tiger]|h|r",
+"|HlootHistory:29|h[Loot]|h: Mangoworm (Need - 54) Won: |cff0070dd|Hitem:5195:0:0:0:0:0:0:0:20:104:0:1:0|h[Gold-Flecked Gloves]|h|r",
+"|HlootHistory:29|h[Loot]|h: Poesy-Stormscale (Greed - 48) Won: |cff0070dd|Hitem:88292:0:0:0:0:0:0:0:32:104:0:1:0|h[Helm of Rising Flame]|h|r",
+"|HlootHistory:29|h[Loot]|h: You (Greed - 72) Won: |cff1eff00|Hitem:25216:0:0:0:0:0:-43:1361772575:62:64:0:1:0|h[Ogre Splitting Axe of the Soldier]|h|r",
+"|HlootHistory:29|h[Loot]|h: You (Greed - 77) Won: |cff0070dd|Hitem:11923:0:0:0:0:0:0:0:51:105:0:1:0|h[The Hammer of Grace]|h|r",
+"|HlootHistory:29|h[Loot]|h: You (Greed - 87) Won: |cff0070dd|Hitem:18493:0:0:0:0:0:0:0:47:268:0:1:0|h[Bulky Iron Spaulders]|h|r",
+"|HlootHistory:29|h[Loot]|h: You (Need - 32) Won: |cff1eff00|Hitem:14159:0:0:0:0:0:-69:1995440128:19:73:0:1:0|h[Pagan Shoes of the Eagle]|h|r",
+"|HlootHistory:29|h[Loot]|h: You have rolled Greed - 20 for: |cff0070dd|Hitem:88292:0:0:0:0:0:0:0:32:104:0:1:0|h[Helm of Rising Flame]|h|r",
+"|HlootHistory:29|h[Loot]|h: You have rolled Greed - 81 for: |cff0070dd|Hitem:18527:0:0:0:0:0:0:0:48:66:0:1:0|h[Harmonious Gauntlets]|h|r",
+"|HlootHistory:29|h[Loot]|h: You have rolled Greed - 94 for: |cff1eff00|Hitem:8188:0:0:0:0:0:0:0:39:264:0:1:0|h[Explosive Shotgun]|h|r",
+"|HlootHistory:29|h[Loot]|h: You have rolled Need - 11 for: |cff0070dd|Hitem:5195:0:0:0:0:0:0:0:20:104:0:1:0|h[Gold-Flecked Gloves]|h|r",
+"|HlootHistory:29|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11923:0:0:0:0:0:0:0:51:105:0:1:0|h[The Hammer of Grace]|h|r",
+"|HlootHistory:29|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18493:0:0:0:0:0:0:0:47:268:0:1:0|h[Bulky Iron Spaulders]|h|r",
+"|HlootHistory:29|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18527:0:0:0:0:0:0:0:48:66:0:1:0|h[Harmonious Gauntlets]|h|r",
+"|HlootHistory:29|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6469:0:0:0:0:0:0:0:19:268:0:1:0|h[Venomstrike]|h|r",
+"|HlootHistory:29|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88292:0:0:0:0:0:0:0:32:104:0:1:0|h[Helm of Rising Flame]|h|r",
+"|HlootHistory:29|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25216:0:0:0:0:0:-43:1361772575:62:64:0:1:0|h[Ogre Splitting Axe of the Soldier]|h|r",
+"|HlootHistory:29|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8188:0:0:0:0:0:0:0:39:264:0:1:0|h[Explosive Shotgun]|h|r",
+"|HlootHistory:29|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:5195:0:0:0:0:0:0:0:20:104:0:1:0|h[Gold-Flecked Gloves]|h|r",
+"|HlootHistory:29|h[Loot]|h: You have selected Need for: |cff1eff00|Hitem:14159:0:0:0:0:0:-69:1995440128:19:73:0:1:0|h[Pagan Shoes of the Eagle]|h|r",
+"|HlootHistory:29|h[Loot]|h: You passed on: |cff0070dd|Hitem:12471:0:0:0:0:0:0:0:49:263:0:1:0|h[Desertwalker Cane]|h|r",
+"|HlootHistory:29|h[Loot]|h: You passed on: |cff0070dd|Hitem:18729:0:0:0:0:0:0:0:54:268:0:1:0|h[Screeching Bow]|h|r",
+"|HlootHistory:29|h[Loot]|h: You passed on: |cff1eff00|Hitem:15215:0:0:0:0:0:-14:343805184:50:268:0:1:0|h[Furious Falchion of the Tiger]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff0070dd|Hitem:10769:0:0:0:0:0:0:0:44:270:0:1:0|h[Glowing Eye of Mordresh]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff0070dd|Hitem:18722:0:0:0:0:0:0:0:52:268:0:1:0|h[Death Grips]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff0070dd|Hitem:24022:0:0:0:0:0:0:0:60:64:0:1:0|h[Scale Leggings of the Skirmisher]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff0070dd|Hitem:5444:0:0:0:0:0:0:0:15:73:0:1:0|h[Miner's Cape]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff0070dd|Hitem:82880:0:0:0:0:0:0:0:15:104:0:1:0|h[Fang of Adarogg]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff1eff00|Hitem:1207:0:0:0:0:0:-14:484062464:45:66:0:1:0|h[Murphstar of the Tiger]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:45:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff1eff00|Hitem:14785:0:0:0:0:0:0:0:48:268:0:1:0|h[Khan's Helmet]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff1eff00|Hitem:14821:0:0:0:0:0:0:0:46:66:0:1:0|h[Symbolic Breastplate]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff1eff00|Hitem:15362:0:0:0:0:0:-9:74255232:34:264:0:1:0|h[Trickster's Boots of the Owl]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff1eff00|Hitem:1613:0:0:0:0:0:-68:561368448:48:263:0:1:0|h[Spiritchaser Staff of the Bear]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff1eff00|Hitem:25306:0:0:0:0:0:-8:2079850512:100:250:0:22:0|h[Permafrost Dagger of the Whale]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff1eff00|Hitem:3056:0:0:0:0:0:0:0:28:104:0:1:0|h[Forest Leather Pants]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff1eff00|Hitem:3192:0:0:0:0:0:-13:1546199680:11:268:0:0:0|h[Short Bastard Sword of the Wolf]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff1eff00|Hitem:6537:0:0:0:0:0:-19:1069996928:14:268:0:0:0|h[Willow Boots of Intellect]|h|r",
+"|HlootHistory:3|h[Loot]|h: |cff1eff00|Hitem:774:0:0:0:0:0:0:0:10:73:0:0:0|h[Malachite]|h|r",
+"|HlootHistory:3|h[Loot]|h: Alehara (Greed - 78) Won: |cff1eff00|Hitem:774:0:0:0:0:0:0:0:10:73:0:0:0|h[Malachite]|h|r",
+"|HlootHistory:3|h[Loot]|h: Aramago-Drak'thul (Greed - 93) Won: |cff0070dd|Hitem:82880:0:0:0:0:0:0:0:15:104:0:1:0|h[Fang of Adarogg]|h|r",
+"|HlootHistory:3|h[Loot]|h: Atmøsfear-TarrenMill (Greed - 90) Won: |cff0070dd|Hitem:11625:0:0:0:0:0:0:0:51:105:0:1:0|h[Enthralled Sphere]|h|r",
+"|HlootHistory:3|h[Loot]|h: Celvariel-Auchindoun (Greed - 25) Won: |cff1eff00|Hitem:3192:0:0:0:0:0:-13:1546199680:11:268:0:0:0|h[Short Bastard Sword of the Wolf]|h|r",
+"|HlootHistory:3|h[Loot]|h: Dudika-ChamberofAspects (Greed - 96) Won: |cff0070dd|Hitem:5444:0:0:0:0:0:0:0:15:73:0:1:0|h[Miner's Cape]|h|r",
+"|HlootHistory:3|h[Loot]|h: Fennec (Greed - 97) Won: |cff1eff00|Hitem:1613:0:0:0:0:0:-68:561368448:48:263:0:1:0|h[Spiritchaser Staff of the Bear]|h|r",
+"|HlootHistory:3|h[Loot]|h: Larku-Magtheridon (Greed - 79) Won: |cff1eff00|Hitem:14821:0:0:0:0:0:0:0:46:66:0:1:0|h[Symbolic Breastplate]|h|r",
+"|HlootHistory:3|h[Loot]|h: Lerona (Greed - 84) Won: |cff1eff00|Hitem:14785:0:0:0:0:0:0:0:48:268:0:1:0|h[Khan's Helmet]|h|r",
+"|HlootHistory:3|h[Loot]|h: Lerona (Need - 41) Won: |cff0070dd|Hitem:18722:0:0:0:0:0:0:0:52:268:0:1:0|h[Death Grips]|h|r",
+"|HlootHistory:3|h[Loot]|h: Maeneth (Greed - 90) Won: |cff1eff00|Hitem:1207:0:0:0:0:0:-14:484062464:45:66:0:1:0|h[Murphstar of the Tiger]|h|r",
+"|HlootHistory:3|h[Loot]|h: Patraulea-Hellscream (Greed - 74) Won: |cff0070dd|Hitem:10769:0:0:0:0:0:0:0:44:270:0:1:0|h[Glowing Eye of Mordresh]|h|r",
+"|HlootHistory:3|h[Loot]|h: Relarian-Ghostlands (Greed - 79) Won: |cff1eff00|Hitem:25306:0:0:0:0:0:-8:2079850512:100:250:0:22:0|h[Permafrost Dagger of the Whale]|h|r",
+"|HlootHistory:3|h[Loot]|h: Sílénce-Stormrage (Greed - 94) Won: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:45:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:3|h[Loot]|h: Smetot-Mazrigos (Greed - 90) Won: |cff1eff00|Hitem:3056:0:0:0:0:0:0:0:28:104:0:1:0|h[Forest Leather Pants]|h|r",
+"|HlootHistory:3|h[Loot]|h: You (Greed - 29) Won: |cff0070dd|Hitem:24022:0:0:0:0:0:0:0:60:64:0:1:0|h[Scale Leggings of the Skirmisher]|h|r",
+"|HlootHistory:3|h[Loot]|h: You (Need - 55) Won: |cff1eff00|Hitem:15362:0:0:0:0:0:-9:74255232:35:264:0:1:0|h[Trickster's Boots of the Owl]|h|r",
+"|HlootHistory:3|h[Loot]|h: You (Need - 56) Won: |cff1eff00|Hitem:6537:0:0:0:0:0:-19:1069996928:14:268:0:0:0|h[Willow Boots of Intellect]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have rolled Greed - 14 for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:45:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have rolled Greed - 16 for: |cff1eff00|Hitem:14785:0:0:0:0:0:0:0:48:268:0:1:0|h[Khan's Helmet]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have rolled Greed - 18 for: |cff1eff00|Hitem:1613:0:0:0:0:0:-68:561368448:48:263:0:1:0|h[Spiritchaser Staff of the Bear]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have rolled Greed - 20 for: |cff1eff00|Hitem:3192:0:0:0:0:0:-13:1546199680:11:268:0:0:0|h[Short Bastard Sword of the Wolf]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have rolled Greed - 22 for: |cff1eff00|Hitem:25306:0:0:0:0:0:-8:2079850512:100:250:0:22:0|h[Permafrost Dagger of the Whale]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have rolled Greed - 39 for: |cff0070dd|Hitem:11625:0:0:0:0:0:0:0:51:105:0:1:0|h[Enthralled Sphere]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have rolled Greed - 43 for: |cff1eff00|Hitem:14821:0:0:0:0:0:0:0:46:66:0:1:0|h[Symbolic Breastplate]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have rolled Greed - 47 for: |cff0070dd|Hitem:10769:0:0:0:0:0:0:0:44:270:0:1:0|h[Glowing Eye of Mordresh]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have rolled Greed - 54 for: |cff1eff00|Hitem:774:0:0:0:0:0:0:0:10:73:0:0:0|h[Malachite]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have rolled Greed - 84 for: |cff1eff00|Hitem:1207:0:0:0:0:0:-14:484062464:45:66:0:1:0|h[Murphstar of the Tiger]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10769:0:0:0:0:0:0:0:44:270:0:1:0|h[Glowing Eye of Mordresh]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11625:0:0:0:0:0:0:0:51:105:0:1:0|h[Enthralled Sphere]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24022:0:0:0:0:0:0:0:60:64:0:1:0|h[Scale Leggings of the Skirmisher]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:1207:0:0:0:0:0:-14:484062464:45:66:0:1:0|h[Murphstar of the Tiger]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:45:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14785:0:0:0:0:0:0:0:48:268:0:1:0|h[Khan's Helmet]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14821:0:0:0:0:0:0:0:46:66:0:1:0|h[Symbolic Breastplate]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:1613:0:0:0:0:0:-68:561368448:48:263:0:1:0|h[Spiritchaser Staff of the Bear]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25306:0:0:0:0:0:-8:2079850512:100:250:0:22:0|h[Permafrost Dagger of the Whale]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:3192:0:0:0:0:0:-13:1546199680:11:268:0:0:0|h[Short Bastard Sword of the Wolf]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:774:0:0:0:0:0:0:0:10:73:0:0:0|h[Malachite]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have selected Need for: |cff1eff00|Hitem:15362:0:0:0:0:0:-9:74255232:35:264:0:1:0|h[Trickster's Boots of the Owl]|h|r",
+"|HlootHistory:3|h[Loot]|h: You have selected Need for: |cff1eff00|Hitem:6537:0:0:0:0:0:-19:1069996928:14:268:0:0:0|h[Willow Boots of Intellect]|h|r",
+"|HlootHistory:3|h[Loot]|h: You passed on: |cff0070dd|Hitem:18722:0:0:0:0:0:0:0:52:268:0:1:0|h[Death Grips]|h|r",
+"|HlootHistory:3|h[Loot]|h: You passed on: |cff0070dd|Hitem:5444:0:0:0:0:0:0:0:15:73:0:1:0|h[Miner's Cape]|h|r",
+"|HlootHistory:3|h[Loot]|h: You passed on: |cff0070dd|Hitem:82880:0:0:0:0:0:0:0:15:104:0:1:0|h[Fang of Adarogg]|h|r",
+"|HlootHistory:3|h[Loot]|h: You passed on: |cff1eff00|Hitem:3056:0:0:0:0:0:0:0:28:104:0:1:0|h[Forest Leather Pants]|h|r",
+"|HlootHistory:30|h[Loot]|h: |cff0070dd|Hitem:13537:0:0:0:0:0:0:0:54:268:0:1:0|h[Chillhide Bracers]|h|r",
+"|HlootHistory:30|h[Loot]|h: |cff0070dd|Hitem:24363:0:0:0:0:0:0:0:62:64:0:1:0|h[Unscarred Breastplate]|h|r",
+"|HlootHistory:30|h[Loot]|h: |cff0070dd|Hitem:6472:0:0:0:0:0:0:0:19:73:0:1:0|h[Stinging Viper]|h|r",
+"|HlootHistory:30|h[Loot]|h: |cff0070dd|Hitem:6629:0:0:0:0:0:0:0:19:268:0:1:0|h[Sporid Cape]|h|r",
+"|HlootHistory:30|h[Loot]|h: |cff0070dd|Hitem:88300:0:0:0:0:0:0:0:33:104:0:1:0|h[Triune Signet]|h|r",
+"|HlootHistory:30|h[Loot]|h: |cff1eff00|Hitem:14213:0:0:0:0:0:-9:2134322176:39:264:0:1:0|h[Vital Raiment of the Owl]|h|r",
+"|HlootHistory:30|h[Loot]|h: |cff1eff00|Hitem:15604:0:0:0:0:0:-9:429904128:50:263:0:1:0|h[Ancient Defender of the Owl]|h|r",
+"|HlootHistory:30|h[Loot]|h: |cff1eff00|Hitem:4638:0:0:0:0:0:0:0:47:268:0:1:0|h[Reinforced Steel Lockbox]|h|r",
+"|HlootHistory:30|h[Loot]|h: |cff1eff00|Hitem:4733:0:0:0:0:0:0:0:50:268:0:1:0|h[Blackforge Pauldrons]|h|r",
+"|HlootHistory:30|h[Loot]|h: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:20:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:30|h[Loot]|h: Anestadren (Greed - 32) Won: |cff0070dd|Hitem:6472:0:0:0:0:0:0:0:19:73:0:1:0|h[Stinging Viper]|h|r",
+"|HlootHistory:30|h[Loot]|h: Atmøsfear-TarrenMill (Greed - 63) Won: |cff0070dd|Hitem:11925:0:0:0:0:0:0:0:51:105:0:1:0|h[Ghostshroud]|h|r",
+"|HlootHistory:30|h[Loot]|h: Celvariel-Auchindoun (Greed - 53) Won: |cff0070dd|Hitem:13537:0:0:0:0:0:0:0:54:268:0:1:0|h[Chillhide Bracers]|h|r",
+"|HlootHistory:30|h[Loot]|h: Celvariel-Auchindoun (Greed - 67) Won: |cff1eff00|Hitem:4733:0:0:0:0:0:0:0:50:268:0:1:0|h[Blackforge Pauldrons]|h|r",
+"|HlootHistory:30|h[Loot]|h: Celvariel-Auchindoun (Greed - 93) Won: |cff1eff00|Hitem:4638:0:0:0:0:0:0:0:47:268:0:1:0|h[Reinforced Steel Lockbox]|h|r",
+"|HlootHistory:30|h[Loot]|h: Celvariel-Auchindoun (Greed - 97) Won: |cff0070dd|Hitem:6629:0:0:0:0:0:0:0:19:268:0:1:0|h[Sporid Cape]|h|r",
+"|HlootHistory:30|h[Loot]|h: Chyranths-Magtheridon (Greed - 92) Won: |cff1eff00|Hitem:15604:0:0:0:0:0:-9:429904128:50:263:0:1:0|h[Ancient Defender of the Owl]|h|r",
+"|HlootHistory:30|h[Loot]|h: Mangoworm (Greed - 84) Won: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:20:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:30|h[Loot]|h: Mangoworm (Need - 63) Won: |cff0070dd|Hitem:88300:0:0:0:0:0:0:0:33:104:0:1:0|h[Triune Signet]|h|r",
+"|HlootHistory:30|h[Loot]|h: Nyloos-Aggra(Português) (Greed - 58) Won: |cff1eff00|Hitem:14213:0:0:0:0:0:-9:2134322176:39:264:0:1:0|h[Vital Raiment of the Owl]|h|r",
+"|HlootHistory:30|h[Loot]|h: Snotter-ArgentDawn (Greed - 79) Won: |cff0070dd|Hitem:24363:0:0:0:0:0:0:0:62:64:0:1:0|h[Unscarred Breastplate]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have rolled Greed - 12 for: |cff1eff00|Hitem:4638:0:0:0:0:0:0:0:47:268:0:1:0|h[Reinforced Steel Lockbox]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have rolled Greed - 13 for: |cff0070dd|Hitem:24363:0:0:0:0:0:0:0:62:64:0:1:0|h[Unscarred Breastplate]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have rolled Greed - 17 for: |cff0070dd|Hitem:11925:0:0:0:0:0:0:0:51:105:0:1:0|h[Ghostshroud]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have rolled Greed - 4 for: |cff1eff00|Hitem:14213:0:0:0:0:0:-9:2134322176:39:264:0:1:0|h[Vital Raiment of the Owl]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have rolled Greed - 68 for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:20:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have rolled Greed - 80 for: |cff1eff00|Hitem:15604:0:0:0:0:0:-9:429904128:50:263:0:1:0|h[Ancient Defender of the Owl]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have rolled Greed - 91 for: |cff0070dd|Hitem:6629:0:0:0:0:0:0:0:19:268:0:1:0|h[Sporid Cape]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11925:0:0:0:0:0:0:0:51:105:0:1:0|h[Ghostshroud]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24363:0:0:0:0:0:0:0:62:64:0:1:0|h[Unscarred Breastplate]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6629:0:0:0:0:0:0:0:19:268:0:1:0|h[Sporid Cape]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88300:0:0:0:0:0:0:0:33:104:0:1:0|h[Triune Signet]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14213:0:0:0:0:0:-9:2134322176:39:264:0:1:0|h[Vital Raiment of the Owl]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15604:0:0:0:0:0:-9:429904128:50:263:0:1:0|h[Ancient Defender of the Owl]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4638:0:0:0:0:0:0:0:47:268:0:1:0|h[Reinforced Steel Lockbox]|h|r",
+"|HlootHistory:30|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:20:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:30|h[Loot]|h: You passed on: |cff0070dd|Hitem:13537:0:0:0:0:0:0:0:54:268:0:1:0|h[Chillhide Bracers]|h|r",
+"|HlootHistory:30|h[Loot]|h: You passed on: |cff0070dd|Hitem:6472:0:0:0:0:0:0:0:19:73:0:1:0|h[Stinging Viper]|h|r",
+"|HlootHistory:30|h[Loot]|h: You passed on: |cff1eff00|Hitem:4733:0:0:0:0:0:0:0:50:268:0:1:0|h[Blackforge Pauldrons]|h|r",
+"|HlootHistory:31|h[Loot]|h: |cff0070dd|Hitem:11086:0:0:0:0:0:0:0:50:263:0:1:0|h[Jang'thraze the Protector]|h|r",
+"|HlootHistory:31|h[Loot]|h: |cff0070dd|Hitem:17714:0:0:0:0:0:0:0:40:264:0:1:0|h[Bracers of the Stone Princess]|h|r",
+"|HlootHistory:31|h[Loot]|h: |cff0070dd|Hitem:18505:0:0:0:0:0:0:0:47:268:0:1:0|h[Mugger's Belt]|h|r",
+"|HlootHistory:31|h[Loot]|h: |cff0070dd|Hitem:18734:0:0:0:0:0:0:0:54:268:0:1:0|h[Pale Moon Cloak]|h|r",
+"|HlootHistory:31|h[Loot]|h: |cff0070dd|Hitem:88297:0:0:0:0:0:0:0:33:104:0:1:0|h[Lightbreaker Greatsword]|h|r",
+"|HlootHistory:31|h[Loot]|h: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:31|h[Loot]|h: |cff1eff00|Hitem:15210:0:0:0:0:0:-84:1071080704:19:73:0:1:0|h[Raider Shortsword of Stamina]|h|r",
+"|HlootHistory:31|h[Loot]|h: |cff1eff00|Hitem:2408:0:0:0:0:0:0:0:19:268:0:1:0|h[Pattern: Fine Leather Gloves]|h|r",
+"|HlootHistory:31|h[Loot]|h: |cff1eff00|Hitem:24814:0:0:0:0:0:-40:1330380822:63:64:0:1:0|h[Felstone Waistband of the Bandit]|h|r",
+"|HlootHistory:31|h[Loot]|h: |cff1eff00|Hitem:4569:0:0:0:0:0:-17:352605184:20:104:0:1:0|h[Staunch Hammer of Strength]|h|r",
+"|HlootHistory:31|h[Loot]|h: Anestadren (Greed - 88) Won: |cff1eff00|Hitem:15210:0:0:0:0:0:-84:1071080704:19:73:0:1:0|h[Raider Shortsword of Stamina]|h|r",
+"|HlootHistory:31|h[Loot]|h: Celvariel-Auchindoun (Greed - 89) Won: |cff1eff00|Hitem:2408:0:0:0:0:0:0:0:19:268:0:1:0|h[Pattern: Fine Leather Gloves]|h|r",
+"|HlootHistory:31|h[Loot]|h: Drcasas-TheVentureCo (Greed - 91) Won: |cff1eff00|Hitem:24814:0:0:0:0:0:-40:1330380822:63:64:0:1:0|h[Felstone Waistband of the Bandit]|h|r",
+"|HlootHistory:31|h[Loot]|h: Immox-Doomhammer (Greed - 67) Won: |cff0070dd|Hitem:88297:0:0:0:0:0:0:0:33:104:0:1:0|h[Lightbreaker Greatsword]|h|r",
+"|HlootHistory:31|h[Loot]|h: Lerona (Greed - 81) Won: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:31|h[Loot]|h: Mangoworm (Greed - 59) Won: |cff1eff00|Hitem:4569:0:0:0:0:0:-17:352605184:20:104:0:1:0|h[Staunch Hammer of Strength]|h|r",
+"|HlootHistory:31|h[Loot]|h: Sanctisius (Greed - 87) Won: |cff0070dd|Hitem:11086:0:0:0:0:0:0:0:50:263:0:1:0|h[Jang'thraze the Protector]|h|r",
+"|HlootHistory:31|h[Loot]|h: Valhallir-Spinebreaker (Greed - 79) Won: |cff1eff00|Hitem:7076:0:0:0:0:0:0:0:52:105:0:0:0|h[Essence of Earth]|h|r",
+"|HlootHistory:31|h[Loot]|h: Wumpsham-TarrenMill (Greed - 97) Won: |cff0070dd|Hitem:18734:0:0:0:0:0:0:0:54:268:0:1:0|h[Pale Moon Cloak]|h|r",
+"|HlootHistory:31|h[Loot]|h: You (Need - 11) Won: |cff0070dd|Hitem:17714:0:0:0:0:0:0:0:40:264:0:1:0|h[Bracers of the Stone Princess]|h|r",
+"|HlootHistory:31|h[Loot]|h: You (Need - 90) Won: |cff0070dd|Hitem:18505:0:0:0:0:0:0:0:47:268:0:1:0|h[Mugger's Belt]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have rolled Greed - 16 for: |cff1eff00|Hitem:4569:0:0:0:0:0:-17:352605184:20:104:0:1:0|h[Staunch Hammer of Strength]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have rolled Greed - 23 for: |cff1eff00|Hitem:24814:0:0:0:0:0:-40:1330380822:63:64:0:1:0|h[Felstone Waistband of the Bandit]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have rolled Greed - 30 for: |cff1eff00|Hitem:2408:0:0:0:0:0:0:0:19:268:0:1:0|h[Pattern: Fine Leather Gloves]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have rolled Greed - 49 for: |cff0070dd|Hitem:88297:0:0:0:0:0:0:0:33:104:0:1:0|h[Lightbreaker Greatsword]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have rolled Greed - 58 for: |cff0070dd|Hitem:18734:0:0:0:0:0:0:0:54:268:0:1:0|h[Pale Moon Cloak]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have rolled Greed - 70 for: |cff1eff00|Hitem:7076:0:0:0:0:0:0:0:52:105:0:0:0|h[Essence of Earth]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18734:0:0:0:0:0:0:0:54:268:0:1:0|h[Pale Moon Cloak]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88297:0:0:0:0:0:0:0:33:104:0:1:0|h[Lightbreaker Greatsword]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:2408:0:0:0:0:0:0:0:19:268:0:1:0|h[Pattern: Fine Leather Gloves]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24814:0:0:0:0:0:-40:1330380822:63:64:0:1:0|h[Felstone Waistband of the Bandit]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4569:0:0:0:0:0:-17:352605184:20:104:0:1:0|h[Staunch Hammer of Strength]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7076:0:0:0:0:0:0:0:52:105:0:0:0|h[Essence of Earth]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:17714:0:0:0:0:0:0:0:40:264:0:1:0|h[Bracers of the Stone Princess]|h|r",
+"|HlootHistory:31|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:18505:0:0:0:0:0:0:0:47:268:0:1:0|h[Mugger's Belt]|h|r",
+"|HlootHistory:31|h[Loot]|h: You passed on: |cff0070dd|Hitem:11086:0:0:0:0:0:0:0:50:263:0:1:0|h[Jang'thraze the Protector]|h|r",
+"|HlootHistory:31|h[Loot]|h: You passed on: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:31|h[Loot]|h: You passed on: |cff1eff00|Hitem:15210:0:0:0:0:0:-84:1071080704:19:73:0:1:0|h[Raider Shortsword of Stamina]|h|r",
+"|HlootHistory:32|h[Loot]|h: |cff0070dd|Hitem:17710:0:0:0:0:0:0:0:40:264:0:1:0|h[Charstone Dirk]|h|r",
+"|HlootHistory:32|h[Loot]|h: |cff0070dd|Hitem:6473:0:0:0:0:0:0:0:19:268:0:1:0|h[Armor of the Fang]|h|r",
+"|HlootHistory:32|h[Loot]|h: |cff0070dd|Hitem:9469:0:0:0:0:0:0:0:50:263:0:1:0|h[Gahz'rilla Scale Armor]|h|r",
+"|HlootHistory:32|h[Loot]|h: |cff1eff00|Hitem:120953:0:0:0:0:0:0:0:20:104:0:1:0|h[Veteran Legguards]|h|r",
+"|HlootHistory:32|h[Loot]|h: |cff1eff00|Hitem:15263:0:0:0:0:0:-14:1162449920:54:268:0:1:0|h[Royal Mallet of the Tiger]|h|r",
+"|HlootHistory:32|h[Loot]|h: |cff1eff00|Hitem:15370:0:0:0:0:0:-18:1183436288:48:268:0:1:0|h[Wolf Rider's Boots of Agility]|h|r",
+"|HlootHistory:32|h[Loot]|h: |cff1eff00|Hitem:24920:0:0:0:0:0:-45:1783955485:63:64:0:1:0|h[Grimscale Armor of the Champion]|h|r",
+"|HlootHistory:32|h[Loot]|h: |cff1eff00|Hitem:2973:0:0:0:0:0:0:0:19:73:0:1:0|h[Hunting Tunic]|h|r",
+"|HlootHistory:32|h[Loot]|h: |cff1eff00|Hitem:7477:0:0:0:0:0:-15:1080427392:50:268:0:1:0|h[Ranger Tunic of Spirit]|h|r",
+"|HlootHistory:32|h[Loot]|h: Anestadren (Greed - 90) Won: |cff1eff00|Hitem:2973:0:0:0:0:0:0:0:19:73:0:1:0|h[Hunting Tunic]|h|r",
+"|HlootHistory:32|h[Loot]|h: Celvariel-Auchindoun (Greed - 76) Won: |cff1eff00|Hitem:7477:0:0:0:0:0:-15:1080427392:50:268:0:1:0|h[Ranger Tunic of Spirit]|h|r",
+"|HlootHistory:32|h[Loot]|h: Celvariel-Auchindoun (Greed - 80) Won: |cff1eff00|Hitem:15263:0:0:0:0:0:-14:1162449920:54:268:0:1:0|h[Royal Mallet of the Tiger]|h|r",
+"|HlootHistory:32|h[Loot]|h: Snotter-ArgentDawn (Greed - 91) Won: |cff1eff00|Hitem:24920:0:0:0:0:0:-45:1783955485:63:64:0:1:0|h[Grimscale Armor of the Champion]|h|r",
+"|HlootHistory:32|h[Loot]|h: Vrc-Draenor (Need - 75) Won: |cff0070dd|Hitem:11746:0:0:0:0:0:0:0:52:105:0:1:0|h[Golem Skull Helm]|h|r",
+"|HlootHistory:32|h[Loot]|h: You (Greed - 71) Won: |cff1eff00|Hitem:120953:0:0:0:0:0:0:0:20:104:0:1:0|h[Veteran Legguards]|h|r",
+"|HlootHistory:32|h[Loot]|h: You (Greed - 77) Won: |cff0070dd|Hitem:9469:0:0:0:0:0:0:0:50:263:0:1:0|h[Gahz'rilla Scale Armor]|h|r",
+"|HlootHistory:32|h[Loot]|h: You (Greed - 85) Won: |cff1eff00|Hitem:15370:0:0:0:0:0:-18:1183436288:48:268:0:1:0|h[Wolf Rider's Boots of Agility]|h|r",
+"|HlootHistory:32|h[Loot]|h: You (Greed - 91) Won: |cff0070dd|Hitem:17710:0:0:0:0:0:0:0:40:264:0:1:0|h[Charstone Dirk]|h|r",
+"|HlootHistory:32|h[Loot]|h: You (Greed - 91) Won: |cff0070dd|Hitem:6473:0:0:0:0:0:0:0:19:268:0:1:0|h[Armor of the Fang]|h|r",
+"|HlootHistory:32|h[Loot]|h: You have rolled Greed - 26 for: |cff1eff00|Hitem:24920:0:0:0:0:0:-45:1783955485:63:64:0:1:0|h[Grimscale Armor of the Champion]|h|r",
+"|HlootHistory:32|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11746:0:0:0:0:0:0:0:52:105:0:1:0|h[Golem Skull Helm]|h|r",
+"|HlootHistory:32|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:17710:0:0:0:0:0:0:0:40:264:0:1:0|h[Charstone Dirk]|h|r",
+"|HlootHistory:32|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6473:0:0:0:0:0:0:0:19:268:0:1:0|h[Armor of the Fang]|h|r",
+"|HlootHistory:32|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:9469:0:0:0:0:0:0:0:50:263:0:1:0|h[Gahz'rilla Scale Armor]|h|r",
+"|HlootHistory:32|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:120953:0:0:0:0:0:0:0:20:104:0:1:0|h[Veteran Legguards]|h|r",
+"|HlootHistory:32|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15370:0:0:0:0:0:-18:1183436288:48:268:0:1:0|h[Wolf Rider's Boots of Agility]|h|r",
+"|HlootHistory:32|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24920:0:0:0:0:0:-45:1783955485:63:64:0:1:0|h[Grimscale Armor of the Champion]|h|r",
+"|HlootHistory:32|h[Loot]|h: You passed on: |cff1eff00|Hitem:15263:0:0:0:0:0:-14:1162449920:54:268:0:1:0|h[Royal Mallet of the Tiger]|h|r",
+"|HlootHistory:32|h[Loot]|h: You passed on: |cff1eff00|Hitem:2973:0:0:0:0:0:0:0:19:73:0:1:0|h[Hunting Tunic]|h|r",
+"|HlootHistory:32|h[Loot]|h: You passed on: |cff1eff00|Hitem:7477:0:0:0:0:0:-15:1080427392:50:268:0:1:0|h[Ranger Tunic of Spirit]|h|r",
+"|HlootHistory:33|h[Loot]|h: |cff0070dd|Hitem:13392:0:0:0:0:0:0:0:50:268:0:1:0|h[The Postmaster's Seal]|h|r",
+"|HlootHistory:33|h[Loot]|h: |cff0070dd|Hitem:17730:0:0:0:0:0:0:0:40:264:0:1:0|h[Gatorbite Axe]|h|r",
+"|HlootHistory:33|h[Loot]|h: |cff0070dd|Hitem:18521:0:0:0:0:0:0:0:48:268:0:1:0|h[Grimy Metal Boots]|h|r",
+"|HlootHistory:33|h[Loot]|h: |cff0070dd|Hitem:24024:0:0:0:0:0:0:0:63:64:0:1:0|h[Pauldrons of Arcane Rage]|h|r",
+"|HlootHistory:33|h[Loot]|h: |cff0070dd|Hitem:5191:0:0:0:0:0:0:0:20:104:0:1:0|h[Cruel Barb]|h|r",
+"|HlootHistory:33|h[Loot]|h: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:54:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:33|h[Loot]|h: |cff1eff00|Hitem:15971:0:0:0:0:0:-15:1322907648:20:73:0:1:0|h[Aboriginal Rod of Spirit]|h|r",
+"|HlootHistory:33|h[Loot]|h: |cff1eff00|Hitem:3196:0:0:0:0:0:-68:1464461312:19:268:0:1:0|h[Edged Bastard Sword of the Bear]|h|r",
+"|HlootHistory:33|h[Loot]|h: |cff1eff00|Hitem:9291:0:0:0:0:0:-81:2079929600:50:263:0:1:0|h[Field Plate Leggings of the Whale]|h|r",
+"|HlootHistory:33|h[Loot]|h: Alehara (Greed - 73) Won: |cff1eff00|Hitem:15971:0:0:0:0:0:-15:1322907648:20:73:0:1:0|h[Aboriginal Rod of Spirit]|h|r",
+"|HlootHistory:33|h[Loot]|h: Celvariel-Auchindoun (Greed - 57) Won: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:54:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:33|h[Loot]|h: Fennec (Greed - 69) Won: |cff1eff00|Hitem:9291:0:0:0:0:0:-81:2079929600:50:263:0:1:0|h[Field Plate Leggings of the Whale]|h|r",
+"|HlootHistory:33|h[Loot]|h: Larissia-BurningLegion (Greed - 98) Won: |cff0070dd|Hitem:17730:0:0:0:0:0:0:0:40:264:0:1:0|h[Gatorbite Axe]|h|r",
+"|HlootHistory:33|h[Loot]|h: Lerona (Need - 24) Won: |cff0070dd|Hitem:18521:0:0:0:0:0:0:0:48:268:0:1:0|h[Grimy Metal Boots]|h|r",
+"|HlootHistory:33|h[Loot]|h: Snotter-ArgentDawn (Greed - 73) Won: |cff0070dd|Hitem:24024:0:0:0:0:0:0:0:63:64:0:1:0|h[Pauldrons of Arcane Rage]|h|r",
+"|HlootHistory:33|h[Loot]|h: Thornraxx-Shadowsong (Greed - 77) Won: |cff0070dd|Hitem:5191:0:0:0:0:0:0:0:20:104:0:1:0|h[Cruel Barb]|h|r",
+"|HlootHistory:33|h[Loot]|h: Valhallir-Spinebreaker (Greed - 72) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:52:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:33|h[Loot]|h: You (Greed - 94) Won: |cff1eff00|Hitem:3196:0:0:0:0:0:-68:1464461312:19:268:0:1:0|h[Edged Bastard Sword of the Bear]|h|r",
+"|HlootHistory:33|h[Loot]|h: You automatically passed on: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:54:268:0:0:0|h[Essence of Undeath]|h|r because you cannot loot that item.",
+"|HlootHistory:33|h[Loot]|h: You have rolled Greed - 23 for: |cff1eff00|Hitem:9291:0:0:0:0:0:-81:2079929600:50:263:0:1:0|h[Field Plate Leggings of the Whale]|h|r",
+"|HlootHistory:33|h[Loot]|h: You have rolled Greed - 6 for: |cff0070dd|Hitem:5191:0:0:0:0:0:0:0:20:104:0:1:0|h[Cruel Barb]|h|r",
+"|HlootHistory:33|h[Loot]|h: You have rolled Greed - 62 for: |cff0070dd|Hitem:24024:0:0:0:0:0:0:0:63:64:0:1:0|h[Pauldrons of Arcane Rage]|h|r",
+"|HlootHistory:33|h[Loot]|h: You have rolled Greed - 7 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:52:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:33|h[Loot]|h: You have rolled Greed - 91 for: |cff0070dd|Hitem:17730:0:0:0:0:0:0:0:40:264:0:1:0|h[Gatorbite Axe]|h|r",
+"|HlootHistory:33|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13392:0:0:0:0:0:0:0:50:268:0:1:0|h[The Postmaster's Seal]|h|r",
+"|HlootHistory:33|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:17730:0:0:0:0:0:0:0:40:264:0:1:0|h[Gatorbite Axe]|h|r",
+"|HlootHistory:33|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18521:0:0:0:0:0:0:0:48:268:0:1:0|h[Grimy Metal Boots]|h|r",
+"|HlootHistory:33|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24024:0:0:0:0:0:0:0:63:64:0:1:0|h[Pauldrons of Arcane Rage]|h|r",
+"|HlootHistory:33|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:5191:0:0:0:0:0:0:0:20:104:0:1:0|h[Cruel Barb]|h|r",
+"|HlootHistory:33|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:52:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:33|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:3196:0:0:0:0:0:-68:1464461312:19:268:0:1:0|h[Edged Bastard Sword of the Bear]|h|r",
+"|HlootHistory:33|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9291:0:0:0:0:0:-81:2079929600:50:263:0:1:0|h[Field Plate Leggings of the Whale]|h|r",
+"|HlootHistory:33|h[Loot]|h: You passed on: |cff1eff00|Hitem:15971:0:0:0:0:0:-15:1322907648:20:73:0:1:0|h[Aboriginal Rod of Spirit]|h|r",
+"|HlootHistory:34|h[Loot]|h: |cff0070dd|Hitem:13405:0:0:0:0:0:0:0:50:268:0:1:0|h[Wailing Nightbane Pauldrons]|h|r",
+"|HlootHistory:34|h[Loot]|h: |cff0070dd|Hitem:18525:0:0:0:0:0:0:0:48:268:0:1:0|h[Bracers of Prosperity]|h|r",
+"|HlootHistory:34|h[Loot]|h: |cff0070dd|Hitem:88337:0:0:0:0:0:0:0:40:264:0:1:0|h[Shadow Puppet Bracers]|h|r",
+"|HlootHistory:34|h[Loot]|h: |cff1eff00|Hitem:10302:0:0:0:0:0:0:0:54:268:0:1:0|h[Pattern: Red Mageweave Pants]|h|r",
+"|HlootHistory:34|h[Loot]|h: |cff1eff00|Hitem:1210:0:0:0:0:0:0:0:20:73:0:0:0|h[Shadowgem]|h|r",
+"|HlootHistory:34|h[Loot]|h: |cff1eff00|Hitem:24718:0:0:0:0:0:-40:317063190:63:64:0:1:0|h[Dreghood Boots of the Bandit]|h|r",
+"|HlootHistory:34|h[Loot]|h: |cff1eff00|Hitem:3195:0:0:0:0:0:-20:1564182144:19:268:0:1:0|h[Barbaric Battle Axe of Power]|h|r",
+"|HlootHistory:34|h[Loot]|h: |cff1eff00|Hitem:6548:0:0:0:0:0:-81:1687860096:20:104:0:1:0|h[Soldier's Girdle of the Whale]|h|r",
+"|HlootHistory:34|h[Loot]|h: |cff1eff00|Hitem:9912:0:0:0:0:0:-9:1680012672:50:263:0:1:0|h[Royal Amice of the Owl]|h|r",
+"|HlootHistory:34|h[Loot]|h: Bowjack-ChamberofAspects (Greed - 84) Won: |cff1eff00|Hitem:1210:0:0:0:0:0:0:0:20:73:0:0:0|h[Shadowgem]|h|r",
+"|HlootHistory:34|h[Loot]|h: Celvariel-Auchindoun (Greed - 93) Won: |cff0070dd|Hitem:13405:0:0:0:0:0:0:0:50:268:0:1:0|h[Wailing Nightbane Pauldrons]|h|r",
+"|HlootHistory:34|h[Loot]|h: Dadcia-Stormscale (Greed - 89) Won: |cff1eff00|Hitem:10302:0:0:0:0:0:0:0:54:268:0:1:0|h[Pattern: Red Mageweave Pants]|h|r",
+"|HlootHistory:34|h[Loot]|h: Hantarro-EmeraldDream (Greed - 98) Won: |cff0070dd|Hitem:12554:0:0:0:0:0:0:0:52:105:0:1:0|h[Hands of the Exalted Herald]|h|r",
+"|HlootHistory:34|h[Loot]|h: Onaix-Magtheridon (Greed - 72) Won: |cff1eff00|Hitem:3195:0:0:0:0:0:-20:1564182144:19:268:0:1:0|h[Barbaric Battle Axe of Power]|h|r",
+"|HlootHistory:34|h[Loot]|h: Snotter-ArgentDawn (Greed - 96) Won: |cff1eff00|Hitem:24718:0:0:0:0:0:-40:317063190:63:64:0:1:0|h[Dreghood Boots of the Bandit]|h|r",
+"|HlootHistory:34|h[Loot]|h: Thornraxx-Shadowsong (Greed - 33) Won: |cff1eff00|Hitem:6548:0:0:0:0:0:-81:1687860096:20:104:0:1:0|h[Soldier's Girdle of the Whale]|h|r",
+"|HlootHistory:34|h[Loot]|h: You (Greed - 100) Won: |cff1eff00|Hitem:9912:0:0:0:0:0:-9:1680012672:50:263:0:1:0|h[Royal Amice of the Owl]|h|r",
+"|HlootHistory:34|h[Loot]|h: You (Need - 47) Won: |cff0070dd|Hitem:18525:0:0:0:0:0:0:0:48:268:0:1:0|h[Bracers of Prosperity]|h|r",
+"|HlootHistory:34|h[Loot]|h: You (Need - 95) Won: |cff0070dd|Hitem:88337:0:0:0:0:0:0:0:40:264:0:1:0|h[Shadow Puppet Bracers]|h|r",
+"|HlootHistory:34|h[Loot]|h: You have rolled Greed - 10 for: |cff1eff00|Hitem:24718:0:0:0:0:0:-40:317063190:63:64:0:1:0|h[Dreghood Boots of the Bandit]|h|r",
+"|HlootHistory:34|h[Loot]|h: You have rolled Greed - 31 for: |cff0070dd|Hitem:13405:0:0:0:0:0:0:0:50:268:0:1:0|h[Wailing Nightbane Pauldrons]|h|r",
+"|HlootHistory:34|h[Loot]|h: You have rolled Greed - 34 for: |cff1eff00|Hitem:3195:0:0:0:0:0:-20:1564182144:19:268:0:1:0|h[Barbaric Battle Axe of Power]|h|r",
+"|HlootHistory:34|h[Loot]|h: You have rolled Greed - 36 for: |cff1eff00|Hitem:10302:0:0:0:0:0:0:0:54:268:0:1:0|h[Pattern: Red Mageweave Pants]|h|r",
+"|HlootHistory:34|h[Loot]|h: You have rolled Greed - 90 for: |cff0070dd|Hitem:12554:0:0:0:0:0:0:0:52:105:0:1:0|h[Hands of the Exalted Herald]|h|r",
+"|HlootHistory:34|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12554:0:0:0:0:0:0:0:52:105:0:1:0|h[Hands of the Exalted Herald]|h|r",
+"|HlootHistory:34|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13405:0:0:0:0:0:0:0:50:268:0:1:0|h[Wailing Nightbane Pauldrons]|h|r",
+"|HlootHistory:34|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10302:0:0:0:0:0:0:0:54:268:0:1:0|h[Pattern: Red Mageweave Pants]|h|r",
+"|HlootHistory:34|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24718:0:0:0:0:0:-40:317063190:63:64:0:1:0|h[Dreghood Boots of the Bandit]|h|r",
+"|HlootHistory:34|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:3195:0:0:0:0:0:-20:1564182144:19:268:0:1:0|h[Barbaric Battle Axe of Power]|h|r",
+"|HlootHistory:34|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9912:0:0:0:0:0:-9:1680012672:50:263:0:1:0|h[Royal Amice of the Owl]|h|r",
+"|HlootHistory:34|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:18525:0:0:0:0:0:0:0:48:268:0:1:0|h[Bracers of Prosperity]|h|r",
+"|HlootHistory:34|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:88337:0:0:0:0:0:0:0:40:264:0:1:0|h[Shadow Puppet Bracers]|h|r",
+"|HlootHistory:34|h[Loot]|h: You passed on: |cff1eff00|Hitem:1210:0:0:0:0:0:0:0:20:73:0:0:0|h[Shadowgem]|h|r",
+"|HlootHistory:34|h[Loot]|h: You passed on: |cff1eff00|Hitem:6548:0:0:0:0:0:-81:1687860096:20:104:0:1:0|h[Soldier's Girdle of the Whale]|h|r",
+"|HlootHistory:35|h[Loot]|h: |cff0070dd|Hitem:13375:0:0:0:0:0:0:0:54:268:0:1:0|h[Crest of Retribution]|h|r",
+"|HlootHistory:35|h[Loot]|h: |cff0070dd|Hitem:18484:0:0:0:0:0:0:0:48:268:0:1:0|h[Cho'Rush's Blade]|h|r",
+"|HlootHistory:35|h[Loot]|h: |cff0070dd|Hitem:88347:0:0:0:0:0:0:0:40:264:0:1:0|h[Ghostwoven Legguards]|h|r",
+"|HlootHistory:35|h[Loot]|h: |cff1eff00|Hitem:12013:0:0:0:0:0:-78:249872384:50:263:0:1:0|h[Desert Ring of the Monkey]|h|r",
+"|HlootHistory:35|h[Loot]|h: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:35|h[Loot]|h: |cff1eff00|Hitem:14166:0:0:0:0:0:-81:1396265088:19:268:0:1:0|h[Buccaneer's Bracers of the Whale]|h|r",
+"|HlootHistory:35|h[Loot]|h: |cff1eff00|Hitem:24942:0:0:0:0:0:-26:69402646:63:64:0:1:0|h[Bloodscale Belt of Intellect]|h|r",
+"|HlootHistory:35|h[Loot]|h: |cff1eff00|Hitem:3184:0:0:0:0:0:-19:677121280:20:73:0:1:0|h[Hook Dagger of Intellect]|h|r",
+"|HlootHistory:35|h[Loot]|h: |cff1eff00|Hitem:9785:0:0:0:0:0:-69:701046144:20:104:0:1:0|h[Raider's Bracers of the Eagle]|h|r",
+"|HlootHistory:35|h[Loot]|h: Atmøsfear-TarrenMill (Greed - 83) Won: |cff0070dd|Hitem:22207:0:0:0:0:0:0:0:52:105:0:1:0|h[Sash of the Grand Hunt]|h|r",
+"|HlootHistory:35|h[Loot]|h: Beldain-ChamberofAspects (Greed - 90) Won: |cff0070dd|Hitem:18484:0:0:0:0:0:0:0:48:268:0:1:0|h[Cho'Rush's Blade]|h|r",
+"|HlootHistory:35|h[Loot]|h: Bowjack-ChamberofAspects (Greed - 73) Won: |cff1eff00|Hitem:3184:0:0:0:0:0:-19:677121280:20:73:0:1:0|h[Hook Dagger of Intellect]|h|r",
+"|HlootHistory:35|h[Loot]|h: Celvariel-Auchindoun (Greed - 31) Won: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:35|h[Loot]|h: Celvariel-Auchindoun (Greed - 83) Won: |cff0070dd|Hitem:13375:0:0:0:0:0:0:0:54:268:0:1:0|h[Crest of Retribution]|h|r",
+"|HlootHistory:35|h[Loot]|h: Elehriah-BurningLegion (Need - 98) Won: |cff1eff00|Hitem:9785:0:0:0:0:0:-69:701046144:20:104:0:1:0|h[Raider's Bracers of the Eagle]|h|r",
+"|HlootHistory:35|h[Loot]|h: Matwuake-Draenor (Need - 30) Won: |cff0070dd|Hitem:88347:0:0:0:0:0:0:0:40:264:0:1:0|h[Ghostwoven Legguards]|h|r",
+"|HlootHistory:35|h[Loot]|h: You (Greed - 40) Won: |cff1eff00|Hitem:24942:0:0:0:0:0:-26:69402646:63:64:0:1:0|h[Bloodscale Belt of Intellect]|h|r",
+"|HlootHistory:35|h[Loot]|h: You (Greed - 85) Won: |cff1eff00|Hitem:12013:0:0:0:0:0:-78:249872384:50:263:0:1:0|h[Desert Ring of the Monkey]|h|r",
+"|HlootHistory:35|h[Loot]|h: You (Need - 56) Won: |cff1eff00|Hitem:14166:0:0:0:0:0:-81:1396265088:19:268:0:1:0|h[Buccaneer's Bracers of the Whale]|h|r",
+"|HlootHistory:35|h[Loot]|h: You have rolled Greed - 11 for: |cff0070dd|Hitem:13375:0:0:0:0:0:0:0:54:268:0:1:0|h[Crest of Retribution]|h|r",
+"|HlootHistory:35|h[Loot]|h: You have rolled Greed - 48 for: |cff0070dd|Hitem:22207:0:0:0:0:0:0:0:52:105:0:1:0|h[Sash of the Grand Hunt]|h|r",
+"|HlootHistory:35|h[Loot]|h: You have rolled Greed - 75 for: |cff0070dd|Hitem:18484:0:0:0:0:0:0:0:48:268:0:1:0|h[Cho'Rush's Blade]|h|r",
+"|HlootHistory:35|h[Loot]|h: You have rolled Greed - 9 for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:35|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13375:0:0:0:0:0:0:0:54:268:0:1:0|h[Crest of Retribution]|h|r",
+"|HlootHistory:35|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18484:0:0:0:0:0:0:0:48:268:0:1:0|h[Cho'Rush's Blade]|h|r",
+"|HlootHistory:35|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22207:0:0:0:0:0:0:0:52:105:0:1:0|h[Sash of the Grand Hunt]|h|r",
+"|HlootHistory:35|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88347:0:0:0:0:0:0:0:40:264:0:1:0|h[Ghostwoven Legguards]|h|r",
+"|HlootHistory:35|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12013:0:0:0:0:0:-78:249872384:50:263:0:1:0|h[Desert Ring of the Monkey]|h|r",
+"|HlootHistory:35|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:268:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:35|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24942:0:0:0:0:0:-26:69402646:63:64:0:1:0|h[Bloodscale Belt of Intellect]|h|r",
+"|HlootHistory:35|h[Loot]|h: You have selected Need for: |cff1eff00|Hitem:14166:0:0:0:0:0:-81:1396265088:19:268:0:1:0|h[Buccaneer's Bracers of the Whale]|h|r",
+"|HlootHistory:35|h[Loot]|h: You passed on: |cff1eff00|Hitem:3184:0:0:0:0:0:-19:677121280:20:73:0:1:0|h[Hook Dagger of Intellect]|h|r",
+"|HlootHistory:35|h[Loot]|h: You passed on: |cff1eff00|Hitem:9785:0:0:0:0:0:-69:701046144:20:104:0:1:0|h[Raider's Bracers of the Eagle]|h|r",
+"|HlootHistory:36|h[Loot]|h: |cff0070dd|Hitem:13394:0:0:0:0:0:0:0:51:268:0:1:0|h[Skul's Cold Embrace]|h|r",
+"|HlootHistory:36|h[Loot]|h: |cff0070dd|Hitem:1937:0:0:0:0:0:0:0:20:104:0:1:0|h[Buzz Saw]|h|r",
+"|HlootHistory:36|h[Loot]|h: |cff0070dd|Hitem:88343:0:0:0:0:0:0:0:40:264:0:1:0|h[Bone Golem Boots]|h|r",
+"|HlootHistory:36|h[Loot]|h: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:36|h[Loot]|h: |cff1eff00|Hitem:15279:0:0:0:0:0:-11:408391552:54:268:0:1:0|h[Ivory Wand of the Falcon]|h|r",
+"|HlootHistory:36|h[Loot]|h: |cff1eff00|Hitem:15312:0:0:0:0:0:-9:730269440:19:268:0:1:0|h[Feral Leggings of the Owl]|h|r",
+"|HlootHistory:36|h[Loot]|h: |cff1eff00|Hitem:24599:0:0:0:0:0:-39:1134886941:63:64:0:1:0|h[Starfire Vest of the Invoker]|h|r",
+"|HlootHistory:36|h[Loot]|h: |cff1eff00|Hitem:3040:0:0:0:0:0:0:0:20:73:0:1:0|h[Hunter's Muzzle Loader]|h|r",
+"|HlootHistory:36|h[Loot]|h: Alehara (Greed - 79) Won: |cff1eff00|Hitem:3040:0:0:0:0:0:0:0:20:73:0:1:0|h[Hunter's Muzzle Loader]|h|r",
+"|HlootHistory:36|h[Loot]|h: Celvariel-Auchindoun (Greed - 78) Won: |cff1eff00|Hitem:15312:0:0:0:0:0:-9:730269440:19:268:0:1:0|h[Feral Leggings of the Owl]|h|r",
+"|HlootHistory:36|h[Loot]|h: Chubntuckk-TarrenMill (Greed - 90) Won: |cff0070dd|Hitem:88343:0:0:0:0:0:0:0:40:264:0:1:0|h[Bone Golem Boots]|h|r",
+"|HlootHistory:36|h[Loot]|h: Huojín-ChamberofAspects (Greed - 90) Won: |cff0070dd|Hitem:1937:0:0:0:0:0:0:0:20:104:0:1:0|h[Buzz Saw]|h|r",
+"|HlootHistory:36|h[Loot]|h: Lerona (Need - 60) Won: |cff0070dd|Hitem:13394:0:0:0:0:0:0:0:51:268:0:1:0|h[Skul's Cold Embrace]|h|r",
+"|HlootHistory:36|h[Loot]|h: Phaendar-Darkspear (Greed - 66) Won: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:36|h[Loot]|h: You (Greed - 100) Won: |cff1eff00|Hitem:15279:0:0:0:0:0:-11:408391552:54:268:0:1:0|h[Ivory Wand of the Falcon]|h|r",
+"|HlootHistory:36|h[Loot]|h: You (Greed - 63) Won: |cff0070dd|Hitem:11933:0:0:0:0:0:0:0:52:105:0:1:0|h[Imperial Jewel]|h|r",
+"|HlootHistory:36|h[Loot]|h: You (Greed - 79) Won: |cff1eff00|Hitem:24599:0:0:0:0:0:-39:1134886941:63:64:0:1:0|h[Starfire Vest of the Invoker]|h|r",
+"|HlootHistory:36|h[Loot]|h: You have rolled Greed - 59 for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:36|h[Loot]|h: You have rolled Greed - 8 for: |cff0070dd|Hitem:88343:0:0:0:0:0:0:0:40:264:0:1:0|h[Bone Golem Boots]|h|r",
+"|HlootHistory:36|h[Loot]|h: You have rolled Greed - 80 for: |cff0070dd|Hitem:1937:0:0:0:0:0:0:0:20:104:0:1:0|h[Buzz Saw]|h|r",
+"|HlootHistory:36|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11933:0:0:0:0:0:0:0:52:105:0:1:0|h[Imperial Jewel]|h|r",
+"|HlootHistory:36|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:1937:0:0:0:0:0:0:0:20:104:0:1:0|h[Buzz Saw]|h|r",
+"|HlootHistory:36|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88343:0:0:0:0:0:0:0:40:264:0:1:0|h[Bone Golem Boots]|h|r",
+"|HlootHistory:36|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:50:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:36|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15279:0:0:0:0:0:-11:408391552:54:268:0:1:0|h[Ivory Wand of the Falcon]|h|r",
+"|HlootHistory:36|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24599:0:0:0:0:0:-39:1134886941:63:64:0:1:0|h[Starfire Vest of the Invoker]|h|r",
+"|HlootHistory:36|h[Loot]|h: You passed on: |cff0070dd|Hitem:13394:0:0:0:0:0:0:0:51:268:0:1:0|h[Skul's Cold Embrace]|h|r",
+"|HlootHistory:36|h[Loot]|h: You passed on: |cff1eff00|Hitem:15312:0:0:0:0:0:-9:730269440:19:268:0:1:0|h[Feral Leggings of the Owl]|h|r",
+"|HlootHistory:36|h[Loot]|h: You passed on: |cff1eff00|Hitem:3040:0:0:0:0:0:0:0:20:73:0:1:0|h[Hunter's Muzzle Loader]|h|r",
+"|HlootHistory:37|h[Loot]|h: |cff0070dd|Hitem:10410:0:0:0:0:0:0:0:20:73:0:1:0|h[Leggings of the Fang]|h|r",
+"|HlootHistory:37|h[Loot]|h: |cff0070dd|Hitem:13384:0:0:0:0:0:0:0:51:268:0:1:0|h[Rainbow Girdle]|h|r",
+"|HlootHistory:37|h[Loot]|h: |cff0070dd|Hitem:5196:0:0:0:0:0:0:0:21:104:0:1:0|h[Smite's Reaver]|h|r",
+"|HlootHistory:37|h[Loot]|h: |cff0070dd|Hitem:88352:0:0:0:0:0:0:0:40:264:0:1:0|h[Shivbreaker Vest]|h|r",
+"|HlootHistory:37|h[Loot]|h: |cff1eff00|Hitem:10069:0:0:0:0:0:-81:387432320:50:263:0:1:0|h[Righteous Bracers of the Whale]|h|r",
+"|HlootHistory:37|h[Loot]|h: |cff1eff00|Hitem:1206:0:0:0:0:0:0:0:19:268:0:0:0|h[Moss Agate]|h|r",
+"|HlootHistory:37|h[Loot]|h: |cff1eff00|Hitem:24711:0:0:0:0:0:-21:33226781:63:64:0:1:0|h[Vengeance Chestpiece of Intellect]|h|r",
+"|HlootHistory:37|h[Loot]|h: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:54:268:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:37|h[Loot]|h: Dadcia-Stormscale (Need - 64) Won: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:54:268:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:37|h[Loot]|h: Drcasas-TheVentureCo (Greed - 30) Won: |cff1eff00|Hitem:24711:0:0:0:0:0:-21:33226781:63:64:0:1:0|h[Vengeance Chestpiece of Intellect]|h|r",
+"|HlootHistory:37|h[Loot]|h: Dudika-ChamberofAspects (Need - 71) Won: |cff0070dd|Hitem:10410:0:0:0:0:0:0:0:20:73:0:1:0|h[Leggings of the Fang]|h|r",
+"|HlootHistory:37|h[Loot]|h: Hantarro-EmeraldDream (Greed - 98) Won: |cff0070dd|Hitem:11765:0:0:0:0:0:0:0:52:105:0:1:0|h[Pyremail Wristguards]|h|r",
+"|HlootHistory:37|h[Loot]|h: Lerona (Greed - 70) Won: |cff0070dd|Hitem:13384:0:0:0:0:0:0:0:51:268:0:1:0|h[Rainbow Girdle]|h|r",
+"|HlootHistory:37|h[Loot]|h: Matwuake-Draenor (Greed - 76) Won: |cff0070dd|Hitem:88352:0:0:0:0:0:0:0:40:264:0:1:0|h[Shivbreaker Vest]|h|r",
+"|HlootHistory:37|h[Loot]|h: Midorìko-Runetotem (Need - 62) Won: |cff1eff00|Hitem:1206:0:0:0:0:0:0:0:19:268:0:0:0|h[Moss Agate]|h|r",
+"|HlootHistory:37|h[Loot]|h: Sanctisius (Greed - 84) Won: |cff1eff00|Hitem:10069:0:0:0:0:0:-81:387432320:50:263:0:1:0|h[Righteous Bracers of the Whale]|h|r",
+"|HlootHistory:37|h[Loot]|h: Thornraxx-Shadowsong (Greed - 90) Won: |cff0070dd|Hitem:5196:0:0:0:0:0:0:0:21:104:0:1:0|h[Smite's Reaver]|h|r",
+"|HlootHistory:37|h[Loot]|h: You have rolled Greed - 1 for: |cff1eff00|Hitem:24711:0:0:0:0:0:-21:33226781:63:64:0:1:0|h[Vengeance Chestpiece of Intellect]|h|r",
+"|HlootHistory:37|h[Loot]|h: You have rolled Greed - 28 for: |cff0070dd|Hitem:5196:0:0:0:0:0:0:0:21:104:0:1:0|h[Smite's Reaver]|h|r",
+"|HlootHistory:37|h[Loot]|h: You have rolled Greed - 39 for: |cff0070dd|Hitem:88352:0:0:0:0:0:0:0:40:264:0:1:0|h[Shivbreaker Vest]|h|r",
+"|HlootHistory:37|h[Loot]|h: You have rolled Greed - 57 for: |cff0070dd|Hitem:11765:0:0:0:0:0:0:0:52:105:0:1:0|h[Pyremail Wristguards]|h|r",
+"|HlootHistory:37|h[Loot]|h: You have rolled Greed - 64 for: |cff1eff00|Hitem:10069:0:0:0:0:0:-81:387432320:50:263:0:1:0|h[Righteous Bracers of the Whale]|h|r",
+"|HlootHistory:37|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11765:0:0:0:0:0:0:0:52:105:0:1:0|h[Pyremail Wristguards]|h|r",
+"|HlootHistory:37|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:5196:0:0:0:0:0:0:0:21:104:0:1:0|h[Smite's Reaver]|h|r",
+"|HlootHistory:37|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88352:0:0:0:0:0:0:0:40:264:0:1:0|h[Shivbreaker Vest]|h|r",
+"|HlootHistory:37|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10069:0:0:0:0:0:-81:387432320:50:263:0:1:0|h[Righteous Bracers of the Whale]|h|r",
+"|HlootHistory:37|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24711:0:0:0:0:0:-21:33226781:63:64:0:1:0|h[Vengeance Chestpiece of Intellect]|h|r",
+"|HlootHistory:37|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:54:268:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:37|h[Loot]|h: You passed on: |cff0070dd|Hitem:10410:0:0:0:0:0:0:0:20:73:0:1:0|h[Leggings of the Fang]|h|r",
+"|HlootHistory:37|h[Loot]|h: You passed on: |cff0070dd|Hitem:13384:0:0:0:0:0:0:0:51:268:0:1:0|h[Rainbow Girdle]|h|r",
+"|HlootHistory:37|h[Loot]|h: You passed on: |cff1eff00|Hitem:1206:0:0:0:0:0:0:0:19:268:0:0:0|h[Moss Agate]|h|r",
+"|HlootHistory:38|h[Loot]|h: |cff0070dd|Hitem:13402:0:0:0:0:0:0:0:51:268:0:1:0|h[Timmy's Galoshes]|h|r",
+"|HlootHistory:38|h[Loot]|h: |cff0070dd|Hitem:22409:0:0:0:0:0:0:0:54:268:0:1:0|h[Tunic of the Crescent Moon]|h|r",
+"|HlootHistory:38|h[Loot]|h: |cff0070dd|Hitem:5198:0:0:0:0:0:0:0:21:104:0:1:0|h[Cookie's Stirring Rod]|h|r",
+"|HlootHistory:38|h[Loot]|h: |cff0070dd|Hitem:6447:0:0:0:0:0:0:0:20:73:0:1:0|h[Worn Turtle Shell Shield]|h|r",
+"|HlootHistory:38|h[Loot]|h: |cff1eff00|Hitem:14129:0:0:0:0:0:-11:158739200:19:268:0:1:0|h[Ritual Sandals of the Falcon]|h|r",
+"|HlootHistory:38|h[Loot]|h: |cff1eff00|Hitem:1625:0:0:0:0:0:-14:70975104:40:264:0:1:0|h[Exquisite Flamberge of the Tiger]|h|r",
+"|HlootHistory:38|h[Loot]|h: |cff1eff00|Hitem:25172:0:0:0:0:0:-11:1050869789:63:64:0:1:0|h[Jinbali Warp-Staff of the Falcon]|h|r",
+"|HlootHistory:38|h[Loot]|h: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:50:263:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:38|h[Loot]|h: Anestadren (Greed - 97) Won: |cff0070dd|Hitem:6447:0:0:0:0:0:0:0:20:73:0:1:0|h[Worn Turtle Shell Shield]|h|r",
+"|HlootHistory:38|h[Loot]|h: Celvariel-Auchindoun (Greed - 75) Won: |cff0070dd|Hitem:22409:0:0:0:0:0:0:0:54:268:0:1:0|h[Tunic of the Crescent Moon]|h|r",
+"|HlootHistory:38|h[Loot]|h: Celvariel-Auchindoun (Need - 23) Won: |cff0070dd|Hitem:13402:0:0:0:0:0:0:0:51:268:0:1:0|h[Timmy's Galoshes]|h|r",
+"|HlootHistory:38|h[Loot]|h: Fennec (Greed - 86) Won: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:50:263:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:38|h[Loot]|h: Matwuake-Draenor (Greed - 46) Won: |cff1eff00|Hitem:1625:0:0:0:0:0:-14:70975104:41:264:0:1:0|h[Exquisite Flamberge of the Tiger]|h|r",
+"|HlootHistory:38|h[Loot]|h: Midorìko-Runetotem (Need - 90) Won: |cff1eff00|Hitem:14129:0:0:0:0:0:-11:158739200:19:268:0:1:0|h[Ritual Sandals of the Falcon]|h|r",
+"|HlootHistory:38|h[Loot]|h: Snotter-ArgentDawn (Greed - 74) Won: |cff1eff00|Hitem:25172:0:0:0:0:0:-11:1050869789:63:64:0:1:0|h[Jinbali Warp-Staff of the Falcon]|h|r",
+"|HlootHistory:38|h[Loot]|h: Valhallir-Spinebreaker (Greed - 88) Won: |cff1eff00|Hitem:10077:0:0:0:0:0:-11:2138407040:52:105:0:1:0|h[Lord's Breastplate of the Falcon]|h|r",
+"|HlootHistory:38|h[Loot]|h: You (Greed - 70) Won: |cff0070dd|Hitem:5198:0:0:0:0:0:0:0:21:104:0:1:0|h[Cookie's Stirring Rod]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have rolled Greed - 11 for: |cff1eff00|Hitem:1625:0:0:0:0:0:-14:70975104:41:264:0:1:0|h[Exquisite Flamberge of the Tiger]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have rolled Greed - 20 for: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:50:263:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have rolled Greed - 29 for: |cff0070dd|Hitem:6447:0:0:0:0:0:0:0:20:73:0:1:0|h[Worn Turtle Shell Shield]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have rolled Greed - 30 for: |cff0070dd|Hitem:22409:0:0:0:0:0:0:0:54:268:0:1:0|h[Tunic of the Crescent Moon]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have rolled Greed - 45 for: |cff1eff00|Hitem:10077:0:0:0:0:0:-11:2138407040:52:105:0:1:0|h[Lord's Breastplate of the Falcon]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have rolled Greed - 7 for: |cff1eff00|Hitem:25172:0:0:0:0:0:-11:1050869789:63:64:0:1:0|h[Jinbali Warp-Staff of the Falcon]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13402:0:0:0:0:0:0:0:51:268:0:1:0|h[Timmy's Galoshes]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22409:0:0:0:0:0:0:0:54:268:0:1:0|h[Tunic of the Crescent Moon]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:5198:0:0:0:0:0:0:0:21:104:0:1:0|h[Cookie's Stirring Rod]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6447:0:0:0:0:0:0:0:20:73:0:1:0|h[Worn Turtle Shell Shield]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10077:0:0:0:0:0:-11:2138407040:52:105:0:1:0|h[Lord's Breastplate of the Falcon]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:1625:0:0:0:0:0:-14:70975104:40:264:0:1:0|h[Exquisite Flamberge of the Tiger]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25172:0:0:0:0:0:-11:1050869789:63:64:0:1:0|h[Jinbali Warp-Staff of the Falcon]|h|r",
+"|HlootHistory:38|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:50:263:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:38|h[Loot]|h: You passed on: |cff1eff00|Hitem:14129:0:0:0:0:0:-11:158739200:19:268:0:1:0|h[Ritual Sandals of the Falcon]|h|r",
+"|HlootHistory:39|h[Loot]|h: |cff0070dd|Hitem:13361:0:0:0:0:0:0:0:54:268:0:1:0|h[Skullforge Reaver]|h|r",
+"|HlootHistory:39|h[Loot]|h: |cff0070dd|Hitem:24155:0:0:0:0:0:0:0:63:64:0:1:0|h[Ursol's Claw]|h|r",
+"|HlootHistory:39|h[Loot]|h: |cff0070dd|Hitem:6460:0:0:0:0:0:0:0:19:268:0:1:0|h[Cobrahn's Grasp]|h|r",
+"|HlootHistory:39|h[Loot]|h: |cff0070dd|Hitem:88355:0:0:0:0:0:0:0:41:264:0:1:0|h[Searing Words]|h|r",
+"|HlootHistory:39|h[Loot]|h: |cff1eff00|Hitem:10089:0:0:0:0:0:-325:1389814912:51:268:0:1:0|h[Gothic Sabatons of Dodge]|h|r",
+"|HlootHistory:39|h[Loot]|h: |cff1eff00|Hitem:11988:0:0:0:0:0:-9:425685376:51:263:0:1:0|h[Tellurium Band of the Owl]|h|r",
+"|HlootHistory:39|h[Loot]|h: |cff1eff00|Hitem:3198:0:0:0:0:0:-12:2042789632:20:73:0:1:0|h[Battering Hammer of the Boar]|h|r",
+"|HlootHistory:39|h[Loot]|h: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:21:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:39|h[Loot]|h: Celvariel-Auchindoun (Greed - 76) Won: |cff1eff00|Hitem:10089:0:0:0:0:0:-325:1389814912:51:268:0:1:0|h[Gothic Sabatons of Dodge]|h|r",
+"|HlootHistory:39|h[Loot]|h: Drcasas-TheVentureCo (Greed - 93) Won: |cff0070dd|Hitem:24155:0:0:0:0:0:0:0:63:64:0:1:0|h[Ursol's Claw]|h|r",
+"|HlootHistory:39|h[Loot]|h: Fennec (Greed - 85) Won: |cff1eff00|Hitem:11988:0:0:0:0:0:-9:425685376:51:263:0:1:0|h[Tellurium Band of the Owl]|h|r",
+"|HlootHistory:39|h[Loot]|h: Hsv-EmeraldDream (Greed - 54) Won: |cff0070dd|Hitem:22223:0:0:0:0:0:0:0:52:105:0:1:0|h[Foreman's Head Protector]|h|r",
+"|HlootHistory:39|h[Loot]|h: Lerona-Jaedenar (Need - 43) Won: |cff0070dd|Hitem:6460:0:0:0:0:0:0:0:19:268:0:1:0|h[Cobrahn's Grasp]|h|r",
+"|HlootHistory:39|h[Loot]|h: Mangoworm (Greed - 80) Won: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:21:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:39|h[Loot]|h: Wumpsham-TarrenMill (Greed - 89) Won: |cff0070dd|Hitem:13361:0:0:0:0:0:0:0:54:268:0:1:0|h[Skullforge Reaver]|h|r",
+"|HlootHistory:39|h[Loot]|h: You (Greed - 94) Won: |cff1eff00|Hitem:3198:0:0:0:0:0:-12:2042789632:20:73:0:1:0|h[Battering Hammer of the Boar]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have rolled Greed - 15 for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:21:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have rolled Greed - 19 for: |cff0070dd|Hitem:13361:0:0:0:0:0:0:0:54:268:0:1:0|h[Skullforge Reaver]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have rolled Greed - 19 for: |cff0070dd|Hitem:24155:0:0:0:0:0:0:0:63:64:0:1:0|h[Ursol's Claw]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have rolled Greed - 24 for: |cff1eff00|Hitem:11988:0:0:0:0:0:-9:425685376:51:263:0:1:0|h[Tellurium Band of the Owl]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have rolled Greed - 30 for: |cff1eff00|Hitem:10089:0:0:0:0:0:-325:1389814912:51:268:0:1:0|h[Gothic Sabatons of Dodge]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have rolled Greed - 4 for: |cff0070dd|Hitem:22223:0:0:0:0:0:0:0:52:105:0:1:0|h[Foreman's Head Protector]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13361:0:0:0:0:0:0:0:54:268:0:1:0|h[Skullforge Reaver]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22223:0:0:0:0:0:0:0:52:105:0:1:0|h[Foreman's Head Protector]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24155:0:0:0:0:0:0:0:63:64:0:1:0|h[Ursol's Claw]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88355:0:0:0:0:0:0:0:41:264:0:1:0|h[Searing Words]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10089:0:0:0:0:0:-325:1389814912:51:268:0:1:0|h[Gothic Sabatons of Dodge]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11988:0:0:0:0:0:-9:425685376:51:263:0:1:0|h[Tellurium Band of the Owl]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:3198:0:0:0:0:0:-12:2042789632:20:73:0:1:0|h[Battering Hammer of the Boar]|h|r",
+"|HlootHistory:39|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:21:104:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:39|h[Loot]|h: You passed on: |cff0070dd|Hitem:6460:0:0:0:0:0:0:0:19:268:0:1:0|h[Cobrahn's Grasp]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff0070dd|Hitem:10774:0:0:0:0:0:0:0:44:270:0:1:0|h[Fleshhide Shoulders]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff0070dd|Hitem:88346:0:0:0:0:0:0:0:45:268:0:1:0|h[Metanoia Shield]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff1eff00|Hitem:10088:0:0:0:0:0:-17:8689664:52:268:0:1:0|h[Gothic Plate Girdle of Strength]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff1eff00|Hitem:11165:0:0:0:0:0:0:0:35:264:0:1:0|h[Formula: Enchant Weapon - Lesser Elemental Slayer]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff1eff00|Hitem:14939:0:0:0:0:0:-69:592297984:48:268:0:1:0|h[Warbringer's Chestguard of the Eagle]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff1eff00|Hitem:15613:0:0:0:0:0:-11:854406016:46:66:0:1:0|h[Bonelink Belt of the Falcon]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff1eff00|Hitem:18267:0:0:0:0:0:0:0:46:66:0:1:0|h[Recipe: Runn Tum Tuber Surprise]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff1eff00|Hitem:24929:0:0:0:0:0:-20:414908438:60:64:0:1:0|h[Ango'rosh Gauntlets of Power]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff1eff00|Hitem:25307:0:0:0:0:0:-15:6553616:100:250:0:22:0|h[Shadow Dagger of Spirit]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff1eff00|Hitem:4562:0:0:0:0:0:-69:1745334656:11:73:0:0:0|h[Severing Axe of the Eagle]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff1eff00|Hitem:4564:0:0:0:0:0:-81:1559110784:15:104:0:1:0|h[Spiked Club of the Whale]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff1eff00|Hitem:4569:0:0:0:0:0:-17:764552064:14:268:0:0:0|h[Staunch Hammer of Strength]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff1eff00|Hitem:5001:0:0:0:0:0:0:0:28:104:0:1:0|h[Heart Ring]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:15:73:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:4|h[Loot]|h: |cff1eff00|Hitem:9295:0:0:0:0:0:0:0:48:263:0:1:0|h[Recipe: Invisibility Potion]|h|r",
+"|HlootHistory:4|h[Loot]|h: Alehara (Greed - 57) Won: |cff1eff00|Hitem:4562:0:0:0:0:0:-69:1745334656:11:73:0:0:0|h[Severing Axe of the Eagle]|h|r",
+"|HlootHistory:4|h[Loot]|h: Aramago-Drak'thul (Need - 23) Won: |cff1eff00|Hitem:4564:0:0:0:0:0:-81:1559110784:15:104:0:1:0|h[Spiked Club of the Whale]|h|r",
+"|HlootHistory:4|h[Loot]|h: Bowjack-ChamberofAspects (Greed - 67) Won: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:15:73:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:4|h[Loot]|h: Celvariel-Auchindoun (Greed - 69) Won: |cff1eff00|Hitem:14939:0:0:0:0:0:-69:592297984:48:268:0:1:0|h[Warbringer's Chestguard of the Eagle]|h|r",
+"|HlootHistory:4|h[Loot]|h: Celvariel-Auchindoun (Greed - 86) Won: |cff1eff00|Hitem:10088:0:0:0:0:0:-17:8689664:52:268:0:1:0|h[Gothic Plate Girdle of Strength]|h|r",
+"|HlootHistory:4|h[Loot]|h: Croen-Zenedar (Need - 86) Won: |cff1eff00|Hitem:11165:0:0:0:0:0:0:0:35:264:0:1:0|h[Formula: Enchant Weapon - Lesser Elemental Slayer]|h|r",
+"|HlootHistory:4|h[Loot]|h: Fennec (Greed - 57) Won: |cff1eff00|Hitem:18267:0:0:0:0:0:0:0:46:66:0:1:0|h[Recipe: Runn Tum Tuber Surprise]|h|r",
+"|HlootHistory:4|h[Loot]|h: Fennec (Greed - 91) Won: |cff1eff00|Hitem:9295:0:0:0:0:0:0:0:48:263:0:1:0|h[Recipe: Invisibility Potion]|h|r",
+"|HlootHistory:4|h[Loot]|h: Hantarro-EmeraldDream (Greed - 92) Won: |cff0070dd|Hitem:11632:0:0:0:0:0:0:0:51:105:0:1:0|h[Earthslag Shoulders]|h|r",
+"|HlootHistory:4|h[Loot]|h: Patraulea-Hellscream (Greed - 82) Won: |cff0070dd|Hitem:10774:0:0:0:0:0:0:0:44:270:0:1:0|h[Fleshhide Shoulders]|h|r",
+"|HlootHistory:4|h[Loot]|h: Raslebøtte-Dunemaul (Greed - 91) Won: |cff1eff00|Hitem:25307:0:0:0:0:0:-15:6553616:100:250:0:22:0|h[Shadow Dagger of Spirit]|h|r",
+"|HlootHistory:4|h[Loot]|h: Sílénce-Stormrage (Greed - 78) Won: |cff0070dd|Hitem:88346:0:0:0:0:0:0:0:45:268:0:1:0|h[Metanoia Shield]|h|r",
+"|HlootHistory:4|h[Loot]|h: You (Greed - 70) Won: |cff1eff00|Hitem:24929:0:0:0:0:0:-20:414908438:60:64:0:1:0|h[Ango'rosh Gauntlets of Power]|h|r",
+"|HlootHistory:4|h[Loot]|h: You (Greed - 88) Won: |cff1eff00|Hitem:15613:0:0:0:0:0:-11:854406016:46:66:0:1:0|h[Bonelink Belt of the Falcon]|h|r",
+"|HlootHistory:4|h[Loot]|h: You (Greed - 90) Won: |cff1eff00|Hitem:4569:0:0:0:0:0:-17:764552064:14:268:0:0:0|h[Staunch Hammer of Strength]|h|r",
+"|HlootHistory:4|h[Loot]|h: You (Need - 74) Won: |cff1eff00|Hitem:5001:0:0:0:0:0:0:0:28:104:0:1:0|h[Heart Ring]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have rolled Greed - 2 for: |cff1eff00|Hitem:14939:0:0:0:0:0:-69:592297984:48:268:0:1:0|h[Warbringer's Chestguard of the Eagle]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have rolled Greed - 3 for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:15:73:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have rolled Greed - 33 for: |cff0070dd|Hitem:10774:0:0:0:0:0:0:0:44:270:0:1:0|h[Fleshhide Shoulders]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have rolled Greed - 36 for: |cff1eff00|Hitem:18267:0:0:0:0:0:0:0:46:66:0:1:0|h[Recipe: Runn Tum Tuber Surprise]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have rolled Greed - 45 for: |cff1eff00|Hitem:25307:0:0:0:0:0:-15:6553616:100:250:0:22:0|h[Shadow Dagger of Spirit]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have rolled Greed - 52 for: |cff0070dd|Hitem:88346:0:0:0:0:0:0:0:45:268:0:1:0|h[Metanoia Shield]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have rolled Greed - 61 for: |cff1eff00|Hitem:9295:0:0:0:0:0:0:0:48:263:0:1:0|h[Recipe: Invisibility Potion]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have rolled Greed - 9 for: |cff0070dd|Hitem:11632:0:0:0:0:0:0:0:51:105:0:1:0|h[Earthslag Shoulders]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10774:0:0:0:0:0:0:0:44:270:0:1:0|h[Fleshhide Shoulders]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11632:0:0:0:0:0:0:0:51:105:0:1:0|h[Earthslag Shoulders]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88346:0:0:0:0:0:0:0:45:268:0:1:0|h[Metanoia Shield]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11165:0:0:0:0:0:0:0:35:264:0:1:0|h[Formula: Enchant Weapon - Lesser Elemental Slayer]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14939:0:0:0:0:0:-69:592297984:48:268:0:1:0|h[Warbringer's Chestguard of the Eagle]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15613:0:0:0:0:0:-11:854406016:46:66:0:1:0|h[Bonelink Belt of the Falcon]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:18267:0:0:0:0:0:0:0:46:66:0:1:0|h[Recipe: Runn Tum Tuber Surprise]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24929:0:0:0:0:0:-20:414908438:60:64:0:1:0|h[Ango'rosh Gauntlets of Power]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25307:0:0:0:0:0:-15:6553616:100:250:0:22:0|h[Shadow Dagger of Spirit]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4569:0:0:0:0:0:-17:764552064:14:268:0:0:0|h[Staunch Hammer of Strength]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:15:73:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9295:0:0:0:0:0:0:0:48:263:0:1:0|h[Recipe: Invisibility Potion]|h|r",
+"|HlootHistory:4|h[Loot]|h: You have selected Need for: |cff1eff00|Hitem:5001:0:0:0:0:0:0:0:28:104:0:1:0|h[Heart Ring]|h|r",
+"|HlootHistory:4|h[Loot]|h: You passed on: |cff1eff00|Hitem:10088:0:0:0:0:0:-17:8689664:52:268:0:1:0|h[Gothic Plate Girdle of Strength]|h|r",
+"|HlootHistory:4|h[Loot]|h: You passed on: |cff1eff00|Hitem:4562:0:0:0:0:0:-69:1745334656:11:73:0:0:0|h[Severing Axe of the Eagle]|h|r",
+"|HlootHistory:4|h[Loot]|h: You passed on: |cff1eff00|Hitem:4564:0:0:0:0:0:-81:1559110784:15:104:0:1:0|h[Spiked Club of the Whale]|h|r",
+"|HlootHistory:40|h[Loot]|h: |cff0070dd|Hitem:24045:0:0:0:0:0:0:0:63:64:0:1:0|h[Band of Renewal]|h|r",
+"|HlootHistory:40|h[Loot]|h: |cff0070dd|Hitem:6449:0:0:0:0:0:0:0:20:73:0:1:0|h[Glowing Lizardscale Cloak]|h|r",
+"|HlootHistory:40|h[Loot]|h: |cff0070dd|Hitem:88360:0:0:0:0:0:0:0:41:264:0:1:0|h[Price of Progress]|h|r",
+"|HlootHistory:40|h[Loot]|h: |cff1eff00|Hitem:11993:0:0:0:0:0:-12:345666688:20:268:0:1:0|h[Clay Ring of the Boar]|h|r",
+"|HlootHistory:40|h[Loot]|h: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:51:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:40|h[Loot]|h: |cff1eff00|Hitem:4568:0:0:0:0:0:-18:115322496:21:104:0:1:0|h[Grunt Axe of Agility]|h|r",
+"|HlootHistory:40|h[Loot]|h: |cff1eff00|Hitem:8116:0:0:0:0:0:0:0:54:268:0:1:0|h[Heraldic Belt]|h|r",
+"|HlootHistory:40|h[Loot]|h: |cff1eff00|Hitem:8273:0:0:0:0:0:0:0:51:268:0:1:0|h[Valorous Wristguards]|h|r",
+"|HlootHistory:40|h[Loot]|h: Bowjack-ChamberofAspects (Need - 17) Won: |cff0070dd|Hitem:6449:0:0:0:0:0:0:0:20:73:0:1:0|h[Glowing Lizardscale Cloak]|h|r",
+"|HlootHistory:40|h[Loot]|h: Celvariel-Auchindoun (Greed - 78) Won: |cff1eff00|Hitem:8273:0:0:0:0:0:0:0:51:268:0:1:0|h[Valorous Wristguards]|h|r",
+"|HlootHistory:40|h[Loot]|h: Luigsech-Draenor (Greed - 80) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:52:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:40|h[Loot]|h: Midorìko-Runetotem (Need - 12) Won: |cff1eff00|Hitem:11993:0:0:0:0:0:-12:345666688:20:268:0:1:0|h[Clay Ring of the Boar]|h|r",
+"|HlootHistory:40|h[Loot]|h: Skebaros-Xavius (Greed - 85) Won: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:51:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:40|h[Loot]|h: Snotter-ArgentDawn (Greed - 87) Won: |cff0070dd|Hitem:24045:0:0:0:0:0:0:0:63:64:0:1:0|h[Band of Renewal]|h|r",
+"|HlootHistory:40|h[Loot]|h: Wumpsham-TarrenMill (Greed - 49) Won: |cff1eff00|Hitem:8116:0:0:0:0:0:0:0:54:268:0:1:0|h[Heraldic Belt]|h|r",
+"|HlootHistory:40|h[Loot]|h: You (Greed - 92) Won: |cff1eff00|Hitem:4568:0:0:0:0:0:-18:115322496:21:104:0:1:0|h[Grunt Axe of Agility]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have rolled Greed - 11 for: |cff1eff00|Hitem:8116:0:0:0:0:0:0:0:54:268:0:1:0|h[Heraldic Belt]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have rolled Greed - 16 for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:51:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have rolled Greed - 22 for: |cff0070dd|Hitem:24045:0:0:0:0:0:0:0:63:64:0:1:0|h[Band of Renewal]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have rolled Greed - 39 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:52:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have rolled Greed - 56 for: |cff1eff00|Hitem:8273:0:0:0:0:0:0:0:51:268:0:1:0|h[Valorous Wristguards]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have rolled Need - 5 for: |cff1eff00|Hitem:11993:0:0:0:0:0:-12:345666688:20:268:0:1:0|h[Clay Ring of the Boar]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24045:0:0:0:0:0:0:0:63:64:0:1:0|h[Band of Renewal]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88360:0:0:0:0:0:0:0:41:264:0:1:0|h[Price of Progress]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:52:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:51:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4568:0:0:0:0:0:-18:115322496:21:104:0:1:0|h[Grunt Axe of Agility]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8116:0:0:0:0:0:0:0:54:268:0:1:0|h[Heraldic Belt]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8273:0:0:0:0:0:0:0:51:268:0:1:0|h[Valorous Wristguards]|h|r",
+"|HlootHistory:40|h[Loot]|h: You have selected Need for: |cff1eff00|Hitem:11993:0:0:0:0:0:-12:345666688:20:268:0:1:0|h[Clay Ring of the Boar]|h|r",
+"|HlootHistory:40|h[Loot]|h: You passed on: |cff0070dd|Hitem:6449:0:0:0:0:0:0:0:20:73:0:1:0|h[Glowing Lizardscale Cloak]|h|r",
+"|HlootHistory:41|h[Loot]|h: |cff0070dd|Hitem:18729:0:0:0:0:0:0:0:51:263:0:1:0|h[Screeching Bow]|h|r",
+"|HlootHistory:41|h[Loot]|h: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:63:64:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:41|h[Loot]|h: |cff0070dd|Hitem:6463:0:0:0:0:0:0:0:21:268:0:1:0|h[Deep Fathom Ring]|h|r",
+"|HlootHistory:41|h[Loot]|h: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:41:264:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:41|h[Loot]|h: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:51:268:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:41|h[Loot]|h: |cff1eff00|Hitem:15333:0:0:0:0:0:-78:1560852864:20:73:0:1:0|h[Wrangler's Cloak of the Monkey]|h|r",
+"|HlootHistory:41|h[Loot]|h: |cff1eff00|Hitem:4638:0:0:0:0:0:0:0:55:268:0:1:0|h[Reinforced Steel Lockbox]|h|r",
+"|HlootHistory:41|h[Loot]|h: |cff1eff00|Hitem:789:0:0:0:0:0:-20:2124858752:21:104:0:1:0|h[Stout Battlehammer of Power]|h|r",
+"|HlootHistory:41|h[Loot]|h: Alehara (Greed - 61) Won: |cff1eff00|Hitem:15333:0:0:0:0:0:-78:1560852864:20:73:0:1:0|h[Wrangler's Cloak of the Monkey]|h|r",
+"|HlootHistory:41|h[Loot]|h: Celvariel-Auchindoun (Greed - 97) Won: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:51:268:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:41|h[Loot]|h: Drcasas-TheVentureCo (Greed - 79) Won: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:63:64:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:41|h[Loot]|h: Midorìko-Runetotem (Need - 93) Won: |cff0070dd|Hitem:6463:0:0:0:0:0:0:0:21:268:0:1:0|h[Deep Fathom Ring]|h|r",
+"|HlootHistory:41|h[Loot]|h: Phaendar-Darkspear (Greed - 100) Won: |cff0070dd|Hitem:18729:0:0:0:0:0:0:0:51:263:0:1:0|h[Screeching Bow]|h|r",
+"|HlootHistory:41|h[Loot]|h: Venomtusk-ChamberofAspects (Greed - 74) Won: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:41:264:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:41|h[Loot]|h: You (Greed - 81) Won: |cff1eff00|Hitem:4638:0:0:0:0:0:0:0:55:268:0:1:0|h[Reinforced Steel Lockbox]|h|r",
+"|HlootHistory:41|h[Loot]|h: You have rolled Greed - 100 for: |cff1eff00|Hitem:789:0:0:0:0:0:-20:2124858752:21:104:0:1:0|h[Stout Battlehammer of Power]|h|r",
+"|HlootHistory:41|h[Loot]|h: You have rolled Greed - 16 for: |cff0070dd|Hitem:18729:0:0:0:0:0:0:0:51:263:0:1:0|h[Screeching Bow]|h|r",
+"|HlootHistory:41|h[Loot]|h: You have rolled Greed - 25 for: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:51:268:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:41|h[Loot]|h: You have rolled Greed - 40 for: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:63:64:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:41|h[Loot]|h: You have rolled Greed - 45 for: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:41:264:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:41|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18729:0:0:0:0:0:0:0:51:263:0:1:0|h[Screeching Bow]|h|r",
+"|HlootHistory:41|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:63:64:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:41|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:41:264:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:41|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:51:268:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:41|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4638:0:0:0:0:0:0:0:55:268:0:1:0|h[Reinforced Steel Lockbox]|h|r",
+"|HlootHistory:41|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:789:0:0:0:0:0:-20:2124858752:21:104:0:1:0|h[Stout Battlehammer of Power]|h|r",
+"|HlootHistory:41|h[Loot]|h: You passed on: |cff0070dd|Hitem:6463:0:0:0:0:0:0:0:21:268:0:1:0|h[Deep Fathom Ring]|h|r",
+"|HlootHistory:41|h[Loot]|h: You passed on: |cff1eff00|Hitem:15333:0:0:0:0:0:-78:1560852864:20:73:0:1:0|h[Wrangler's Cloak of the Monkey]|h|r",
+"|HlootHistory:41|h[Loot]|h: Yutag-TarrenMill (Greed - 100) Won: |cff1eff00|Hitem:789:0:0:0:0:0:-20:2124858752:21:104:0:1:0|h[Stout Battlehammer of Power]|h|r",
+"|HlootHistory:42|h[Loot]|h: |cff0070dd|Hitem:6632:0:0:0:0:0:0:0:20:73:0:1:0|h[Feyscale Cloak]|h|r",
+"|HlootHistory:42|h[Loot]|h: |cff1eff00|Hitem:11733:0:0:0:0:0:0:0:55:268:0:0:0|h[Libram of Constitution]|h|r",
+"|HlootHistory:42|h[Loot]|h: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:41:264:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:42|h[Loot]|h: |cff1eff00|Hitem:14174:0:0:0:0:0:-19:1362937600:21:104:0:1:0|h[Buccaneer's Boots of Intellect]|h|r",
+"|HlootHistory:42|h[Loot]|h: |cff1eff00|Hitem:16248:0:0:0:0:0:0:0:51:263:0:1:0|h[Formula: Enchant Weapon - Unholy]|h|r",
+"|HlootHistory:42|h[Loot]|h: |cff1eff00|Hitem:25075:0:0:0:0:0:-39:1868169232:63:64:0:1:0|h[Hardened Steel Shield of the Invoker]|h|r",
+"|HlootHistory:42|h[Loot]|h: |cff1eff00|Hitem:8144:0:0:0:0:0:0:0:51:268:0:1:0|h[Chromite Pauldrons]|h|r",
+"|HlootHistory:42|h[Loot]|h: |cff1eff00|Hitem:9780:0:0:0:0:0:-11:1584301568:21:268:0:1:0|h[Bandit Gloves of the Falcon]|h|r",
+"|HlootHistory:42|h[Loot]|h: Bowjack-ChamberofAspects (Greed - 71) Won: |cff0070dd|Hitem:6632:0:0:0:0:0:0:0:20:73:0:1:0|h[Feyscale Cloak]|h|r",
+"|HlootHistory:42|h[Loot]|h: Dadcia-Stormscale (Greed - 55) Won: |cff1eff00|Hitem:11733:0:0:0:0:0:0:0:55:268:0:0:0|h[Libram of Constitution]|h|r",
+"|HlootHistory:42|h[Loot]|h: Lerona (Greed - 89) Won: |cff1eff00|Hitem:8144:0:0:0:0:0:0:0:51:268:0:1:0|h[Chromite Pauldrons]|h|r",
+"|HlootHistory:42|h[Loot]|h: Phaendar-Darkspear (Greed - 94) Won: |cff1eff00|Hitem:16248:0:0:0:0:0:0:0:51:263:0:1:0|h[Formula: Enchant Weapon - Unholy]|h|r",
+"|HlootHistory:42|h[Loot]|h: Wàrsong-Stormscale (Greed - 92) Won: |cff1eff00|Hitem:25075:0:0:0:0:0:-39:1868169232:63:64:0:1:0|h[Hardened Steel Shield of the Invoker]|h|r",
+"|HlootHistory:42|h[Loot]|h: You (Greed - 48) Won: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:41:264:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:42|h[Loot]|h: You (Need - 35) Won: |cff1eff00|Hitem:9780:0:0:0:0:0:-11:1584301568:21:268:0:1:0|h[Bandit Gloves of the Falcon]|h|r",
+"|HlootHistory:42|h[Loot]|h: You have rolled Greed - 41 for: |cff1eff00|Hitem:11733:0:0:0:0:0:0:0:55:268:0:0:0|h[Libram of Constitution]|h|r",
+"|HlootHistory:42|h[Loot]|h: You have rolled Greed - 56 for: |cff1eff00|Hitem:8144:0:0:0:0:0:0:0:51:268:0:1:0|h[Chromite Pauldrons]|h|r",
+"|HlootHistory:42|h[Loot]|h: You have rolled Greed - 77 for: |cff1eff00|Hitem:25075:0:0:0:0:0:-39:1868169232:63:64:0:1:0|h[Hardened Steel Shield of the Invoker]|h|r",
+"|HlootHistory:42|h[Loot]|h: You have rolled Greed - 93 for: |cff1eff00|Hitem:16248:0:0:0:0:0:0:0:51:263:0:1:0|h[Formula: Enchant Weapon - Unholy]|h|r",
+"|HlootHistory:42|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11733:0:0:0:0:0:0:0:55:268:0:0:0|h[Libram of Constitution]|h|r",
+"|HlootHistory:42|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:41:264:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:42|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:16248:0:0:0:0:0:0:0:51:263:0:1:0|h[Formula: Enchant Weapon - Unholy]|h|r",
+"|HlootHistory:42|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25075:0:0:0:0:0:-39:1868169232:63:64:0:1:0|h[Hardened Steel Shield of the Invoker]|h|r",
+"|HlootHistory:42|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8144:0:0:0:0:0:0:0:51:268:0:1:0|h[Chromite Pauldrons]|h|r",
+"|HlootHistory:42|h[Loot]|h: You have selected Need for: |cff1eff00|Hitem:9780:0:0:0:0:0:-11:1584301568:21:268:0:1:0|h[Bandit Gloves of the Falcon]|h|r",
+"|HlootHistory:42|h[Loot]|h: You passed on: |cff0070dd|Hitem:6632:0:0:0:0:0:0:0:20:73:0:1:0|h[Feyscale Cloak]|h|r",
+"|HlootHistory:42|h[Loot]|h: You passed on: |cff1eff00|Hitem:14174:0:0:0:0:0:-19:1362937600:21:104:0:1:0|h[Buccaneer's Boots of Intellect]|h|r",
+"|HlootHistory:42|h[Loot]|h: Yutag-TarrenMill (Greed - 83) Won: |cff1eff00|Hitem:14174:0:0:0:0:0:-19:1362937600:21:104:0:1:0|h[Buccaneer's Boots of Intellect]|h|r",
+"|HlootHistory:43|h[Loot]|h: |cff0070dd|Hitem:18721:0:0:0:0:0:0:0:51:268:0:1:0|h[Barrage Girdle]|h|r",
+"|HlootHistory:43|h[Loot]|h: |cff0070dd|Hitem:22240:0:0:0:0:0:0:0:55:268:0:1:0|h[Greaves of Withering Despair]|h|r",
+"|HlootHistory:43|h[Loot]|h: |cff0070dd|Hitem:24452:0:0:0:0:0:0:0:63:64:0:1:0|h[Starlight Gauntlets]|h|r",
+"|HlootHistory:43|h[Loot]|h: |cff0070dd|Hitem:6324:0:0:0:0:0:0:0:21:104:0:1:0|h[Robes of Arugal]|h|r",
+"|HlootHistory:43|h[Loot]|h: |cff0070dd|Hitem:6459:0:0:0:0:0:0:0:20:73:0:1:0|h[Savage Trodders]|h|r",
+"|HlootHistory:43|h[Loot]|h: |cff0070dd|Hitem:82880:0:0:0:0:0:0:0:21:268:0:1:0|h[Fang of Adarogg]|h|r",
+"|HlootHistory:43|h[Loot]|h: |cff1eff00|Hitem:10069:0:0:0:0:0:-84:2126962688:51:263:0:1:0|h[Righteous Bracers of Stamina]|h|r",
+"|HlootHistory:43|h[Loot]|h: |cff1eff00|Hitem:14656:0:0:0:0:0:0:0:41:264:0:1:0|h[Scorpashi Cape]|h|r",
+"|HlootHistory:43|h[Loot]|h: Lerona (Greed - 86) Won: |cff0070dd|Hitem:18721:0:0:0:0:0:0:0:51:268:0:1:0|h[Barrage Girdle]|h|r",
+"|HlootHistory:43|h[Loot]|h: Lerona-Jaedenar (Greed - 65) Won: |cff0070dd|Hitem:82880:0:0:0:0:0:0:0:21:268:0:1:0|h[Fang of Adarogg]|h|r",
+"|HlootHistory:43|h[Loot]|h: Skebaros-Xavius (Greed - 96) Won: |cff1eff00|Hitem:10069:0:0:0:0:0:-84:2126962688:51:263:0:1:0|h[Righteous Bracers of Stamina]|h|r",
+"|HlootHistory:43|h[Loot]|h: Stumper-SteamwheedleCartel (Greed - 96) Won: |cff0070dd|Hitem:6324:0:0:0:0:0:0:0:21:104:0:1:0|h[Robes of Arugal]|h|r",
+"|HlootHistory:43|h[Loot]|h: Venomtusk-ChamberofAspects (Need - 97) Won: |cff1eff00|Hitem:14656:0:0:0:0:0:0:0:41:264:0:1:0|h[Scorpashi Cape]|h|r",
+"|HlootHistory:43|h[Loot]|h: Wàrsong-Stormscale (Greed - 84) Won: |cff0070dd|Hitem:24452:0:0:0:0:0:0:0:63:64:0:1:0|h[Starlight Gauntlets]|h|r",
+"|HlootHistory:43|h[Loot]|h: You (Greed - 71) Won: |cff0070dd|Hitem:22240:0:0:0:0:0:0:0:55:268:0:1:0|h[Greaves of Withering Despair]|h|r",
+"|HlootHistory:43|h[Loot]|h: You (Need - 60) Won: |cff0070dd|Hitem:6459:0:0:0:0:0:0:0:20:73:0:1:0|h[Savage Trodders]|h|r",
+"|HlootHistory:43|h[Loot]|h: You have rolled Greed - 2 for: |cff0070dd|Hitem:82880:0:0:0:0:0:0:0:21:268:0:1:0|h[Fang of Adarogg]|h|r",
+"|HlootHistory:43|h[Loot]|h: You have rolled Greed - 26 for: |cff0070dd|Hitem:24452:0:0:0:0:0:0:0:63:64:0:1:0|h[Starlight Gauntlets]|h|r",
+"|HlootHistory:43|h[Loot]|h: You have rolled Greed - 3 for: |cff0070dd|Hitem:18721:0:0:0:0:0:0:0:51:268:0:1:0|h[Barrage Girdle]|h|r",
+"|HlootHistory:43|h[Loot]|h: You have rolled Greed - 54 for: |cff1eff00|Hitem:10069:0:0:0:0:0:-84:2126962688:51:263:0:1:0|h[Righteous Bracers of Stamina]|h|r",
+"|HlootHistory:43|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18721:0:0:0:0:0:0:0:51:268:0:1:0|h[Barrage Girdle]|h|r",
+"|HlootHistory:43|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22240:0:0:0:0:0:0:0:55:268:0:1:0|h[Greaves of Withering Despair]|h|r",
+"|HlootHistory:43|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24452:0:0:0:0:0:0:0:63:64:0:1:0|h[Starlight Gauntlets]|h|r",
+"|HlootHistory:43|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:82880:0:0:0:0:0:0:0:21:268:0:1:0|h[Fang of Adarogg]|h|r",
+"|HlootHistory:43|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10069:0:0:0:0:0:-84:2126962688:51:263:0:1:0|h[Righteous Bracers of Stamina]|h|r",
+"|HlootHistory:43|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14656:0:0:0:0:0:0:0:41:264:0:1:0|h[Scorpashi Cape]|h|r",
+"|HlootHistory:43|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:6459:0:0:0:0:0:0:0:20:73:0:1:0|h[Savage Trodders]|h|r",
+"|HlootHistory:43|h[Loot]|h: You passed on: |cff0070dd|Hitem:6324:0:0:0:0:0:0:0:21:104:0:1:0|h[Robes of Arugal]|h|r",
+"|HlootHistory:44|h[Loot]|h: |cff0070dd|Hitem:18353:0:0:0:0:0:0:0:41:264:0:1:0|h[Stoneflower Staff]|h|r",
+"|HlootHistory:44|h[Loot]|h: |cff0070dd|Hitem:22404:0:0:0:0:0:0:0:51:268:0:1:0|h[Willey's Back Scratcher]|h|r",
+"|HlootHistory:44|h[Loot]|h: |cff0070dd|Hitem:6631:0:0:0:0:0:0:0:20:73:0:1:0|h[Living Root]|h|r",
+"|HlootHistory:44|h[Loot]|h: |cff0070dd|Hitem:82877:0:0:0:0:0:0:0:21:268:0:1:0|h[Grasp of the Broken Totem]|h|r",
+"|HlootHistory:44|h[Loot]|h: |cff1eff00|Hitem:12001:0:0:0:0:0:-68:1695200256:55:268:0:1:0|h[Onyx Ring of the Bear]|h|r",
+"|HlootHistory:44|h[Loot]|h: |cff1eff00|Hitem:21949:0:0:0:0:0:0:0:51:263:0:1:0|h[Design: Ruby Serpent]|h|r",
+"|HlootHistory:44|h[Loot]|h: |cff1eff00|Hitem:24614:0:0:0:0:0:-37:1055653911:63:64:0:1:0|h[Vindicator Boots of the Seer]|h|r",
+"|HlootHistory:44|h[Loot]|h: |cff1eff00|Hitem:6552:0:0:0:0:0:-9:988489856:22:104:0:1:0|h[Bard's Tunic of the Owl]|h|r",
+"|HlootHistory:44|h[Loot]|h: Anestadren (Greed - 98) Won: |cff0070dd|Hitem:6631:0:0:0:0:0:0:0:20:73:0:1:0|h[Living Root]|h|r",
+"|HlootHistory:44|h[Loot]|h: Lerona (Greed - 95) Won: |cff1eff00|Hitem:12001:0:0:0:0:0:-68:1695200256:55:268:0:1:0|h[Onyx Ring of the Bear]|h|r",
+"|HlootHistory:44|h[Loot]|h: Mangoworm (Need - 61) Won: |cff1eff00|Hitem:6552:0:0:0:0:0:-9:988489856:22:104:0:1:0|h[Bard's Tunic of the Owl]|h|r",
+"|HlootHistory:44|h[Loot]|h: Nuzgruul-Stormscale (Greed - 77) Won: |cff1eff00|Hitem:24614:0:0:0:0:0:-37:1055653911:63:64:0:1:0|h[Vindicator Boots of the Seer]|h|r",
+"|HlootHistory:44|h[Loot]|h: Tûrtlè-Draenor (Greed - 53) Won: |cff0070dd|Hitem:82877:0:0:0:0:0:0:0:21:268:0:1:0|h[Grasp of the Broken Totem]|h|r",
+"|HlootHistory:44|h[Loot]|h: Venomtusk-ChamberofAspects (Need - 58) Won: |cff0070dd|Hitem:18353:0:0:0:0:0:0:0:41:264:0:1:0|h[Stoneflower Staff]|h|r",
+"|HlootHistory:44|h[Loot]|h: You (Greed - 85) Won: |cff0070dd|Hitem:22404:0:0:0:0:0:0:0:51:268:0:1:0|h[Willey's Back Scratcher]|h|r",
+"|HlootHistory:44|h[Loot]|h: You (Greed - 97) Won: |cff1eff00|Hitem:21949:0:0:0:0:0:0:0:51:263:0:1:0|h[Design: Ruby Serpent]|h|r",
+"|HlootHistory:44|h[Loot]|h: You have rolled Greed - 45 for: |cff0070dd|Hitem:82877:0:0:0:0:0:0:0:21:268:0:1:0|h[Grasp of the Broken Totem]|h|r",
+"|HlootHistory:44|h[Loot]|h: You have rolled Greed - 48 for: |cff1eff00|Hitem:12001:0:0:0:0:0:-68:1695200256:55:268:0:1:0|h[Onyx Ring of the Bear]|h|r",
+"|HlootHistory:44|h[Loot]|h: You have rolled Greed - 79 for: |cff0070dd|Hitem:6631:0:0:0:0:0:0:0:20:73:0:1:0|h[Living Root]|h|r",
+"|HlootHistory:44|h[Loot]|h: You have rolled Greed - 9 for: |cff1eff00|Hitem:24614:0:0:0:0:0:-37:1055653911:63:64:0:1:0|h[Vindicator Boots of the Seer]|h|r",
+"|HlootHistory:44|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18353:0:0:0:0:0:0:0:41:264:0:1:0|h[Stoneflower Staff]|h|r",
+"|HlootHistory:44|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22404:0:0:0:0:0:0:0:51:268:0:1:0|h[Willey's Back Scratcher]|h|r",
+"|HlootHistory:44|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6631:0:0:0:0:0:0:0:20:73:0:1:0|h[Living Root]|h|r",
+"|HlootHistory:44|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:82877:0:0:0:0:0:0:0:21:268:0:1:0|h[Grasp of the Broken Totem]|h|r",
+"|HlootHistory:44|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12001:0:0:0:0:0:-68:1695200256:55:268:0:1:0|h[Onyx Ring of the Bear]|h|r",
+"|HlootHistory:44|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:21949:0:0:0:0:0:0:0:51:263:0:1:0|h[Design: Ruby Serpent]|h|r",
+"|HlootHistory:44|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24614:0:0:0:0:0:-37:1055653911:63:64:0:1:0|h[Vindicator Boots of the Seer]|h|r",
+"|HlootHistory:44|h[Loot]|h: You passed on: |cff1eff00|Hitem:6552:0:0:0:0:0:-9:988489856:22:104:0:1:0|h[Bard's Tunic of the Owl]|h|r",
+"|HlootHistory:45|h[Loot]|h: |cff0070dd|Hitem:18374:0:0:0:0:0:0:0:41:264:0:1:0|h[Flamescarred Shoulders]|h|r",
+"|HlootHistory:45|h[Loot]|h: |cff0070dd|Hitem:18735:0:0:0:0:0:0:0:51:263:0:1:0|h[Maleki's Footwraps]|h|r",
+"|HlootHistory:45|h[Loot]|h: |cff0070dd|Hitem:82885:0:0:0:0:0:0:0:21:268:0:1:0|h[Flameseared Carapace]|h|r",
+"|HlootHistory:45|h[Loot]|h: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:51:268:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:45|h[Loot]|h: |cff1eff00|Hitem:15893:0:0:0:0:0:0:0:21:73:0:1:0|h[Prospector's Buckler]|h|r",
+"|HlootHistory:45|h[Loot]|h: |cff1eff00|Hitem:24860:0:0:0:0:0:-33:1841299482:63:64:0:1:0|h[Marshcreeper Mantle of Frost Protection]|h|r",
+"|HlootHistory:45|h[Loot]|h: |cff1eff00|Hitem:6552:0:0:0:0:0:-9:898998272:22:104:0:1:0|h[Bard's Tunic of the Owl]|h|r",
+"|HlootHistory:45|h[Loot]|h: |cff1eff00|Hitem:8257:0:0:0:0:0:0:0:55:268:0:1:0|h[Serpentskin Bracers]|h|r",
+"|HlootHistory:45|h[Loot]|h: Celvariel-Auchindoun (Greed - 98) Won: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:51:268:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:45|h[Loot]|h: Celvariel-Auchindoun (Need - 51) Won: |cff0070dd|Hitem:82885:0:0:0:0:0:0:0:21:268:0:1:0|h[Flameseared Carapace]|h|r",
+"|HlootHistory:45|h[Loot]|h: Fennec (Greed - 88) Won: |cff0070dd|Hitem:18735:0:0:0:0:0:0:0:51:263:0:1:0|h[Maleki's Footwraps]|h|r",
+"|HlootHistory:45|h[Loot]|h: Mangoworm (Need - 82) Won: |cff1eff00|Hitem:6552:0:0:0:0:0:-9:898998272:22:104:0:1:0|h[Bard's Tunic of the Owl]|h|r",
+"|HlootHistory:45|h[Loot]|h: You (Greed - 57) Won: |cff1eff00|Hitem:15893:0:0:0:0:0:0:0:21:73:0:1:0|h[Prospector's Buckler]|h|r",
+"|HlootHistory:45|h[Loot]|h: You (Greed - 91) Won: |cff1eff00|Hitem:24860:0:0:0:0:0:-33:1841299482:63:64:0:1:0|h[Marshcreeper Mantle of Frost Protection]|h|r",
+"|HlootHistory:45|h[Loot]|h: You (Greed - 91) Won: |cff1eff00|Hitem:8257:0:0:0:0:0:0:0:55:268:0:1:0|h[Serpentskin Bracers]|h|r",
+"|HlootHistory:45|h[Loot]|h: You (Greed - 98) Won: |cff0070dd|Hitem:18374:0:0:0:0:0:0:0:41:264:0:1:0|h[Flamescarred Shoulders]|h|r",
+"|HlootHistory:45|h[Loot]|h: You have rolled Greed - 25 for: |cff0070dd|Hitem:18735:0:0:0:0:0:0:0:51:263:0:1:0|h[Maleki's Footwraps]|h|r",
+"|HlootHistory:45|h[Loot]|h: You have rolled Greed - 74 for: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:51:268:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:45|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18374:0:0:0:0:0:0:0:41:264:0:1:0|h[Flamescarred Shoulders]|h|r",
+"|HlootHistory:45|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18735:0:0:0:0:0:0:0:51:263:0:1:0|h[Maleki's Footwraps]|h|r",
+"|HlootHistory:45|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:82885:0:0:0:0:0:0:0:21:268:0:1:0|h[Flameseared Carapace]|h|r",
+"|HlootHistory:45|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:51:268:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:45|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15893:0:0:0:0:0:0:0:21:73:0:1:0|h[Prospector's Buckler]|h|r",
+"|HlootHistory:45|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24860:0:0:0:0:0:-33:1841299482:63:64:0:1:0|h[Marshcreeper Mantle of Frost Protection]|h|r",
+"|HlootHistory:45|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8257:0:0:0:0:0:0:0:55:268:0:1:0|h[Serpentskin Bracers]|h|r",
+"|HlootHistory:45|h[Loot]|h: You passed on: |cff1eff00|Hitem:6552:0:0:0:0:0:-9:898998272:22:104:0:1:0|h[Bard's Tunic of the Owl]|h|r",
+"|HlootHistory:46|h[Loot]|h: |cff0070dd|Hitem:11807:0:0:0:0:0:0:0:55:268:0:1:0|h[Sash of the Burning Heart]|h|r",
+"|HlootHistory:46|h[Loot]|h: |cff0070dd|Hitem:18738:0:0:0:0:0:0:0:51:263:0:1:0|h[Carapace Spine Crossbow]|h|r",
+"|HlootHistory:46|h[Loot]|h: |cff0070dd|Hitem:24459:0:0:0:0:0:0:0:63:64:0:1:0|h[Cloak of Healing Rays]|h|r",
+"|HlootHistory:46|h[Loot]|h: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:51:268:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:46|h[Loot]|h: |cff1eff00|Hitem:14167:0:0:0:0:0:-19:1626551424:22:104:0:1:0|h[Buccaneer's Cape of Intellect]|h|r",
+"|HlootHistory:46|h[Loot]|h: |cff1eff00|Hitem:15114:0:0:0:0:0:-15:637136128:21:73:0:1:0|h[Rigid Cape of Spirit]|h|r",
+"|HlootHistory:46|h[Loot]|h: |cff1eff00|Hitem:15233:0:0:0:0:0:-20:1120386944:41:264:0:1:0|h[Savage Axe of Power]|h|r",
+"|HlootHistory:46|h[Loot]|h: |cff1eff00|Hitem:4569:0:0:0:0:0:-17:1133152896:21:268:0:1:0|h[Staunch Hammer of Strength]|h|r",
+"|HlootHistory:46|h[Loot]|h: Bowjack-ChamberofAspects (Greed - 72) Won: |cff1eff00|Hitem:15114:0:0:0:0:0:-15:637136128:21:73:0:1:0|h[Rigid Cape of Spirit]|h|r",
+"|HlootHistory:46|h[Loot]|h: Celvariel-Auchindoun (Greed - 88) Won: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:51:268:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:46|h[Loot]|h: Iragealot-BurningLegion (Greed - 85) Won: |cff0070dd|Hitem:24459:0:0:0:0:0:0:0:63:64:0:1:0|h[Cloak of Healing Rays]|h|r",
+"|HlootHistory:46|h[Loot]|h: Lerona (Greed - 99) Won: |cff0070dd|Hitem:11807:0:0:0:0:0:0:0:55:268:0:1:0|h[Sash of the Burning Heart]|h|r",
+"|HlootHistory:46|h[Loot]|h: Phaendar-Darkspear (Greed - 85) Won: |cff0070dd|Hitem:18738:0:0:0:0:0:0:0:51:263:0:1:0|h[Carapace Spine Crossbow]|h|r",
+"|HlootHistory:46|h[Loot]|h: Stumper-SteamwheedleCartel (Greed - 74) Won: |cff1eff00|Hitem:14167:0:0:0:0:0:-19:1626551424:22:104:0:1:0|h[Buccaneer's Cape of Intellect]|h|r",
+"|HlootHistory:46|h[Loot]|h: Tûrtlè-Draenor (Greed - 80) Won: |cff1eff00|Hitem:4569:0:0:0:0:0:-17:1133152896:21:268:0:1:0|h[Staunch Hammer of Strength]|h|r",
+"|HlootHistory:46|h[Loot]|h: You (Greed - 62) Won: |cff1eff00|Hitem:15233:0:0:0:0:0:-20:1120386944:41:264:0:1:0|h[Savage Axe of Power]|h|r",
+"|HlootHistory:46|h[Loot]|h: You have rolled Greed - 10 for: |cff1eff00|Hitem:15114:0:0:0:0:0:-15:637136128:21:73:0:1:0|h[Rigid Cape of Spirit]|h|r",
+"|HlootHistory:46|h[Loot]|h: You have rolled Greed - 13 for: |cff1eff00|Hitem:4569:0:0:0:0:0:-17:1133152896:21:268:0:1:0|h[Staunch Hammer of Strength]|h|r",
+"|HlootHistory:46|h[Loot]|h: You have rolled Greed - 43 for: |cff0070dd|Hitem:11807:0:0:0:0:0:0:0:55:268:0:1:0|h[Sash of the Burning Heart]|h|r",
+"|HlootHistory:46|h[Loot]|h: You have rolled Greed - 43 for: |cff0070dd|Hitem:18738:0:0:0:0:0:0:0:51:263:0:1:0|h[Carapace Spine Crossbow]|h|r",
+"|HlootHistory:46|h[Loot]|h: You have rolled Greed - 43 for: |cff0070dd|Hitem:24459:0:0:0:0:0:0:0:63:64:0:1:0|h[Cloak of Healing Rays]|h|r",
+"|HlootHistory:46|h[Loot]|h: You have rolled Greed - 87 for: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:51:268:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:46|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11807:0:0:0:0:0:0:0:55:268:0:1:0|h[Sash of the Burning Heart]|h|r",
+"|HlootHistory:46|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18738:0:0:0:0:0:0:0:51:263:0:1:0|h[Carapace Spine Crossbow]|h|r",
+"|HlootHistory:46|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24459:0:0:0:0:0:0:0:63:64:0:1:0|h[Cloak of Healing Rays]|h|r",
+"|HlootHistory:46|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:51:268:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:46|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15114:0:0:0:0:0:-15:637136128:21:73:0:1:0|h[Rigid Cape of Spirit]|h|r",
+"|HlootHistory:46|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15233:0:0:0:0:0:-20:1120386944:41:264:0:1:0|h[Savage Axe of Power]|h|r",
+"|HlootHistory:46|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4569:0:0:0:0:0:-17:1133152896:21:268:0:1:0|h[Staunch Hammer of Strength]|h|r",
+"|HlootHistory:46|h[Loot]|h: You passed on: |cff1eff00|Hitem:14167:0:0:0:0:0:-19:1626551424:22:104:0:1:0|h[Buccaneer's Cape of Intellect]|h|r",
+"|HlootHistory:47|h[Loot]|h: |cff0070dd|Hitem:13385:0:0:0:0:0:0:0:51:268:0:1:0|h[Tome of Knowledge]|h|r",
+"|HlootHistory:47|h[Loot]|h: |cff0070dd|Hitem:6463:0:0:0:0:0:0:0:21:73:0:1:0|h[Deep Fathom Ring]|h|r",
+"|HlootHistory:47|h[Loot]|h: |cff0070dd|Hitem:82888:0:0:0:0:0:0:0:22:268:0:1:0|h[Heartboiler Staff]|h|r",
+"|HlootHistory:47|h[Loot]|h: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:55:268:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:47|h[Loot]|h: |cff1eff00|Hitem:12382:0:0:0:0:0:0:0:51:263:0:0:0|h[Key to the City]|h|r",
+"|HlootHistory:47|h[Loot]|h: |cff1eff00|Hitem:14942:0:0:0:0:0:-68:1955732736:41:264:0:1:0|h[Warbringer's Gauntlets of the Bear]|h|r",
+"|HlootHistory:47|h[Loot]|h: |cff1eff00|Hitem:24725:0:0:0:0:0:-40:2070872087:63:64:0:1:0|h[Dementia Cord of the Bandit]|h|r",
+"|HlootHistory:47|h[Loot]|h: |cff1eff00|Hitem:7608:0:0:0:0:0:0:0:22:104:0:1:0|h[Seer's Fine Stein]|h|r",
+"|HlootHistory:47|h[Loot]|h: Anestadren (Need - 29) Won: |cff0070dd|Hitem:6463:0:0:0:0:0:0:0:21:73:0:1:0|h[Deep Fathom Ring]|h|r",
+"|HlootHistory:47|h[Loot]|h: Engolo-Dunemaul (Greed - 91) Won: |cff0070dd|Hitem:13385:0:0:0:0:0:0:0:51:268:0:1:0|h[Tome of Knowledge]|h|r",
+"|HlootHistory:47|h[Loot]|h: Huntertop-Outland (Greed - 39) Won: |cff1eff00|Hitem:24725:0:0:0:0:0:-40:2070872087:63:64:0:1:0|h[Dementia Cord of the Bandit]|h|r",
+"|HlootHistory:47|h[Loot]|h: Lerona (Greed - 83) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:55:268:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:47|h[Loot]|h: Skebaros-Xavius (Greed - 78) Won: |cff1eff00|Hitem:12382:0:0:0:0:0:0:0:51:263:0:0:0|h[Key to the City]|h|r",
+"|HlootHistory:47|h[Loot]|h: Sweetable-Bloodhoof (Greed - 96) Won: |cff1eff00|Hitem:14942:0:0:0:0:0:-68:1955732736:41:264:0:1:0|h[Warbringer's Gauntlets of the Bear]|h|r",
+"|HlootHistory:47|h[Loot]|h: You (Greed - 63) Won: |cff0070dd|Hitem:82888:0:0:0:0:0:0:0:22:268:0:1:0|h[Heartboiler Staff]|h|r",
+"|HlootHistory:47|h[Loot]|h: You have rolled Greed - 33 for: |cff1eff00|Hitem:24725:0:0:0:0:0:-40:2070872087:63:64:0:1:0|h[Dementia Cord of the Bandit]|h|r",
+"|HlootHistory:47|h[Loot]|h: You have rolled Greed - 38 for: |cff0070dd|Hitem:13385:0:0:0:0:0:0:0:51:268:0:1:0|h[Tome of Knowledge]|h|r",
+"|HlootHistory:47|h[Loot]|h: You have rolled Greed - 4 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:55:268:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:47|h[Loot]|h: You have rolled Greed - 46 for: |cff1eff00|Hitem:12382:0:0:0:0:0:0:0:51:263:0:0:0|h[Key to the City]|h|r",
+"|HlootHistory:47|h[Loot]|h: You have rolled Greed - 60 for: |cff1eff00|Hitem:14942:0:0:0:0:0:-68:1955732736:41:264:0:1:0|h[Warbringer's Gauntlets of the Bear]|h|r",
+"|HlootHistory:47|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13385:0:0:0:0:0:0:0:51:268:0:1:0|h[Tome of Knowledge]|h|r",
+"|HlootHistory:47|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6463:0:0:0:0:0:0:0:21:73:0:1:0|h[Deep Fathom Ring]|h|r",
+"|HlootHistory:47|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:82888:0:0:0:0:0:0:0:22:268:0:1:0|h[Heartboiler Staff]|h|r",
+"|HlootHistory:47|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:55:268:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:47|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12382:0:0:0:0:0:0:0:51:263:0:0:0|h[Key to the City]|h|r",
+"|HlootHistory:47|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14942:0:0:0:0:0:-68:1955732736:41:264:0:1:0|h[Warbringer's Gauntlets of the Bear]|h|r",
+"|HlootHistory:47|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24725:0:0:0:0:0:-40:2070872087:63:64:0:1:0|h[Dementia Cord of the Bandit]|h|r",
+"|HlootHistory:47|h[Loot]|h: You passed on: |cff1eff00|Hitem:7608:0:0:0:0:0:0:0:22:104:0:1:0|h[Seer's Fine Stein]|h|r",
+"|HlootHistory:47|h[Loot]|h: Yutag-TarrenMill (Greed - 88) Won: |cff1eff00|Hitem:7608:0:0:0:0:0:0:0:22:104:0:1:0|h[Seer's Fine Stein]|h|r",
+"|HlootHistory:48|h[Loot]|h: |cff0070dd|Hitem:18726:0:0:0:0:0:0:0:51:263:0:1:0|h[Magistrate's Cuffs]|h|r",
+"|HlootHistory:48|h[Loot]|h: |cff0070dd|Hitem:19269:0:0:0:0:0:0:0:41:264:0:0:0|h[Two of Elementals]|h|r",
+"|HlootHistory:48|h[Loot]|h: |cff0070dd|Hitem:24454:0:0:0:0:0:0:0:63:64:0:1:0|h[Cloak of Enduring Swiftness]|h|r",
+"|HlootHistory:48|h[Loot]|h: |cff0070dd|Hitem:6323:0:0:0:0:0:0:0:23:268:0:1:0|h[Baron's Scepter]|h|r",
+"|HlootHistory:48|h[Loot]|h: |cff1eff00|Hitem:15222:0:0:0:0:0:-20:2108657280:22:104:0:1:0|h[Barbed Club of Power]|h|r",
+"|HlootHistory:48|h[Loot]|h: |cff1eff00|Hitem:15252:0:0:0:0:0:-13:1386837888:55:268:0:1:0|h[Tusker Sword of the Wolf]|h|r",
+"|HlootHistory:48|h[Loot]|h: |cff1eff00|Hitem:9784:0:0:0:0:0:-10:797814016:21:73:0:1:0|h[Raider's Boots of the Gorilla]|h|r",
+"|HlootHistory:48|h[Loot]|h: |cffa335ee|Hitem:14512:0:0:0:0:0:0:0:51:268:0:1:0|h[Pattern: Truefaith Vestments]|h|r",
+"|HlootHistory:48|h[Loot]|h: Anestadren (Greed - 74) Won: |cff1eff00|Hitem:9784:0:0:0:0:0:-10:797814016:21:73:0:1:0|h[Raider's Boots of the Gorilla]|h|r",
+"|HlootHistory:48|h[Loot]|h: Iragealot-BurningLegion (Greed - 66) Won: |cff0070dd|Hitem:24454:0:0:0:0:0:0:0:63:64:0:1:0|h[Cloak of Enduring Swiftness]|h|r",
+"|HlootHistory:48|h[Loot]|h: Lerona (Greed - 74) Won: |cffa335ee|Hitem:14512:0:0:0:0:0:0:0:51:268:0:1:0|h[Pattern: Truefaith Vestments]|h|r",
+"|HlootHistory:48|h[Loot]|h: Mangoworm (Greed - 71) Won: |cff1eff00|Hitem:15222:0:0:0:0:0:-20:2108657280:22:104:0:1:0|h[Barbed Club of Power]|h|r",
+"|HlootHistory:48|h[Loot]|h: Skebaros-Xavius (Greed - 52) Won: |cff0070dd|Hitem:18726:0:0:0:0:0:0:0:51:263:0:1:0|h[Magistrate's Cuffs]|h|r",
+"|HlootHistory:48|h[Loot]|h: Tûrtlè-Draenor (Greed - 97) Won: |cff0070dd|Hitem:6323:0:0:0:0:0:0:0:23:268:0:1:0|h[Baron's Scepter]|h|r",
+"|HlootHistory:48|h[Loot]|h: Venomtusk-ChamberofAspects (Need - 4) Won: |cff0070dd|Hitem:19269:0:0:0:0:0:0:0:41:264:0:0:0|h[Two of Elementals]|h|r",
+"|HlootHistory:48|h[Loot]|h: You (Greed - 97) Won: |cff1eff00|Hitem:15252:0:0:0:0:0:-13:1386837888:55:268:0:1:0|h[Tusker Sword of the Wolf]|h|r",
+"|HlootHistory:48|h[Loot]|h: You have rolled Greed - 22 for: |cff0070dd|Hitem:18726:0:0:0:0:0:0:0:51:263:0:1:0|h[Magistrate's Cuffs]|h|r",
+"|HlootHistory:48|h[Loot]|h: You have rolled Greed - 26 for: |cff0070dd|Hitem:24454:0:0:0:0:0:0:0:63:64:0:1:0|h[Cloak of Enduring Swiftness]|h|r",
+"|HlootHistory:48|h[Loot]|h: You have rolled Greed - 30 for: |cff0070dd|Hitem:6323:0:0:0:0:0:0:0:23:268:0:1:0|h[Baron's Scepter]|h|r",
+"|HlootHistory:48|h[Loot]|h: You have rolled Greed - 38 for: |cff1eff00|Hitem:9784:0:0:0:0:0:-10:797814016:21:73:0:1:0|h[Raider's Boots of the Gorilla]|h|r",
+"|HlootHistory:48|h[Loot]|h: You have rolled Greed - 71 for: |cffa335ee|Hitem:14512:0:0:0:0:0:0:0:51:268:0:1:0|h[Pattern: Truefaith Vestments]|h|r",
+"|HlootHistory:48|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18726:0:0:0:0:0:0:0:51:263:0:1:0|h[Magistrate's Cuffs]|h|r",
+"|HlootHistory:48|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:19269:0:0:0:0:0:0:0:41:264:0:0:0|h[Two of Elementals]|h|r",
+"|HlootHistory:48|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24454:0:0:0:0:0:0:0:63:64:0:1:0|h[Cloak of Enduring Swiftness]|h|r",
+"|HlootHistory:48|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6323:0:0:0:0:0:0:0:23:268:0:1:0|h[Baron's Scepter]|h|r",
+"|HlootHistory:48|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15252:0:0:0:0:0:-13:1386837888:55:268:0:1:0|h[Tusker Sword of the Wolf]|h|r",
+"|HlootHistory:48|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9784:0:0:0:0:0:-10:797814016:21:73:0:1:0|h[Raider's Boots of the Gorilla]|h|r",
+"|HlootHistory:48|h[Loot]|h: You have selected Greed for: |cffa335ee|Hitem:14512:0:0:0:0:0:0:0:51:268:0:1:0|h[Pattern: Truefaith Vestments]|h|r",
+"|HlootHistory:48|h[Loot]|h: You passed on: |cff1eff00|Hitem:15222:0:0:0:0:0:-20:2108657280:22:104:0:1:0|h[Barbed Club of Power]|h|r",
+"|HlootHistory:49|h[Loot]|h: |cff0070dd|Hitem:18349:0:0:0:0:0:0:0:41:264:0:1:0|h[Gauntlets of Accuracy]|h|r",
+"|HlootHistory:49|h[Loot]|h: |cff0070dd|Hitem:18720:0:0:0:0:0:0:0:51:268:0:1:0|h[Shroud of the Nathrezim]|h|r",
+"|HlootHistory:49|h[Loot]|h: |cff0070dd|Hitem:24464:0:0:0:0:0:0:0:64:64:0:1:0|h[The Stalker's Fangs]|h|r",
+"|HlootHistory:49|h[Loot]|h: |cff0070dd|Hitem:6321:0:0:0:0:0:0:0:22:104:0:1:0|h[Silverlaine's Family Seal]|h|r",
+"|HlootHistory:49|h[Loot]|h: |cff1eff00|Hitem:10242:0:0:0:0:0:-68:1123024000:51:263:0:1:0|h[Heavy Lamellar Gauntlets of the Bear]|h|r",
+"|HlootHistory:49|h[Loot]|h: |cff1eff00|Hitem:15222:0:0:0:0:0:-84:874013056:21:73:0:1:0|h[Barbed Club of Stamina]|h|r",
+"|HlootHistory:49|h[Loot]|h: |cff1eff00|Hitem:6552:0:0:0:0:0:-78:1841133696:23:268:0:1:0|h[Bard's Tunic of the Monkey]|h|r",
+"|HlootHistory:49|h[Loot]|h: |cff1eff00|Hitem:7078:0:0:0:0:0:0:0:55:268:0:0:0|h[Essence of Fire]|h|r",
+"|HlootHistory:49|h[Loot]|h: Anestadren (Need - 1) Won: |cff1eff00|Hitem:15222:0:0:0:0:0:-84:874013056:22:73:0:1:0|h[Barbed Club of Stamina]|h|r",
+"|HlootHistory:49|h[Loot]|h: Celvariel-Auchindoun (Greed - 85) Won: |cff1eff00|Hitem:7078:0:0:0:0:0:0:0:55:268:0:0:0|h[Essence of Fire]|h|r",
+"|HlootHistory:49|h[Loot]|h: Chubntuckk-TarrenMill (Greed - 96) Won: |cff0070dd|Hitem:18349:0:0:0:0:0:0:0:41:264:0:1:0|h[Gauntlets of Accuracy]|h|r",
+"|HlootHistory:49|h[Loot]|h: Engolo-Dunemaul (Greed - 84) Won: |cff0070dd|Hitem:18720:0:0:0:0:0:0:0:51:268:0:1:0|h[Shroud of the Nathrezim]|h|r",
+"|HlootHistory:49|h[Loot]|h: Lerona-Jaedenar (Greed - 96) Won: |cff1eff00|Hitem:6552:0:0:0:0:0:-78:1841133696:23:268:0:1:0|h[Bard's Tunic of the Monkey]|h|r",
+"|HlootHistory:49|h[Loot]|h: Sanctisius (Need - 75) Won: |cff1eff00|Hitem:10242:0:0:0:0:0:-68:1123024000:51:263:0:1:0|h[Heavy Lamellar Gauntlets of the Bear]|h|r",
+"|HlootHistory:49|h[Loot]|h: Warriorstump-Kazzak (Need - 35) Won: |cff0070dd|Hitem:6321:0:0:0:0:0:0:0:22:104:0:1:0|h[Silverlaine's Family Seal]|h|r",
+"|HlootHistory:49|h[Loot]|h: Wàrsong-Stormscale (Need - 17) Won: |cff0070dd|Hitem:24464:0:0:0:0:0:0:0:64:64:0:1:0|h[The Stalker's Fangs]|h|r",
+"|HlootHistory:49|h[Loot]|h: You have rolled Greed - 3 for: |cff0070dd|Hitem:18349:0:0:0:0:0:0:0:41:264:0:1:0|h[Gauntlets of Accuracy]|h|r",
+"|HlootHistory:49|h[Loot]|h: You have rolled Greed - 68 for: |cff0070dd|Hitem:18720:0:0:0:0:0:0:0:51:268:0:1:0|h[Shroud of the Nathrezim]|h|r",
+"|HlootHistory:49|h[Loot]|h: You have rolled Greed - 73 for: |cff1eff00|Hitem:7078:0:0:0:0:0:0:0:55:268:0:0:0|h[Essence of Fire]|h|r",
+"|HlootHistory:49|h[Loot]|h: You have rolled Greed - 82 for: |cff1eff00|Hitem:6552:0:0:0:0:0:-78:1841133696:23:268:0:1:0|h[Bard's Tunic of the Monkey]|h|r",
+"|HlootHistory:49|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18349:0:0:0:0:0:0:0:41:264:0:1:0|h[Gauntlets of Accuracy]|h|r",
+"|HlootHistory:49|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18720:0:0:0:0:0:0:0:51:268:0:1:0|h[Shroud of the Nathrezim]|h|r",
+"|HlootHistory:49|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24464:0:0:0:0:0:0:0:64:64:0:1:0|h[The Stalker's Fangs]|h|r",
+"|HlootHistory:49|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6321:0:0:0:0:0:0:0:22:104:0:1:0|h[Silverlaine's Family Seal]|h|r",
+"|HlootHistory:49|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10242:0:0:0:0:0:-68:1123024000:51:263:0:1:0|h[Heavy Lamellar Gauntlets of the Bear]|h|r",
+"|HlootHistory:49|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15222:0:0:0:0:0:-84:874013056:21:73:0:1:0|h[Barbed Club of Stamina]|h|r",
+"|HlootHistory:49|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:6552:0:0:0:0:0:-78:1841133696:23:268:0:1:0|h[Bard's Tunic of the Monkey]|h|r",
+"|HlootHistory:49|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7078:0:0:0:0:0:0:0:55:268:0:0:0|h[Essence of Fire]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff0070dd|Hitem:10765:0:0:0:0:0:0:0:45:270:0:1:0|h[Bonefingers]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff0070dd|Hitem:13397:0:0:0:0:0:0:0:52:268:0:1:0|h[Stoneskin Gargoyle Cape]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff0070dd|Hitem:13408:0:0:0:0:0:0:0:48:263:0:1:0|h[Soul Breaker]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff0070dd|Hitem:17746:0:0:0:0:0:0:0:35:264:0:1:0|h[Noxxion's Shackles]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff0070dd|Hitem:18325:0:0:0:0:0:0:0:46:66:0:1:0|h[Felhide Cap]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:60:64:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff0070dd|Hitem:82881:0:0:0:0:0:0:0:15:104:0:1:0|h[Cuffs of Black Elements]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff0070dd|Hitem:88341:0:0:0:0:0:0:0:45:268:0:1:0|h[Necromantic Wand]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff1eff00|Hitem:106678:0:0:0:0:0:0:0:99:253:0:20:1:137|h[Windswept Wristwraps of the Deft]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff1eff00|Hitem:14237:0:0:0:0:0:-15:1135324032:48:268:0:1:0|h[Darkmist Armor of Spirit]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff1eff00|Hitem:15210:0:0:0:0:0:-20:674002432:15:73:0:1:0|h[Raider Shortsword of Power]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff1eff00|Hitem:3036:0:0:0:0:0:0:0:13:73:0:0:0|h[Heavy Shortbow]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff1eff00|Hitem:3067:0:0:0:0:0:0:0:28:104:0:1:0|h[Bright Pants]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff1eff00|Hitem:7909:0:0:0:0:0:0:0:46:66:0:0:0|h[Aquamarine]|h|r",
+"|HlootHistory:5|h[Loot]|h: |cff1eff00|Hitem:9749:0:0:0:0:0:-84:301389696:15:268:0:1:0|h[Simple Blouse of Stamina]|h|r",
+"|HlootHistory:5|h[Loot]|h: Alehara (Greed - 3) Won: |cff1eff00|Hitem:3036:0:0:0:0:0:0:0:13:73:0:0:0|h[Heavy Shortbow]|h|r",
+"|HlootHistory:5|h[Loot]|h: Anestadren (Greed - 47) Won: |cff1eff00|Hitem:15210:0:0:0:0:0:-20:674002432:15:73:0:1:0|h[Raider Shortsword of Power]|h|r",
+"|HlootHistory:5|h[Loot]|h: Aurôra-Dunemaul (Greed - 95) Won: |cff1eff00|Hitem:3067:0:0:0:0:0:0:0:28:104:0:1:0|h[Bright Pants]|h|r",
+"|HlootHistory:5|h[Loot]|h: Dopelius-Stormreaver (Greed - 68) Won: |cff0070dd|Hitem:18325:0:0:0:0:0:0:0:46:66:0:1:0|h[Felhide Cap]|h|r",
+"|HlootHistory:5|h[Loot]|h: Fatpandaass-Ragnaros (Greed - 87) Won: |cff1eff00|Hitem:106678:0:0:0:0:0:0:0:99:253:0:20:1:137|h[Windswept Wristwraps of the Deft]|h|r",
+"|HlootHistory:5|h[Loot]|h: Fennec (Greed - 87) Won: |cff0070dd|Hitem:13408:0:0:0:0:0:0:0:48:263:0:1:0|h[Soul Breaker]|h|r",
+"|HlootHistory:5|h[Loot]|h: Fennec (Greed - 89) Won: |cff1eff00|Hitem:7909:0:0:0:0:0:0:0:46:66:0:0:0|h[Aquamarine]|h|r",
+"|HlootHistory:5|h[Loot]|h: Hantarro-EmeraldDream (Greed - 94) Won: |cff1eff00|Hitem:10191:0:0:0:0:0:-13:777027584:51:105:0:1:0|h[Crusader's Armguards of the Wolf]|h|r",
+"|HlootHistory:5|h[Loot]|h: Holrenkaisia-Drak'thul (Greed - 47) Won: |cff1eff00|Hitem:14237:0:0:0:0:0:-15:1135324032:48:268:0:1:0|h[Darkmist Armor of Spirit]|h|r",
+"|HlootHistory:5|h[Loot]|h: Lerona (Greed - 94) Won: |cff0070dd|Hitem:13397:0:0:0:0:0:0:0:52:268:0:1:0|h[Stoneskin Gargoyle Cape]|h|r",
+"|HlootHistory:5|h[Loot]|h: Lerona-Jaedenar (Greed - 97) Won: |cff1eff00|Hitem:9749:0:0:0:0:0:-84:301389696:15:268:0:1:0|h[Simple Blouse of Stamina]|h|r",
+"|HlootHistory:5|h[Loot]|h: Noot-Outland (Greed - 89) Won: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:60:64:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:5|h[Loot]|h: Pallypally-TheMaelstrom (Need - 34) Won: |cff0070dd|Hitem:17746:0:0:0:0:0:0:0:35:264:0:1:0|h[Noxxion's Shackles]|h|r",
+"|HlootHistory:5|h[Loot]|h: Sílénce-Stormrage (Greed - 66) Won: |cff0070dd|Hitem:88341:0:0:0:0:0:0:0:45:268:0:1:0|h[Necromantic Wand]|h|r",
+"|HlootHistory:5|h[Loot]|h: Wydad-Draenor (Need - 86) Won: |cff0070dd|Hitem:82881:0:0:0:0:0:0:0:15:104:0:1:0|h[Cuffs of Black Elements]|h|r",
+"|HlootHistory:5|h[Loot]|h: You (Greed - 71) Won: |cff0070dd|Hitem:10765:0:0:0:0:0:0:0:45:270:0:1:0|h[Bonefingers]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have rolled Greed - 1 for: |cff0070dd|Hitem:13397:0:0:0:0:0:0:0:52:268:0:1:0|h[Stoneskin Gargoyle Cape]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have rolled Greed - 16 for: |cff1eff00|Hitem:15210:0:0:0:0:0:-20:674002432:15:73:0:1:0|h[Raider Shortsword of Power]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have rolled Greed - 2 for: |cff0070dd|Hitem:88341:0:0:0:0:0:0:0:45:268:0:1:0|h[Necromantic Wand]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have rolled Greed - 31 for: |cff1eff00|Hitem:9749:0:0:0:0:0:-84:301389696:15:268:0:1:0|h[Simple Blouse of Stamina]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have rolled Greed - 47 for: |cff1eff00|Hitem:106678:0:0:0:0:0:0:0:99:253:0:20:1:137|h[Windswept Wristwraps of the Deft]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have rolled Greed - 5 for: |cff1eff00|Hitem:10191:0:0:0:0:0:-13:777027584:51:105:0:1:0|h[Crusader's Armguards of the Wolf]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have rolled Greed - 5 for: |cff1eff00|Hitem:14237:0:0:0:0:0:-15:1135324032:48:268:0:1:0|h[Darkmist Armor of Spirit]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have rolled Greed - 53 for: |cff0070dd|Hitem:18325:0:0:0:0:0:0:0:46:66:0:1:0|h[Felhide Cap]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have rolled Greed - 57 for: |cff1eff00|Hitem:7909:0:0:0:0:0:0:0:46:66:0:0:0|h[Aquamarine]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have rolled Greed - 78 for: |cff0070dd|Hitem:13408:0:0:0:0:0:0:0:48:263:0:1:0|h[Soul Breaker]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have rolled Greed - 78 for: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:60:64:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have rolled Need - 42 for: |cff0070dd|Hitem:82881:0:0:0:0:0:0:0:15:104:0:1:0|h[Cuffs of Black Elements]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10765:0:0:0:0:0:0:0:45:270:0:1:0|h[Bonefingers]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13397:0:0:0:0:0:0:0:52:268:0:1:0|h[Stoneskin Gargoyle Cape]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13408:0:0:0:0:0:0:0:48:263:0:1:0|h[Soul Breaker]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:17746:0:0:0:0:0:0:0:35:264:0:1:0|h[Noxxion's Shackles]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18325:0:0:0:0:0:0:0:46:66:0:1:0|h[Felhide Cap]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24094:0:0:0:0:0:0:0:60:64:0:1:0|h[Heart Fire Warhammer]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88341:0:0:0:0:0:0:0:45:268:0:1:0|h[Necromantic Wand]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10191:0:0:0:0:0:-13:777027584:51:105:0:1:0|h[Crusader's Armguards of the Wolf]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:106678:0:0:0:0:0:0:0:99:253:0:20:1:137|h[Windswept Wristwraps of the Deft]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14237:0:0:0:0:0:-15:1135324032:48:268:0:1:0|h[Darkmist Armor of Spirit]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15210:0:0:0:0:0:-20:674002432:15:73:0:1:0|h[Raider Shortsword of Power]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7909:0:0:0:0:0:0:0:46:66:0:0:0|h[Aquamarine]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9749:0:0:0:0:0:-84:301389696:15:268:0:1:0|h[Simple Blouse of Stamina]|h|r",
+"|HlootHistory:5|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:82881:0:0:0:0:0:0:0:15:104:0:1:0|h[Cuffs of Black Elements]|h|r",
+"|HlootHistory:5|h[Loot]|h: You passed on: |cff1eff00|Hitem:3036:0:0:0:0:0:0:0:13:73:0:0:0|h[Heavy Shortbow]|h|r",
+"|HlootHistory:5|h[Loot]|h: You passed on: |cff1eff00|Hitem:3067:0:0:0:0:0:0:0:28:104:0:1:0|h[Bright Pants]|h|r",
+"|HlootHistory:50|h[Loot]|h: |cff0070dd|Hitem:13360:0:0:0:0:0:0:0:51:268:0:1:0|h[Gift of the Elven Magi]|h|r",
+"|HlootHistory:50|h[Loot]|h: |cff0070dd|Hitem:13373:0:0:0:0:0:0:0:51:263:0:1:0|h[Band of Flesh]|h|r",
+"|HlootHistory:50|h[Loot]|h: |cff0070dd|Hitem:18381:0:0:0:0:0:0:0:42:264:0:1:0|h[Evil Eye Pendant]|h|r",
+"|HlootHistory:50|h[Loot]|h: |cff0070dd|Hitem:22234:0:0:0:0:0:0:0:55:268:0:1:0|h[Mantle of Lost Hope]|h|r",
+"|HlootHistory:50|h[Loot]|h: |cff0070dd|Hitem:3191:0:0:0:0:0:0:0:22:104:0:1:0|h[Arced War Axe]|h|r",
+"|HlootHistory:50|h[Loot]|h: |cff0070dd|Hitem:6324:0:0:0:0:0:0:0:22:73:0:1:0|h[Robes of Arugal]|h|r",
+"|HlootHistory:50|h[Loot]|h: |cff1eff00|Hitem:24969:0:0:0:0:0:-11:895352858:64:64:0:1:0|h[Talonguard Gloves of the Falcon]|h|r",
+"|HlootHistory:50|h[Loot]|h: |cff1eff00|Hitem:6538:0:0:0:0:0:-19:775596800:23:268:0:1:0|h[Willow Robe of Intellect]|h|r",
+"|HlootHistory:50|h[Loot]|h: Anestadren (Need - 69) Won: |cff0070dd|Hitem:6324:0:0:0:0:0:0:0:22:73:0:1:0|h[Robes of Arugal]|h|r",
+"|HlootHistory:50|h[Loot]|h: Celvariel-Auchindoun (Greed - 43) Won: |cff0070dd|Hitem:22234:0:0:0:0:0:0:0:55:268:0:1:0|h[Mantle of Lost Hope]|h|r",
+"|HlootHistory:50|h[Loot]|h: Lerona (Greed - 93) Won: |cff0070dd|Hitem:13360:0:0:0:0:0:0:0:51:268:0:1:0|h[Gift of the Elven Magi]|h|r",
+"|HlootHistory:50|h[Loot]|h: Skebaros-Xavius (Greed - 81) Won: |cff0070dd|Hitem:13373:0:0:0:0:0:0:0:51:263:0:1:0|h[Band of Flesh]|h|r",
+"|HlootHistory:50|h[Loot]|h: Tûrtlè-Draenor (Greed - 54) Won: |cff1eff00|Hitem:6538:0:0:0:0:0:-19:775596800:23:268:0:1:0|h[Willow Robe of Intellect]|h|r",
+"|HlootHistory:50|h[Loot]|h: Warriorstump-Kazzak (Need - 78) Won: |cff0070dd|Hitem:3191:0:0:0:0:0:0:0:22:104:0:1:0|h[Arced War Axe]|h|r",
+"|HlootHistory:50|h[Loot]|h: You (Greed - 30) Won: |cff1eff00|Hitem:24969:0:0:0:0:0:-11:895352858:64:64:0:1:0|h[Talonguard Gloves of the Falcon]|h|r",
+"|HlootHistory:50|h[Loot]|h: You (Greed - 95) Won: |cff0070dd|Hitem:18381:0:0:0:0:0:0:0:42:264:0:1:0|h[Evil Eye Pendant]|h|r",
+"|HlootHistory:50|h[Loot]|h: You have rolled Greed - 20 for: |cff0070dd|Hitem:22234:0:0:0:0:0:0:0:55:268:0:1:0|h[Mantle of Lost Hope]|h|r",
+"|HlootHistory:50|h[Loot]|h: You have rolled Greed - 26 for: |cff1eff00|Hitem:6538:0:0:0:0:0:-19:775596800:23:268:0:1:0|h[Willow Robe of Intellect]|h|r",
+"|HlootHistory:50|h[Loot]|h: You have rolled Greed - 39 for: |cff0070dd|Hitem:13373:0:0:0:0:0:0:0:51:263:0:1:0|h[Band of Flesh]|h|r",
+"|HlootHistory:50|h[Loot]|h: You have rolled Greed - 57 for: |cff0070dd|Hitem:13360:0:0:0:0:0:0:0:51:268:0:1:0|h[Gift of the Elven Magi]|h|r",
+"|HlootHistory:50|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13360:0:0:0:0:0:0:0:51:268:0:1:0|h[Gift of the Elven Magi]|h|r",
+"|HlootHistory:50|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13373:0:0:0:0:0:0:0:51:263:0:1:0|h[Band of Flesh]|h|r",
+"|HlootHistory:50|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18381:0:0:0:0:0:0:0:42:264:0:1:0|h[Evil Eye Pendant]|h|r",
+"|HlootHistory:50|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22234:0:0:0:0:0:0:0:55:268:0:1:0|h[Mantle of Lost Hope]|h|r",
+"|HlootHistory:50|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:3191:0:0:0:0:0:0:0:22:104:0:1:0|h[Arced War Axe]|h|r",
+"|HlootHistory:50|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24969:0:0:0:0:0:-11:895352858:64:64:0:1:0|h[Talonguard Gloves of the Falcon]|h|r",
+"|HlootHistory:50|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:6538:0:0:0:0:0:-19:775596800:23:268:0:1:0|h[Willow Robe of Intellect]|h|r",
+"|HlootHistory:50|h[Loot]|h: You passed on: |cff0070dd|Hitem:6324:0:0:0:0:0:0:0:22:73:0:1:0|h[Robes of Arugal]|h|r",
+"|HlootHistory:51|h[Loot]|h: |cff0070dd|Hitem:18391:0:0:0:0:0:0:0:42:264:0:1:0|h[Eyestalk Cord]|h|r",
+"|HlootHistory:51|h[Loot]|h: |cff0070dd|Hitem:22408:0:0:0:0:0:0:0:51:263:0:1:0|h[Ritssyn's Wand of Bad Mojo]|h|r",
+"|HlootHistory:51|h[Loot]|h: |cff0070dd|Hitem:25939:0:0:0:0:0:0:0:64:64:0:1:0|h[Voidfire Wand]|h|r",
+"|HlootHistory:51|h[Loot]|h: |cff0070dd|Hitem:6641:0:0:0:0:0:0:0:22:104:0:1:0|h[Haunting Blade]|h|r",
+"|HlootHistory:51|h[Loot]|h: |cff1eff00|Hitem:10186:0:0:0:0:0:-78:564323968:55:268:0:1:0|h[Swashbuckler's Gloves of the Monkey]|h|r",
+"|HlootHistory:51|h[Loot]|h: |cff1eff00|Hitem:1206:0:0:0:0:0:0:0:23:268:0:0:0|h[Moss Agate]|h|r",
+"|HlootHistory:51|h[Loot]|h: |cff1eff00|Hitem:4576:0:0:0:0:0:0:0:22:73:0:1:0|h[Light Bow]|h|r",
+"|HlootHistory:51|h[Loot]|h: Alehara (Greed - 99) Won: |cff1eff00|Hitem:4576:0:0:0:0:0:0:0:22:73:0:1:0|h[Light Bow]|h|r",
+"|HlootHistory:51|h[Loot]|h: Herdrymas-Draenor (Greed - 95) Won: |cff1eff00|Hitem:1206:0:0:0:0:0:0:0:23:268:0:0:0|h[Moss Agate]|h|r",
+"|HlootHistory:51|h[Loot]|h: Venomtusk-ChamberofAspects (Need - 12) Won: |cff0070dd|Hitem:18391:0:0:0:0:0:0:0:42:264:0:1:0|h[Eyestalk Cord]|h|r",
+"|HlootHistory:51|h[Loot]|h: Warriorstump-Kazzak (Need - 36) Won: |cff0070dd|Hitem:6641:0:0:0:0:0:0:0:22:104:0:1:0|h[Haunting Blade]|h|r",
+"|HlootHistory:51|h[Loot]|h: Wumpsham-TarrenMill (Greed - 65) Won: |cff1eff00|Hitem:10186:0:0:0:0:0:-78:564323968:55:268:0:1:0|h[Swashbuckler's Gloves of the Monkey]|h|r",
+"|HlootHistory:51|h[Loot]|h: You (Greed - 78) Won: |cff0070dd|Hitem:25939:0:0:0:0:0:0:0:64:64:0:1:0|h[Voidfire Wand]|h|r",
+"|HlootHistory:51|h[Loot]|h: You (Greed - 93) Won: |cff0070dd|Hitem:22408:0:0:0:0:0:0:0:51:263:0:1:0|h[Ritssyn's Wand of Bad Mojo]|h|r",
+"|HlootHistory:51|h[Loot]|h: You have rolled Greed - 43 for: |cff1eff00|Hitem:10186:0:0:0:0:0:-78:564323968:55:268:0:1:0|h[Swashbuckler's Gloves of the Monkey]|h|r",
+"|HlootHistory:51|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18391:0:0:0:0:0:0:0:42:264:0:1:0|h[Eyestalk Cord]|h|r",
+"|HlootHistory:51|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22408:0:0:0:0:0:0:0:51:263:0:1:0|h[Ritssyn's Wand of Bad Mojo]|h|r",
+"|HlootHistory:51|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:25939:0:0:0:0:0:0:0:64:64:0:1:0|h[Voidfire Wand]|h|r",
+"|HlootHistory:51|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6641:0:0:0:0:0:0:0:22:104:0:1:0|h[Haunting Blade]|h|r",
+"|HlootHistory:51|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10186:0:0:0:0:0:-78:564323968:55:268:0:1:0|h[Swashbuckler's Gloves of the Monkey]|h|r",
+"|HlootHistory:51|h[Loot]|h: You passed on: |cff1eff00|Hitem:1206:0:0:0:0:0:0:0:23:268:0:0:0|h[Moss Agate]|h|r",
+"|HlootHistory:51|h[Loot]|h: You passed on: |cff1eff00|Hitem:4576:0:0:0:0:0:0:0:22:73:0:1:0|h[Light Bow]|h|r",
+"|HlootHistory:52|h[Loot]|h: |cff0070dd|Hitem:11629:0:0:0:0:0:0:0:55:268:0:1:0|h[Houndmaster's Rifle]|h|r",
+"|HlootHistory:52|h[Loot]|h: |cff0070dd|Hitem:13340:0:0:0:0:0:0:0:51:263:0:1:0|h[Cape of the Black Baron]|h|r",
+"|HlootHistory:52|h[Loot]|h: |cff0070dd|Hitem:18380:0:0:0:0:0:0:0:42:264:0:1:0|h[Eldritch Reinforced Legplates]|h|r",
+"|HlootHistory:52|h[Loot]|h: |cff1eff00|Hitem:12006:0:0:0:0:0:-78:172208512:23:268:0:1:0|h[Meadow Ring of the Monkey]|h|r",
+"|HlootHistory:52|h[Loot]|h: |cff1eff00|Hitem:15222:0:0:0:0:0:-17:1128942208:22:73:0:1:0|h[Barbed Club of Strength]|h|r",
+"|HlootHistory:52|h[Loot]|h: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:64:64:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:52|h[Loot]|h: |cff1eff00|Hitem:6563:0:0:0:0:0:-15:1422583168:22:104:0:1:0|h[Shimmering Bracers of Spirit]|h|r",
+"|HlootHistory:52|h[Loot]|h: Alehara (Greed - 78) Won: |cff1eff00|Hitem:15222:0:0:0:0:0:-17:1128942208:22:73:0:1:0|h[Barbed Club of Strength]|h|r",
+"|HlootHistory:52|h[Loot]|h: Lerona-Jaedenar (Greed - 89) Won: |cff1eff00|Hitem:12006:0:0:0:0:0:-78:172208512:23:268:0:1:0|h[Meadow Ring of the Monkey]|h|r",
+"|HlootHistory:52|h[Loot]|h: Mangoworm (Greed - 75) Won: |cff1eff00|Hitem:6563:0:0:0:0:0:-15:1422583168:22:104:0:1:0|h[Shimmering Bracers of Spirit]|h|r",
+"|HlootHistory:52|h[Loot]|h: Sjalg-Draenor (Need - 16) Won: |cff0070dd|Hitem:18380:0:0:0:0:0:0:0:42:264:0:1:0|h[Eldritch Reinforced Legplates]|h|r",
+"|HlootHistory:52|h[Loot]|h: Skebaros-Xavius (Greed - 74) Won: |cff0070dd|Hitem:13340:0:0:0:0:0:0:0:51:263:0:1:0|h[Cape of the Black Baron]|h|r",
+"|HlootHistory:52|h[Loot]|h: You (Greed - 93) Won: |cff0070dd|Hitem:11629:0:0:0:0:0:0:0:55:268:0:1:0|h[Houndmaster's Rifle]|h|r",
+"|HlootHistory:52|h[Loot]|h: You (Greed - 97) Won: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:64:64:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:52|h[Loot]|h: You have rolled Greed - 18 for: |cff1eff00|Hitem:6563:0:0:0:0:0:-15:1422583168:22:104:0:1:0|h[Shimmering Bracers of Spirit]|h|r",
+"|HlootHistory:52|h[Loot]|h: You have rolled Greed - 62 for: |cff0070dd|Hitem:13340:0:0:0:0:0:0:0:51:263:0:1:0|h[Cape of the Black Baron]|h|r",
+"|HlootHistory:52|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11629:0:0:0:0:0:0:0:55:268:0:1:0|h[Houndmaster's Rifle]|h|r",
+"|HlootHistory:52|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13340:0:0:0:0:0:0:0:51:263:0:1:0|h[Cape of the Black Baron]|h|r",
+"|HlootHistory:52|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18380:0:0:0:0:0:0:0:42:264:0:1:0|h[Eldritch Reinforced Legplates]|h|r",
+"|HlootHistory:52|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:64:64:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:52|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:6563:0:0:0:0:0:-15:1422583168:22:104:0:1:0|h[Shimmering Bracers of Spirit]|h|r",
+"|HlootHistory:52|h[Loot]|h: You passed on: |cff1eff00|Hitem:12006:0:0:0:0:0:-78:172208512:23:268:0:1:0|h[Meadow Ring of the Monkey]|h|r",
+"|HlootHistory:52|h[Loot]|h: You passed on: |cff1eff00|Hitem:15222:0:0:0:0:0:-17:1128942208:22:73:0:1:0|h[Barbed Club of Strength]|h|r",
+"|HlootHistory:53|h[Loot]|h: |cff0070dd|Hitem:10846:0:0:0:0:0:0:0:52:263:0:1:0|h[Bloodshot Greaves]|h|r",
+"|HlootHistory:53|h[Loot]|h: |cff0070dd|Hitem:18378:0:0:0:0:0:0:0:42:264:0:1:0|h[Silvermoon Leggings]|h|r",
+"|HlootHistory:53|h[Loot]|h: |cff0070dd|Hitem:31222:0:0:0:0:0:0:0:64:64:0:1:0|h[Headdress of Inner Rage]|h|r",
+"|HlootHistory:53|h[Loot]|h: |cff0070dd|Hitem:6321:0:0:0:0:0:0:0:22:73:0:1:0|h[Silverlaine's Family Seal]|h|r",
+"|HlootHistory:53|h[Loot]|h: |cff1eff00|Hitem:6553:0:0:0:0:0:-78:83739008:22:104:0:1:0|h[Bard's Trousers of the Monkey]|h|r",
+"|HlootHistory:53|h[Loot]|h: |cff1eff00|Hitem:8119:0:0:0:0:0:0:0:55:268:0:1:0|h[Heraldic Breastplate]|h|r",
+"|HlootHistory:53|h[Loot]|h: |cff1eff00|Hitem:9781:0:0:0:0:0:-9:290473728:23:268:0:1:0|h[Bandit Pants of the Owl]|h|r",
+"|HlootHistory:53|h[Loot]|h: Celvariel-Auchindoun (Greed - 91) Won: |cff1eff00|Hitem:8119:0:0:0:0:0:0:0:55:268:0:1:0|h[Heraldic Breastplate]|h|r",
+"|HlootHistory:53|h[Loot]|h: Eezma-Kazzak (Greed - 66) Won: |cff0070dd|Hitem:31222:0:0:0:0:0:0:0:64:64:0:1:0|h[Headdress of Inner Rage]|h|r",
+"|HlootHistory:53|h[Loot]|h: Fennec (Greed - 82) Won: |cff0070dd|Hitem:10846:0:0:0:0:0:0:0:52:263:0:1:0|h[Bloodshot Greaves]|h|r",
+"|HlootHistory:53|h[Loot]|h: Stumper-SteamwheedleCartel (Greed - 70) Won: |cff1eff00|Hitem:6553:0:0:0:0:0:-78:83739008:22:104:0:1:0|h[Bard's Trousers of the Monkey]|h|r",
+"|HlootHistory:53|h[Loot]|h: Tûrtlè-Draenor (Greed - 58) Won: |cff1eff00|Hitem:9781:0:0:0:0:0:-9:290473728:23:268:0:1:0|h[Bandit Pants of the Owl]|h|r",
+"|HlootHistory:53|h[Loot]|h: Venomtusk-ChamberofAspects (Need - 25) Won: |cff0070dd|Hitem:18378:0:0:0:0:0:0:0:42:264:0:1:0|h[Silvermoon Leggings]|h|r",
+"|HlootHistory:53|h[Loot]|h: You (Need - 23) Won: |cff0070dd|Hitem:6321:0:0:0:0:0:0:0:22:73:0:1:0|h[Silverlaine's Family Seal]|h|r",
+"|HlootHistory:53|h[Loot]|h: You have rolled Greed - 31 for: |cff1eff00|Hitem:8119:0:0:0:0:0:0:0:55:268:0:1:0|h[Heraldic Breastplate]|h|r",
+"|HlootHistory:53|h[Loot]|h: You have rolled Greed - 6 for: |cff1eff00|Hitem:6553:0:0:0:0:0:-78:83739008:22:104:0:1:0|h[Bard's Trousers of the Monkey]|h|r",
+"|HlootHistory:53|h[Loot]|h: You have rolled Greed - 62 for: |cff0070dd|Hitem:31222:0:0:0:0:0:0:0:64:64:0:1:0|h[Headdress of Inner Rage]|h|r",
+"|HlootHistory:53|h[Loot]|h: You have rolled Greed - 77 for: |cff0070dd|Hitem:10846:0:0:0:0:0:0:0:52:263:0:1:0|h[Bloodshot Greaves]|h|r",
+"|HlootHistory:53|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10846:0:0:0:0:0:0:0:52:263:0:1:0|h[Bloodshot Greaves]|h|r",
+"|HlootHistory:53|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18378:0:0:0:0:0:0:0:42:264:0:1:0|h[Silvermoon Leggings]|h|r",
+"|HlootHistory:53|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:31222:0:0:0:0:0:0:0:64:64:0:1:0|h[Headdress of Inner Rage]|h|r",
+"|HlootHistory:53|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:6553:0:0:0:0:0:-78:83739008:22:104:0:1:0|h[Bard's Trousers of the Monkey]|h|r",
+"|HlootHistory:53|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8119:0:0:0:0:0:0:0:55:268:0:1:0|h[Heraldic Breastplate]|h|r",
+"|HlootHistory:53|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:6321:0:0:0:0:0:0:0:22:73:0:1:0|h[Silverlaine's Family Seal]|h|r",
+"|HlootHistory:53|h[Loot]|h: You passed on: |cff1eff00|Hitem:9781:0:0:0:0:0:-9:290473728:23:268:0:1:0|h[Bandit Pants of the Owl]|h|r",
+"|HlootHistory:54|h[Loot]|h: |cff0070dd|Hitem:10838:0:0:0:0:0:0:0:52:263:0:1:0|h[Might of Hakkar]|h|r",
+"|HlootHistory:54|h[Loot]|h: |cff0070dd|Hitem:11678:0:0:0:0:0:0:0:55:268:0:1:0|h[Carapace of Anub'shiah]|h|r",
+"|HlootHistory:54|h[Loot]|h: |cff0070dd|Hitem:1292:0:0:0:0:0:0:0:22:104:0:1:0|h[Butcher's Cleaver]|h|r",
+"|HlootHistory:54|h[Loot]|h: |cff1eff00|Hitem:14168:0:0:0:0:0:-69:1159221376:22:73:0:1:0|h[Buccaneer's Gloves of the Eagle]|h|r",
+"|HlootHistory:54|h[Loot]|h: |cff1eff00|Hitem:24867:0:0:0:0:0:-13:128122915:64:64:0:1:0|h[Blood Knight Greaves of the Wolf]|h|r",
+"|HlootHistory:54|h[Loot]|h: |cff1eff00|Hitem:8386:0:0:0:0:0:0:0:42:264:0:1:0|h[Pattern: Big Voodoo Robe]|h|r",
+"|HlootHistory:54|h[Loot]|h: |cff1eff00|Hitem:9775:0:0:0:0:0:-325:1904064000:23:268:0:1:0|h[Bandit Cinch of Dodge]|h|r",
+"|HlootHistory:54|h[Loot]|h: Caaxi-TwistingNether (Need - 78) Won: |cff1eff00|Hitem:14168:0:0:0:0:0:-69:1159221376:22:73:0:1:0|h[Buccaneer's Gloves of the Eagle]|h|r",
+"|HlootHistory:54|h[Loot]|h: Élèméntz-Ragnaros (Greed - 95) Won: |cff1eff00|Hitem:24867:0:0:0:0:0:-13:128122915:64:64:0:1:0|h[Blood Knight Greaves of the Wolf]|h|r",
+"|HlootHistory:54|h[Loot]|h: Sanctisius (Greed - 81) Won: |cff0070dd|Hitem:10838:0:0:0:0:0:0:0:52:263:0:1:0|h[Might of Hakkar]|h|r",
+"|HlootHistory:54|h[Loot]|h: Wumpsham-TarrenMill (Need - 63) Won: |cff0070dd|Hitem:11678:0:0:0:0:0:0:0:55:268:0:1:0|h[Carapace of Anub'shiah]|h|r",
+"|HlootHistory:54|h[Loot]|h: You (Greed - 83) Won: |cff1eff00|Hitem:9775:0:0:0:0:0:-325:1904064000:23:268:0:1:0|h[Bandit Cinch of Dodge]|h|r",
+"|HlootHistory:54|h[Loot]|h: You (Greed - 87) Won: |cff1eff00|Hitem:8386:0:0:0:0:0:0:0:42:264:0:1:0|h[Pattern: Big Voodoo Robe]|h|r",
+"|HlootHistory:54|h[Loot]|h: You have rolled Greed - 17 for: |cff0070dd|Hitem:1292:0:0:0:0:0:0:0:22:104:0:1:0|h[Butcher's Cleaver]|h|r",
+"|HlootHistory:54|h[Loot]|h: You have rolled Greed - 43 for: |cff0070dd|Hitem:10838:0:0:0:0:0:0:0:52:263:0:1:0|h[Might of Hakkar]|h|r",
+"|HlootHistory:54|h[Loot]|h: You have rolled Greed - 51 for: |cff1eff00|Hitem:24867:0:0:0:0:0:-13:128122915:64:64:0:1:0|h[Blood Knight Greaves of the Wolf]|h|r",
+"|HlootHistory:54|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10838:0:0:0:0:0:0:0:52:263:0:1:0|h[Might of Hakkar]|h|r",
+"|HlootHistory:54|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11678:0:0:0:0:0:0:0:55:268:0:1:0|h[Carapace of Anub'shiah]|h|r",
+"|HlootHistory:54|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:1292:0:0:0:0:0:0:0:22:104:0:1:0|h[Butcher's Cleaver]|h|r",
+"|HlootHistory:54|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24867:0:0:0:0:0:-13:128122915:64:64:0:1:0|h[Blood Knight Greaves of the Wolf]|h|r",
+"|HlootHistory:54|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8386:0:0:0:0:0:0:0:42:264:0:1:0|h[Pattern: Big Voodoo Robe]|h|r",
+"|HlootHistory:54|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9775:0:0:0:0:0:-325:1904064000:23:268:0:1:0|h[Bandit Cinch of Dodge]|h|r",
+"|HlootHistory:54|h[Loot]|h: You passed on: |cff1eff00|Hitem:14168:0:0:0:0:0:-69:1159221376:22:73:0:1:0|h[Buccaneer's Gloves of the Eagle]|h|r",
+"|HlootHistory:54|h[Loot]|h: Yutag-TarrenMill (Greed - 59) Won: |cff0070dd|Hitem:1292:0:0:0:0:0:0:0:22:104:0:1:0|h[Butcher's Cleaver]|h|r",
+"|HlootHistory:55|h[Loot]|h: |cff0070dd|Hitem:25952:0:0:0:0:0:0:0:64:64:0:1:0|h[Scimitar of the Nexus-Stalkers]|h|r",
+"|HlootHistory:55|h[Loot]|h: |cff0070dd|Hitem:6321:0:0:0:0:0:0:0:23:268:0:1:0|h[Silverlaine's Family Seal]|h|r",
+"|HlootHistory:55|h[Loot]|h: |cff1eff00|Hitem:5207:0:0:0:0:0:0:0:23:104:0:1:0|h[Opaque Wand]|h|r",
+"|HlootHistory:55|h[Loot]|h: |cff1eff00|Hitem:6536:0:0:0:0:0:-9:1787179264:22:73:0:1:0|h[Willow Vest of the Owl]|h|r",
+"|HlootHistory:55|h[Loot]|h: |cff1eff00|Hitem:7909:0:0:0:0:0:0:0:42:264:0:0:0|h[Aquamarine]|h|r",
+"|HlootHistory:55|h[Loot]|h: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:55:268:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:55|h[Loot]|h: |cff1eff00|Hitem:8263:0:0:0:0:0:0:0:52:263:0:1:0|h[Serpentskin Spaulders]|h|r",
+"|HlootHistory:55|h[Loot]|h: Alehara (Need - 63) Won: |cff1eff00|Hitem:6536:0:0:0:0:0:-9:1787179264:22:73:0:1:0|h[Willow Vest of the Owl]|h|r",
+"|HlootHistory:55|h[Loot]|h: Dadcia-Stormscale (Need - 34) Won: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:55:268:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:55|h[Loot]|h: Lerona-Jaedenar (Greed - 75) Won: |cff0070dd|Hitem:6321:0:0:0:0:0:0:0:23:268:0:1:0|h[Silverlaine's Family Seal]|h|r",
+"|HlootHistory:55|h[Loot]|h: You (Greed - 31) Won: |cff0070dd|Hitem:25952:0:0:0:0:0:0:0:64:64:0:1:0|h[Scimitar of the Nexus-Stalkers]|h|r",
+"|HlootHistory:55|h[Loot]|h: You (Greed - 92) Won: |cff1eff00|Hitem:7909:0:0:0:0:0:0:0:42:264:0:0:0|h[Aquamarine]|h|r",
+"|HlootHistory:55|h[Loot]|h: You (Greed - 97) Won: |cff1eff00|Hitem:8263:0:0:0:0:0:0:0:52:263:0:1:0|h[Serpentskin Spaulders]|h|r",
+"|HlootHistory:55|h[Loot]|h: You have rolled Greed - 36 for: |cff0070dd|Hitem:6321:0:0:0:0:0:0:0:23:268:0:1:0|h[Silverlaine's Family Seal]|h|r",
+"|HlootHistory:55|h[Loot]|h: You have rolled Greed - 63 for: |cff1eff00|Hitem:5207:0:0:0:0:0:0:0:23:104:0:1:0|h[Opaque Wand]|h|r",
+"|HlootHistory:55|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:25952:0:0:0:0:0:0:0:64:64:0:1:0|h[Scimitar of the Nexus-Stalkers]|h|r",
+"|HlootHistory:55|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6321:0:0:0:0:0:0:0:23:268:0:1:0|h[Silverlaine's Family Seal]|h|r",
+"|HlootHistory:55|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:5207:0:0:0:0:0:0:0:23:104:0:1:0|h[Opaque Wand]|h|r",
+"|HlootHistory:55|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7909:0:0:0:0:0:0:0:42:264:0:0:0|h[Aquamarine]|h|r",
+"|HlootHistory:55|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:55:268:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:55|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8263:0:0:0:0:0:0:0:52:263:0:1:0|h[Serpentskin Spaulders]|h|r",
+"|HlootHistory:55|h[Loot]|h: You passed on: |cff1eff00|Hitem:6536:0:0:0:0:0:-9:1787179264:22:73:0:1:0|h[Willow Vest of the Owl]|h|r",
+"|HlootHistory:55|h[Loot]|h: Yutag-TarrenMill (Greed - 80) Won: |cff1eff00|Hitem:5207:0:0:0:0:0:0:0:23:104:0:1:0|h[Opaque Wand]|h|r",
+"|HlootHistory:56|h[Loot]|h: |cff0070dd|Hitem:3191:0:0:0:0:0:0:0:22:73:0:1:0|h[Arced War Axe]|h|r",
+"|HlootHistory:56|h[Loot]|h: |cff0070dd|Hitem:3748:0:0:0:0:0:0:0:23:104:0:1:0|h[Feline Mantle]|h|r",
+"|HlootHistory:56|h[Loot]|h: |cff0070dd|Hitem:6320:0:0:0:0:0:0:0:23:268:0:1:0|h[Commander's Crest]|h|r",
+"|HlootHistory:56|h[Loot]|h: |cff0070dd|Hitem:88336:0:0:0:0:0:0:0:42:264:0:1:0|h[Icewrath Belt]|h|r",
+"|HlootHistory:56|h[Loot]|h: |cff1eff00|Hitem:10100:0:0:0:0:0:-69:1473835520:52:263:0:1:0|h[Councillor's Shoulders of the Eagle]|h|r",
+"|HlootHistory:56|h[Loot]|h: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:55:268:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:56|h[Loot]|h: |cff1eff00|Hitem:24978:0:0:0:0:0:-45:1354629155:64:64:0:1:0|h[Reaver Helmet of the Champion]|h|r",
+"|HlootHistory:56|h[Loot]|h: Anestadren (Greed - 93) Won: |cff0070dd|Hitem:3191:0:0:0:0:0:0:0:22:73:0:1:0|h[Arced War Axe]|h|r",
+"|HlootHistory:56|h[Loot]|h: Celvariel-Auchindoun (Greed - 99) Won: |cff0070dd|Hitem:6320:0:0:0:0:0:0:0:23:268:0:1:0|h[Commander's Crest]|h|r",
+"|HlootHistory:56|h[Loot]|h: Dadcia-Stormscale (Need - 54) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:55:268:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:56|h[Loot]|h: Élèméntz-Ragnaros (Greed - 96) Won: |cff1eff00|Hitem:24978:0:0:0:0:0:-45:1354629155:64:64:0:1:0|h[Reaver Helmet of the Champion]|h|r",
+"|HlootHistory:56|h[Loot]|h: Mangoworm (Greed - 96) Won: |cff0070dd|Hitem:3748:0:0:0:0:0:0:0:23:104:0:1:0|h[Feline Mantle]|h|r",
+"|HlootHistory:56|h[Loot]|h: Muchodeeps-Magtheridon (Greed - 71) Won: |cff1eff00|Hitem:10100:0:0:0:0:0:-69:1473835520:52:263:0:1:0|h[Councillor's Shoulders of the Eagle]|h|r",
+"|HlootHistory:56|h[Loot]|h: Venomtusk-ChamberofAspects (Need - 23) Won: |cff0070dd|Hitem:88336:0:0:0:0:0:0:0:42:264:0:1:0|h[Icewrath Belt]|h|r",
+"|HlootHistory:56|h[Loot]|h: You have rolled Greed - 1 for: |cff1eff00|Hitem:10100:0:0:0:0:0:-69:1473835520:52:263:0:1:0|h[Councillor's Shoulders of the Eagle]|h|r",
+"|HlootHistory:56|h[Loot]|h: You have rolled Greed - 1 for: |cff1eff00|Hitem:24978:0:0:0:0:0:-45:1354629155:64:64:0:1:0|h[Reaver Helmet of the Champion]|h|r",
+"|HlootHistory:56|h[Loot]|h: You have rolled Greed - 31 for: |cff0070dd|Hitem:3748:0:0:0:0:0:0:0:23:104:0:1:0|h[Feline Mantle]|h|r",
+"|HlootHistory:56|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:3748:0:0:0:0:0:0:0:23:104:0:1:0|h[Feline Mantle]|h|r",
+"|HlootHistory:56|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88336:0:0:0:0:0:0:0:42:264:0:1:0|h[Icewrath Belt]|h|r",
+"|HlootHistory:56|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10100:0:0:0:0:0:-69:1473835520:52:263:0:1:0|h[Councillor's Shoulders of the Eagle]|h|r",
+"|HlootHistory:56|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24978:0:0:0:0:0:-45:1354629155:64:64:0:1:0|h[Reaver Helmet of the Champion]|h|r",
+"|HlootHistory:56|h[Loot]|h: You passed on: |cff0070dd|Hitem:3191:0:0:0:0:0:0:0:22:73:0:1:0|h[Arced War Axe]|h|r",
+"|HlootHistory:56|h[Loot]|h: You passed on: |cff0070dd|Hitem:6320:0:0:0:0:0:0:0:23:268:0:1:0|h[Commander's Crest]|h|r",
+"|HlootHistory:56|h[Loot]|h: You passed on: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:55:268:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:57|h[Loot]|h: |cff0070dd|Hitem:10808:0:0:0:0:0:0:0:52:263:0:1:0|h[Gloves of the Atal'ai Prophet]|h|r",
+"|HlootHistory:57|h[Loot]|h: |cff0070dd|Hitem:25962:0:0:0:0:0:0:0:64:64:0:1:0|h[Longstrider's Loop]|h|r",
+"|HlootHistory:57|h[Loot]|h: |cff1eff00|Hitem:10064:0:0:0:0:0:-81:1279342080:55:268:0:1:0|h[Duskwoven Pants of the Whale]|h|r",
+"|HlootHistory:57|h[Loot]|h: |cff1eff00|Hitem:12031:0:0:0:0:0:-29:903769600:42:264:0:1:0|h[Lodestone Necklace of Eluding]|h|r",
+"|HlootHistory:57|h[Loot]|h: |cff1eff00|Hitem:1210:0:0:0:0:0:0:0:24:268:0:0:0|h[Shadowgem]|h|r",
+"|HlootHistory:57|h[Loot]|h: |cff1eff00|Hitem:15269:0:0:0:0:0:-69:43718400:23:104:0:1:0|h[Massive Battle Axe of the Eagle]|h|r",
+"|HlootHistory:57|h[Loot]|h: |cff1eff00|Hitem:3211:0:0:0:0:0:0:0:22:73:0:1:0|h[Burnished Bracers]|h|r",
+"|HlootHistory:57|h[Loot]|h: Élèméntz-Ragnaros (Need - 16) Won: |cff0070dd|Hitem:25962:0:0:0:0:0:0:0:64:64:0:1:0|h[Longstrider's Loop]|h|r",
+"|HlootHistory:57|h[Loot]|h: Mangoworm (Greed - 88) Won: |cff1eff00|Hitem:15269:0:0:0:0:0:-69:43718400:23:104:0:1:0|h[Massive Battle Axe of the Eagle]|h|r",
+"|HlootHistory:57|h[Loot]|h: Sanctisius (Greed - 76) Won: |cff0070dd|Hitem:10808:0:0:0:0:0:0:0:52:263:0:1:0|h[Gloves of the Atal'ai Prophet]|h|r",
+"|HlootHistory:57|h[Loot]|h: Tûrtlè-Draenor (Greed - 98) Won: |cff1eff00|Hitem:1210:0:0:0:0:0:0:0:24:268:0:0:0|h[Shadowgem]|h|r",
+"|HlootHistory:57|h[Loot]|h: Venomtusk-ChamberofAspects (Greed - 93) Won: |cff1eff00|Hitem:12031:0:0:0:0:0:-29:903769600:42:264:0:1:0|h[Lodestone Necklace of Eluding]|h|r",
+"|HlootHistory:57|h[Loot]|h: Wumpsham-TarrenMill (Greed - 84) Won: |cff1eff00|Hitem:10064:0:0:0:0:0:-81:1279342080:55:268:0:1:0|h[Duskwoven Pants of the Whale]|h|r",
+"|HlootHistory:57|h[Loot]|h: You (Need - 29) Won: |cff1eff00|Hitem:3211:0:0:0:0:0:0:0:22:73:0:1:0|h[Burnished Bracers]|h|r",
+"|HlootHistory:57|h[Loot]|h: You have rolled Greed - 13 for: |cff0070dd|Hitem:10808:0:0:0:0:0:0:0:52:263:0:1:0|h[Gloves of the Atal'ai Prophet]|h|r",
+"|HlootHistory:57|h[Loot]|h: You have rolled Greed - 4 for: |cff1eff00|Hitem:12031:0:0:0:0:0:-29:903769600:42:264:0:1:0|h[Lodestone Necklace of Eluding]|h|r",
+"|HlootHistory:57|h[Loot]|h: You have rolled Greed - 79 for: |cff1eff00|Hitem:10064:0:0:0:0:0:-81:1279342080:55:268:0:1:0|h[Duskwoven Pants of the Whale]|h|r",
+"|HlootHistory:57|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10808:0:0:0:0:0:0:0:52:263:0:1:0|h[Gloves of the Atal'ai Prophet]|h|r",
+"|HlootHistory:57|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:25962:0:0:0:0:0:0:0:64:64:0:1:0|h[Longstrider's Loop]|h|r",
+"|HlootHistory:57|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10064:0:0:0:0:0:-81:1279342080:55:268:0:1:0|h[Duskwoven Pants of the Whale]|h|r",
+"|HlootHistory:57|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12031:0:0:0:0:0:-29:903769600:42:264:0:1:0|h[Lodestone Necklace of Eluding]|h|r",
+"|HlootHistory:57|h[Loot]|h: You have selected Need for: |cff1eff00|Hitem:3211:0:0:0:0:0:0:0:22:73:0:1:0|h[Burnished Bracers]|h|r",
+"|HlootHistory:57|h[Loot]|h: You passed on: |cff1eff00|Hitem:1210:0:0:0:0:0:0:0:24:268:0:0:0|h[Shadowgem]|h|r",
+"|HlootHistory:57|h[Loot]|h: You passed on: |cff1eff00|Hitem:15269:0:0:0:0:0:-69:43718400:23:104:0:1:0|h[Massive Battle Axe of the Eagle]|h|r",
+"|HlootHistory:58|h[Loot]|h: |cff0070dd|Hitem:10804:0:0:0:0:0:0:0:52:263:0:1:0|h[Fist of the Damned]|h|r",
+"|HlootHistory:58|h[Loot]|h: |cff0070dd|Hitem:11816:0:0:0:0:0:0:0:55:268:0:1:0|h[Angerforge's Battle Axe]|h|r",
+"|HlootHistory:58|h[Loot]|h: |cff0070dd|Hitem:6907:0:0:0:0:0:0:0:24:104:0:1:0|h[Tortoise Armor]|h|r",
+"|HlootHistory:58|h[Loot]|h: |cff0070dd|Hitem:88348:0:0:0:0:0:0:0:42:264:0:1:0|h[Wraithplate Treads]|h|r",
+"|HlootHistory:58|h[Loot]|h: |cff1eff00|Hitem:22921:0:0:0:0:0:0:0:64:64:0:1:0|h[Recipe: Major Frost Protection Potion]|h|r",
+"|HlootHistory:58|h[Loot]|h: |cff1eff00|Hitem:6538:0:0:0:0:0:-69:237543552:22:73:0:1:0|h[Willow Robe of the Eagle]|h|r",
+"|HlootHistory:58|h[Loot]|h: |cff1eff00|Hitem:6571:0:0:0:0:0:-14:1649094272:24:268:0:1:0|h[Scouting Buckler of the Tiger]|h|r",
+"|HlootHistory:58|h[Loot]|h: Alehara (Greed - 32) Won: |cff1eff00|Hitem:6538:0:0:0:0:0:-69:237543552:22:73:0:1:0|h[Willow Robe of the Eagle]|h|r",
+"|HlootHistory:58|h[Loot]|h: Celvariel-Auchindoun (Greed - 98) Won: |cff1eff00|Hitem:6571:0:0:0:0:0:-14:1649094272:24:268:0:1:0|h[Scouting Buckler of the Tiger]|h|r",
+"|HlootHistory:58|h[Loot]|h: Thecrusader-Karazhan (Need - 81) Won: |cff0070dd|Hitem:88348:0:0:0:0:0:0:0:42:264:0:1:0|h[Wraithplate Treads]|h|r",
+"|HlootHistory:58|h[Loot]|h: Warriorstump-Kazzak (Greed - 87) Won: |cff0070dd|Hitem:6907:0:0:0:0:0:0:0:24:104:0:1:0|h[Tortoise Armor]|h|r",
+"|HlootHistory:58|h[Loot]|h: You (Greed - 100) Won: |cff0070dd|Hitem:10804:0:0:0:0:0:0:0:52:263:0:1:0|h[Fist of the Damned]|h|r",
+"|HlootHistory:58|h[Loot]|h: You (Greed - 23) Won: |cff1eff00|Hitem:22921:0:0:0:0:0:0:0:64:64:0:1:0|h[Recipe: Major Frost Protection Potion]|h|r",
+"|HlootHistory:58|h[Loot]|h: You (Greed - 87) Won: |cff0070dd|Hitem:11816:0:0:0:0:0:0:0:55:268:0:1:0|h[Angerforge's Battle Axe]|h|r",
+"|HlootHistory:58|h[Loot]|h: You have rolled Greed - 24 for: |cff1eff00|Hitem:6538:0:0:0:0:0:-69:237543552:22:73:0:1:0|h[Willow Robe of the Eagle]|h|r",
+"|HlootHistory:58|h[Loot]|h: You have rolled Greed - 34 for: |cff0070dd|Hitem:6907:0:0:0:0:0:0:0:24:104:0:1:0|h[Tortoise Armor]|h|r",
+"|HlootHistory:58|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10804:0:0:0:0:0:0:0:52:263:0:1:0|h[Fist of the Damned]|h|r",
+"|HlootHistory:58|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11816:0:0:0:0:0:0:0:55:268:0:1:0|h[Angerforge's Battle Axe]|h|r",
+"|HlootHistory:58|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6907:0:0:0:0:0:0:0:24:104:0:1:0|h[Tortoise Armor]|h|r",
+"|HlootHistory:58|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88348:0:0:0:0:0:0:0:42:264:0:1:0|h[Wraithplate Treads]|h|r",
+"|HlootHistory:58|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:22921:0:0:0:0:0:0:0:64:64:0:1:0|h[Recipe: Major Frost Protection Potion]|h|r",
+"|HlootHistory:58|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:6538:0:0:0:0:0:-69:237543552:22:73:0:1:0|h[Willow Robe of the Eagle]|h|r",
+"|HlootHistory:58|h[Loot]|h: You passed on: |cff1eff00|Hitem:6571:0:0:0:0:0:-14:1649094272:24:268:0:1:0|h[Scouting Buckler of the Tiger]|h|r",
+"|HlootHistory:59|h[Loot]|h: |cff0070dd|Hitem:11121:0:0:0:0:0:0:0:24:104:0:1:0|h[Darkwater Talwar]|h|r",
+"|HlootHistory:59|h[Loot]|h: |cff0070dd|Hitem:11669:0:0:0:0:0:0:0:55:268:0:1:0|h[Naglering]|h|r",
+"|HlootHistory:59|h[Loot]|h: |cff0070dd|Hitem:12465:0:0:0:0:0:0:0:52:263:0:1:0|h[Nightfall Drape]|h|r",
+"|HlootHistory:59|h[Loot]|h: |cff0070dd|Hitem:6642:0:0:0:0:0:0:0:24:268:0:1:0|h[Phantom Armor]|h|r",
+"|HlootHistory:59|h[Loot]|h: |cff0070dd|Hitem:88343:0:0:0:0:0:0:0:42:264:0:1:0|h[Bone Golem Boots]|h|r",
+"|HlootHistory:59|h[Loot]|h: |cff1eff00|Hitem:15222:0:0:0:0:0:-20:1513298176:23:73:0:1:0|h[Barbed Club of Power]|h|r",
+"|HlootHistory:59|h[Loot]|h: |cff1eff00|Hitem:25092:0:0:0:0:0:-39:716767252:64:64:0:1:0|h[Consortium Crystal of the Invoker]|h|r",
+"|HlootHistory:59|h[Loot]|h: Alehara (Greed - 84) Won: |cff1eff00|Hitem:15222:0:0:0:0:0:-20:1513298176:23:73:0:1:0|h[Barbed Club of Power]|h|r",
+"|HlootHistory:59|h[Loot]|h: Celvariel-Auchindoun (Need - 62) Won: |cff0070dd|Hitem:6642:0:0:0:0:0:0:0:24:268:0:1:0|h[Phantom Armor]|h|r",
+"|HlootHistory:59|h[Loot]|h: Sweetable-Bloodhoof (Greed - 48) Won: |cff0070dd|Hitem:88343:0:0:0:0:0:0:0:42:264:0:1:0|h[Bone Golem Boots]|h|r",
+"|HlootHistory:59|h[Loot]|h: Warriorstump-Kazzak (Need - 90) Won: |cff0070dd|Hitem:11121:0:0:0:0:0:0:0:24:104:0:1:0|h[Darkwater Talwar]|h|r",
+"|HlootHistory:59|h[Loot]|h: Wumpsham-TarrenMill (Greed - 64) Won: |cff0070dd|Hitem:11669:0:0:0:0:0:0:0:55:268:0:1:0|h[Naglering]|h|r",
+"|HlootHistory:59|h[Loot]|h: You (Greed - 94) Won: |cff1eff00|Hitem:25092:0:0:0:0:0:-39:716767252:64:64:0:1:0|h[Consortium Crystal of the Invoker]|h|r",
+"|HlootHistory:59|h[Loot]|h: You (Greed - 99) Won: |cff0070dd|Hitem:12465:0:0:0:0:0:0:0:52:263:0:1:0|h[Nightfall Drape]|h|r",
+"|HlootHistory:59|h[Loot]|h: You have rolled Greed - 20 for: |cff0070dd|Hitem:88343:0:0:0:0:0:0:0:42:264:0:1:0|h[Bone Golem Boots]|h|r",
+"|HlootHistory:59|h[Loot]|h: You have rolled Greed - 28 for: |cff0070dd|Hitem:11669:0:0:0:0:0:0:0:55:268:0:1:0|h[Naglering]|h|r",
+"|HlootHistory:59|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11121:0:0:0:0:0:0:0:24:104:0:1:0|h[Darkwater Talwar]|h|r",
+"|HlootHistory:59|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11669:0:0:0:0:0:0:0:55:268:0:1:0|h[Naglering]|h|r",
+"|HlootHistory:59|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12465:0:0:0:0:0:0:0:52:263:0:1:0|h[Nightfall Drape]|h|r",
+"|HlootHistory:59|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6642:0:0:0:0:0:0:0:24:268:0:1:0|h[Phantom Armor]|h|r",
+"|HlootHistory:59|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88343:0:0:0:0:0:0:0:42:264:0:1:0|h[Bone Golem Boots]|h|r",
+"|HlootHistory:59|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25092:0:0:0:0:0:-39:716767252:64:64:0:1:0|h[Consortium Crystal of the Invoker]|h|r",
+"|HlootHistory:59|h[Loot]|h: You passed on: |cff1eff00|Hitem:15222:0:0:0:0:0:-20:1513298176:23:73:0:1:0|h[Barbed Club of Power]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff0070dd|Hitem:10763:0:0:0:0:0:0:0:45:270:0:1:0|h[Icemetal Barbute]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff0070dd|Hitem:18347:0:0:0:0:0:0:0:46:66:0:1:0|h[Well Balanced Axe]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff0070dd|Hitem:24155:0:0:0:0:0:0:0:60:64:0:1:0|h[Ursol's Claw]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff0070dd|Hitem:5444:0:0:0:0:0:0:0:15:268:0:1:0|h[Miner's Cape]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff0070dd|Hitem:82885:0:0:0:0:0:0:0:15:104:0:1:0|h[Flameseared Carapace]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff0070dd|Hitem:9379:0:0:0:0:0:0:0:49:268:0:1:0|h[Sang'thraze the Deflector]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff1eff00|Hitem:106596:0:0:0:0:0:0:0:99:253:0:20:1:163|h[Sharptusk Vambraces of the Aurora]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff1eff00|Hitem:11975:0:0:0:0:0:-328:687197568:52:268:0:1:0|h[Topaz Ring of Nature Resistance]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff1eff00|Hitem:12022:0:0:0:0:0:-9:289838208:46:268:0:1:0|h[Iridium Chain of the Owl]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:48:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff1eff00|Hitem:14593:0:0:0:0:0:0:0:35:264:0:1:0|h[Hawkeye's Cloak]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff1eff00|Hitem:6608:0:0:0:0:0:0:0:29:104:0:1:0|h[Bright Armor]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff1eff00|Hitem:7080:0:0:0:0:0:0:0:46:66:0:0:0|h[Essence of Water]|h|r",
+"|HlootHistory:6|h[Loot]|h: |cff1eff00|Hitem:9749:0:0:0:0:0:-19:897628032:15:73:0:1:0|h[Simple Blouse of Intellect]|h|r",
+"|HlootHistory:6|h[Loot]|h: Aurôra-Dunemaul (Need - 6) Won: |cff1eff00|Hitem:6608:0:0:0:0:0:0:0:29:104:0:1:0|h[Bright Armor]|h|r",
+"|HlootHistory:6|h[Loot]|h: Bombardacka-Drak'thul (Need - 70) Won: |cff0070dd|Hitem:10763:0:0:0:0:0:0:0:45:270:0:1:0|h[Icemetal Barbute]|h|r",
+"|HlootHistory:6|h[Loot]|h: Dopelius-Stormreaver (Greed - 56) Won: |cff1eff00|Hitem:7080:0:0:0:0:0:0:0:46:66:0:0:0|h[Essence of Water]|h|r",
+"|HlootHistory:6|h[Loot]|h: Fennec (Greed - 68) Won: |cff0070dd|Hitem:18347:0:0:0:0:0:0:0:46:66:0:1:0|h[Well Balanced Axe]|h|r",
+"|HlootHistory:6|h[Loot]|h: Fennec (Greed - 97) Won: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:48:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:6|h[Loot]|h: Jazziemyn-ChamberofAspects (Greed - 79) Won: |cff1eff00|Hitem:14593:0:0:0:0:0:0:0:35:264:0:1:0|h[Hawkeye's Cloak]|h|r",
+"|HlootHistory:6|h[Loot]|h: Lerona (Greed - 57) Won: |cff0070dd|Hitem:9379:0:0:0:0:0:0:0:49:268:0:1:0|h[Sang'thraze the Deflector]|h|r",
+"|HlootHistory:6|h[Loot]|h: Lerona (Greed - 93) Won: |cff1eff00|Hitem:11975:0:0:0:0:0:-328:687197568:52:268:0:1:0|h[Topaz Ring of Nature Resistance]|h|r",
+"|HlootHistory:6|h[Loot]|h: Lerona (Greed - 93) Won: |cff1eff00|Hitem:12022:0:0:0:0:0:-9:289838208:46:268:0:1:0|h[Iridium Chain of the Owl]|h|r",
+"|HlootHistory:6|h[Loot]|h: Lojjsaan-DefiasBrotherhood (Need - 46) Won: |cff1eff00|Hitem:106596:0:0:0:0:0:0:0:99:253:0:20:1:163|h[Sharptusk Vambraces of the Aurora]|h|r",
+"|HlootHistory:6|h[Loot]|h: Onaix-Magtheridon (Greed - 87) Won: |cff0070dd|Hitem:5444:0:0:0:0:0:0:0:15:268:0:1:0|h[Miner's Cape]|h|r",
+"|HlootHistory:6|h[Loot]|h: Wydad-Draenor (Need - 29) Won: |cff0070dd|Hitem:82885:0:0:0:0:0:0:0:15:104:0:1:0|h[Flameseared Carapace]|h|r",
+"|HlootHistory:6|h[Loot]|h: You (Greed - 70) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:6|h[Loot]|h: You (Greed - 89) Won: |cff0070dd|Hitem:24155:0:0:0:0:0:0:0:60:64:0:1:0|h[Ursol's Claw]|h|r",
+"|HlootHistory:6|h[Loot]|h: You (Greed - 93) Won: |cff1eff00|Hitem:9749:0:0:0:0:0:-19:897628032:15:73:0:1:0|h[Simple Blouse of Intellect]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have rolled Greed - 16 for: |cff1eff00|Hitem:14593:0:0:0:0:0:0:0:35:264:0:1:0|h[Hawkeye's Cloak]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have rolled Greed - 35 for: |cff1eff00|Hitem:7080:0:0:0:0:0:0:0:46:66:0:0:0|h[Essence of Water]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have rolled Greed - 38 for: |cff0070dd|Hitem:18347:0:0:0:0:0:0:0:46:66:0:1:0|h[Well Balanced Axe]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have rolled Greed - 43 for: |cff0070dd|Hitem:5444:0:0:0:0:0:0:0:15:268:0:1:0|h[Miner's Cape]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have rolled Greed - 66 for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:48:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10763:0:0:0:0:0:0:0:45:270:0:1:0|h[Icemetal Barbute]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18347:0:0:0:0:0:0:0:46:66:0:1:0|h[Well Balanced Axe]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24155:0:0:0:0:0:0:0:60:64:0:1:0|h[Ursol's Claw]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:5444:0:0:0:0:0:0:0:15:268:0:1:0|h[Miner's Cape]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:106596:0:0:0:0:0:0:0:99:253:0:20:1:163|h[Sharptusk Vambraces of the Aurora]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12808:0:0:0:0:0:0:0:48:263:0:0:0|h[Essence of Undeath]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14593:0:0:0:0:0:0:0:35:264:0:1:0|h[Hawkeye's Cloak]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7080:0:0:0:0:0:0:0:46:66:0:0:0|h[Essence of Water]|h|r",
+"|HlootHistory:6|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9749:0:0:0:0:0:-19:897628032:15:73:0:1:0|h[Simple Blouse of Intellect]|h|r",
+"|HlootHistory:6|h[Loot]|h: You passed on: |cff0070dd|Hitem:82885:0:0:0:0:0:0:0:15:104:0:1:0|h[Flameseared Carapace]|h|r",
+"|HlootHistory:6|h[Loot]|h: You passed on: |cff0070dd|Hitem:9379:0:0:0:0:0:0:0:49:268:0:1:0|h[Sang'thraze the Deflector]|h|r",
+"|HlootHistory:6|h[Loot]|h: You passed on: |cff1eff00|Hitem:11975:0:0:0:0:0:-328:687197568:52:268:0:1:0|h[Topaz Ring of Nature Resistance]|h|r",
+"|HlootHistory:6|h[Loot]|h: You passed on: |cff1eff00|Hitem:12022:0:0:0:0:0:-9:289838208:46:268:0:1:0|h[Iridium Chain of the Owl]|h|r",
+"|HlootHistory:6|h[Loot]|h: You passed on: |cff1eff00|Hitem:6608:0:0:0:0:0:0:0:29:104:0:1:0|h[Bright Armor]|h|r",
+"|HlootHistory:60|h[Loot]|h: |cff0070dd|Hitem:12465:0:0:0:0:0:0:0:52:263:0:1:0|h[Nightfall Drape]|h|r",
+"|HlootHistory:60|h[Loot]|h: |cff0070dd|Hitem:1292:0:0:0:0:0:0:0:23:73:0:1:0|h[Butcher's Cleaver]|h|r",
+"|HlootHistory:60|h[Loot]|h: |cff0070dd|Hitem:18043:0:0:0:0:0:0:0:55:268:0:1:0|h[Coal Miner Boots]|h|r",
+"|HlootHistory:60|h[Loot]|h: |cff0070dd|Hitem:27410:0:0:0:0:0:0:0:64:64:0:1:0|h[Collar of Command]|h|r",
+"|HlootHistory:60|h[Loot]|h: |cff0070dd|Hitem:6318:0:0:0:0:0:0:0:25:268:0:1:0|h[Odo's Ley Staff]|h|r",
+"|HlootHistory:60|h[Loot]|h: |cff0070dd|Hitem:88351:0:0:0:0:0:0:0:42:264:0:1:0|h[Soulburner Crown]|h|r",
+"|HlootHistory:60|h[Loot]|h: |cff1eff00|Hitem:2034:0:0:0:0:0:0:0:24:104:0:1:0|h[Scholarly Robes]|h|r",
+"|HlootHistory:60|h[Loot]|h: Alehara (Greed - 83) Won: |cff0070dd|Hitem:1292:0:0:0:0:0:0:0:23:73:0:1:0|h[Butcher's Cleaver]|h|r",
+"|HlootHistory:60|h[Loot]|h: Ezequiel-Draenor (Need - 35) Won: |cff0070dd|Hitem:27410:0:0:0:0:0:0:0:64:64:0:1:0|h[Collar of Command]|h|r",
+"|HlootHistory:60|h[Loot]|h: Lerona-Jaedenar (Greed - 98) Won: |cff0070dd|Hitem:6318:0:0:0:0:0:0:0:25:268:0:1:0|h[Odo's Ley Staff]|h|r",
+"|HlootHistory:60|h[Loot]|h: Phaendar-Darkspear (Greed - 79) Won: |cff0070dd|Hitem:12465:0:0:0:0:0:0:0:52:263:0:1:0|h[Nightfall Drape]|h|r",
+"|HlootHistory:60|h[Loot]|h: You (Greed - 59) Won: |cff0070dd|Hitem:88351:0:0:0:0:0:0:0:42:264:0:1:0|h[Soulburner Crown]|h|r",
+"|HlootHistory:60|h[Loot]|h: You (Greed - 99) Won: |cff1eff00|Hitem:2034:0:0:0:0:0:0:0:24:104:0:1:0|h[Scholarly Robes]|h|r",
+"|HlootHistory:60|h[Loot]|h: You (Need - 12) Won: |cff0070dd|Hitem:18043:0:0:0:0:0:0:0:55:268:0:1:0|h[Coal Miner Boots]|h|r",
+"|HlootHistory:60|h[Loot]|h: You have rolled Greed - 19 for: |cff0070dd|Hitem:12465:0:0:0:0:0:0:0:52:263:0:1:0|h[Nightfall Drape]|h|r",
+"|HlootHistory:60|h[Loot]|h: You have rolled Greed - 66 for: |cff0070dd|Hitem:6318:0:0:0:0:0:0:0:25:268:0:1:0|h[Odo's Ley Staff]|h|r",
+"|HlootHistory:60|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12465:0:0:0:0:0:0:0:52:263:0:1:0|h[Nightfall Drape]|h|r",
+"|HlootHistory:60|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:27410:0:0:0:0:0:0:0:64:64:0:1:0|h[Collar of Command]|h|r",
+"|HlootHistory:60|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6318:0:0:0:0:0:0:0:25:268:0:1:0|h[Odo's Ley Staff]|h|r",
+"|HlootHistory:60|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88351:0:0:0:0:0:0:0:42:264:0:1:0|h[Soulburner Crown]|h|r",
+"|HlootHistory:60|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:2034:0:0:0:0:0:0:0:24:104:0:1:0|h[Scholarly Robes]|h|r",
+"|HlootHistory:60|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:18043:0:0:0:0:0:0:0:55:268:0:1:0|h[Coal Miner Boots]|h|r",
+"|HlootHistory:60|h[Loot]|h: You passed on: |cff0070dd|Hitem:1292:0:0:0:0:0:0:0:23:73:0:1:0|h[Butcher's Cleaver]|h|r",
+"|HlootHistory:61|h[Loot]|h: |cff0070dd|Hitem:3748:0:0:0:0:0:0:0:23:73:0:1:0|h[Feline Mantle]|h|r",
+"|HlootHistory:61|h[Loot]|h: |cff0070dd|Hitem:63344:0:0:0:0:0:0:0:25:268:0:1:0|h[Standard Issue Prisoner Shoes]|h|r",
+"|HlootHistory:61|h[Loot]|h: |cff0070dd|Hitem:88356:0:0:0:0:0:0:0:43:264:0:1:0|h[Tombstone Gauntlets]|h|r",
+"|HlootHistory:61|h[Loot]|h: |cff1eff00|Hitem:1206:0:0:0:0:0:0:0:24:104:0:0:0|h[Moss Agate]|h|r",
+"|HlootHistory:61|h[Loot]|h: |cff1eff00|Hitem:31952:0:0:0:0:0:0:0:64:64:0:1:0|h[Khorium Lockbox]|h|r",
+"|HlootHistory:61|h[Loot]|h: |cff1eff00|Hitem:7909:0:0:0:0:0:0:0:52:263:0:0:0|h[Aquamarine]|h|r",
+"|HlootHistory:61|h[Loot]|h: |cff1eff00|Hitem:9939:0:0:0:0:0:-78:1161096192:55:268:0:1:0|h[Abjurer's Gloves of the Monkey]|h|r",
+"|HlootHistory:61|h[Loot]|h: Anestadren (Greed - 52) Won: |cff0070dd|Hitem:3748:0:0:0:0:0:0:0:23:73:0:1:0|h[Feline Mantle]|h|r",
+"|HlootHistory:61|h[Loot]|h: Arathoas-Draenor (Greed - 73) Won: |cff1eff00|Hitem:31952:0:0:0:0:0:0:0:64:64:0:1:0|h[Khorium Lockbox]|h|r",
+"|HlootHistory:61|h[Loot]|h: Dadcia-Stormscale (Greed - 94) Won: |cff1eff00|Hitem:9939:0:0:0:0:0:-78:1161096192:55:268:0:1:0|h[Abjurer's Gloves of the Monkey]|h|r",
+"|HlootHistory:61|h[Loot]|h: Fennec (Greed - 99) Won: |cff1eff00|Hitem:7909:0:0:0:0:0:0:0:52:263:0:0:0|h[Aquamarine]|h|r",
+"|HlootHistory:61|h[Loot]|h: Mangoworm (Greed - 5) Won: |cff1eff00|Hitem:1206:0:0:0:0:0:0:0:24:104:0:0:0|h[Moss Agate]|h|r",
+"|HlootHistory:61|h[Loot]|h: Venomtusk-ChamberofAspects (Greed - 54) Won: |cff0070dd|Hitem:88356:0:0:0:0:0:0:0:43:264:0:1:0|h[Tombstone Gauntlets]|h|r",
+"|HlootHistory:61|h[Loot]|h: You (Need - 83) Won: |cff0070dd|Hitem:63344:0:0:0:0:0:0:0:25:268:0:1:0|h[Standard Issue Prisoner Shoes]|h|r",
+"|HlootHistory:61|h[Loot]|h: You automatically passed on: |cff1eff00|Hitem:9939:0:0:0:0:0:-78:1161096192:55:268:0:1:0|h[Abjurer's Gloves of the Monkey]|h|r because you cannot loot that item.",
+"|HlootHistory:61|h[Loot]|h: You have rolled Greed - 2 for: |cff1eff00|Hitem:31952:0:0:0:0:0:0:0:64:64:0:1:0|h[Khorium Lockbox]|h|r",
+"|HlootHistory:61|h[Loot]|h: You have rolled Greed - 25 for: |cff0070dd|Hitem:3748:0:0:0:0:0:0:0:23:73:0:1:0|h[Feline Mantle]|h|r",
+"|HlootHistory:61|h[Loot]|h: You have rolled Greed - 35 for: |cff1eff00|Hitem:7909:0:0:0:0:0:0:0:52:263:0:0:0|h[Aquamarine]|h|r",
+"|HlootHistory:61|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:3748:0:0:0:0:0:0:0:23:73:0:1:0|h[Feline Mantle]|h|r",
+"|HlootHistory:61|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:31952:0:0:0:0:0:0:0:64:64:0:1:0|h[Khorium Lockbox]|h|r",
+"|HlootHistory:61|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7909:0:0:0:0:0:0:0:52:263:0:0:0|h[Aquamarine]|h|r",
+"|HlootHistory:61|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:63344:0:0:0:0:0:0:0:25:268:0:1:0|h[Standard Issue Prisoner Shoes]|h|r",
+"|HlootHistory:61|h[Loot]|h: You passed on: |cff0070dd|Hitem:88356:0:0:0:0:0:0:0:43:264:0:1:0|h[Tombstone Gauntlets]|h|r",
+"|HlootHistory:61|h[Loot]|h: You passed on: |cff1eff00|Hitem:1206:0:0:0:0:0:0:0:24:104:0:0:0|h[Moss Agate]|h|r",
+"|HlootHistory:62|h[Loot]|h: |cff0070dd|Hitem:10833:0:0:0:0:0:0:0:52:263:0:1:0|h[Horns of Eranikus]|h|r",
+"|HlootHistory:62|h[Loot]|h: |cff0070dd|Hitem:88359:0:0:0:0:0:0:0:43:264:0:1:0|h[Incineration Belt]|h|r",
+"|HlootHistory:62|h[Loot]|h: |cff1eff00|Hitem:15118:0:0:0:0:0:-20:233891328:24:104:0:1:0|h[Rigid Tunic of Power]|h|r",
+"|HlootHistory:62|h[Loot]|h: |cff1eff00|Hitem:24656:0:0:0:0:0:-39:1023541275:64:64:0:1:0|h[Consortium Gloves of the Invoker]|h|r",
+"|HlootHistory:62|h[Loot]|h: |cff1eff00|Hitem:3199:0:0:0:0:0:-69:329662592:23:73:0:1:0|h[Battle Slayer of the Eagle]|h|r",
+"|HlootHistory:62|h[Loot]|h: |cff1eff00|Hitem:4661:0:0:0:0:0:0:0:25:268:0:1:0|h[Bright Mantle]|h|r",
+"|HlootHistory:62|h[Loot]|h: |cff1eff00|Hitem:8279:0:0:0:0:0:0:0:55:268:0:1:0|h[Valorous Helm]|h|r",
+"|HlootHistory:62|h[Loot]|h: Anestadren (Greed - 93) Won: |cff1eff00|Hitem:3199:0:0:0:0:0:-69:329662592:23:73:0:1:0|h[Battle Slayer of the Eagle]|h|r",
+"|HlootHistory:62|h[Loot]|h: Dadcia-Stormscale (Greed - 100) Won: |cff1eff00|Hitem:8279:0:0:0:0:0:0:0:55:268:0:1:0|h[Valorous Helm]|h|r",
+"|HlootHistory:62|h[Loot]|h: Ezequiel-Draenor (Greed - 94) Won: |cff1eff00|Hitem:24656:0:0:0:0:0:-39:1023541275:64:64:0:1:0|h[Consortium Gloves of the Invoker]|h|r",
+"|HlootHistory:62|h[Loot]|h: Fennec (Greed - 96) Won: |cff0070dd|Hitem:10833:0:0:0:0:0:0:0:52:263:0:1:0|h[Horns of Eranikus]|h|r",
+"|HlootHistory:62|h[Loot]|h: Mangoworm (Need - 28) Won: |cff1eff00|Hitem:15118:0:0:0:0:0:-20:233891328:24:104:0:1:0|h[Rigid Tunic of Power]|h|r",
+"|HlootHistory:62|h[Loot]|h: Venomtusk-ChamberofAspects (Need - 62) Won: |cff0070dd|Hitem:88359:0:0:0:0:0:0:0:43:264:0:1:0|h[Incineration Belt]|h|r",
+"|HlootHistory:62|h[Loot]|h: You (Greed - 94) Won: |cff1eff00|Hitem:4661:0:0:0:0:0:0:0:25:268:0:1:0|h[Bright Mantle]|h|r",
+"|HlootHistory:62|h[Loot]|h: You have rolled Greed - 37 for: |cff1eff00|Hitem:8279:0:0:0:0:0:0:0:55:268:0:1:0|h[Valorous Helm]|h|r",
+"|HlootHistory:62|h[Loot]|h: You have rolled Greed - 42 for: |cff0070dd|Hitem:10833:0:0:0:0:0:0:0:52:263:0:1:0|h[Horns of Eranikus]|h|r",
+"|HlootHistory:62|h[Loot]|h: You have rolled Greed - 48 for: |cff1eff00|Hitem:24656:0:0:0:0:0:-39:1023541275:64:64:0:1:0|h[Consortium Gloves of the Invoker]|h|r",
+"|HlootHistory:62|h[Loot]|h: You have rolled Greed - 67 for: |cff1eff00|Hitem:3199:0:0:0:0:0:-69:329662592:23:73:0:1:0|h[Battle Slayer of the Eagle]|h|r",
+"|HlootHistory:62|h[Loot]|h: You have rolled Need - 41 for: |cff0070dd|Hitem:88359:0:0:0:0:0:0:0:43:264:0:1:0|h[Incineration Belt]|h|r",
+"|HlootHistory:62|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10833:0:0:0:0:0:0:0:52:263:0:1:0|h[Horns of Eranikus]|h|r",
+"|HlootHistory:62|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24656:0:0:0:0:0:-39:1023541275:64:64:0:1:0|h[Consortium Gloves of the Invoker]|h|r",
+"|HlootHistory:62|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:3199:0:0:0:0:0:-69:329662592:23:73:0:1:0|h[Battle Slayer of the Eagle]|h|r",
+"|HlootHistory:62|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4661:0:0:0:0:0:0:0:25:268:0:1:0|h[Bright Mantle]|h|r",
+"|HlootHistory:62|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8279:0:0:0:0:0:0:0:55:268:0:1:0|h[Valorous Helm]|h|r",
+"|HlootHistory:62|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:88359:0:0:0:0:0:0:0:43:264:0:1:0|h[Incineration Belt]|h|r",
+"|HlootHistory:62|h[Loot]|h: You passed on: |cff1eff00|Hitem:15118:0:0:0:0:0:-20:233891328:24:104:0:1:0|h[Rigid Tunic of Power]|h|r",
+"|HlootHistory:63|h[Loot]|h: |cff0070dd|Hitem:10835:0:0:0:0:0:0:0:52:263:0:1:0|h[Crest of Supremacy]|h|r",
+"|HlootHistory:63|h[Loot]|h: |cff0070dd|Hitem:18397:0:0:0:0:0:0:0:43:264:0:1:0|h[Elder Magus Pendant]|h|r",
+"|HlootHistory:63|h[Loot]|h: |cff0070dd|Hitem:5967:0:0:0:0:0:0:0:25:268:0:1:0|h[Girdle of Nobility]|h|r",
+"|HlootHistory:63|h[Loot]|h: |cff0070dd|Hitem:6907:0:0:0:0:0:0:0:24:73:0:1:0|h[Tortoise Armor]|h|r",
+"|HlootHistory:63|h[Loot]|h: |cff1eff00|Hitem:12034:0:0:0:0:0:-68:2087858560:55:268:0:1:0|h[Marble Necklace of the Bear]|h|r",
+"|HlootHistory:63|h[Loot]|h: |cff1eff00|Hitem:24982:0:0:0:0:0:-9:1812594715:64:64:0:1:0|h[Boulderfist Belt of the Owl]|h|r",
+"|HlootHistory:63|h[Loot]|h: |cff1eff00|Hitem:5972:0:0:0:0:0:0:0:24:104:0:1:0|h[Pattern: Fine Leather Pants]|h|r",
+"|HlootHistory:63|h[Loot]|h: Alehara (Greed - 99) Won: |cff0070dd|Hitem:6907:0:0:0:0:0:0:0:24:73:0:1:0|h[Tortoise Armor]|h|r",
+"|HlootHistory:63|h[Loot]|h: Lerona-Jaedenar (Greed - 87) Won: |cff0070dd|Hitem:5967:0:0:0:0:0:0:0:25:268:0:1:0|h[Girdle of Nobility]|h|r",
+"|HlootHistory:63|h[Loot]|h: Mangoworm (Greed - 1) Won: |cff1eff00|Hitem:5972:0:0:0:0:0:0:0:24:104:0:1:0|h[Pattern: Fine Leather Pants]|h|r",
+"|HlootHistory:63|h[Loot]|h: Muchodeeps-Magtheridon (Greed - 67) Won: |cff0070dd|Hitem:10835:0:0:0:0:0:0:0:52:263:0:1:0|h[Crest of Supremacy]|h|r",
+"|HlootHistory:63|h[Loot]|h: Thecrusader-Karazhan (Greed - 92) Won: |cff0070dd|Hitem:18397:0:0:0:0:0:0:0:43:264:0:1:0|h[Elder Magus Pendant]|h|r",
+"|HlootHistory:63|h[Loot]|h: You (Greed - 47) Won: |cff1eff00|Hitem:24982:0:0:0:0:0:-9:1812594715:64:64:0:1:0|h[Boulderfist Belt of the Owl]|h|r",
+"|HlootHistory:63|h[Loot]|h: You (Greed - 61) Won: |cff1eff00|Hitem:12034:0:0:0:0:0:-68:2087858560:55:268:0:1:0|h[Marble Necklace of the Bear]|h|r",
+"|HlootHistory:63|h[Loot]|h: You have rolled Greed - 12 for: |cff0070dd|Hitem:18397:0:0:0:0:0:0:0:43:264:0:1:0|h[Elder Magus Pendant]|h|r",
+"|HlootHistory:63|h[Loot]|h: You have rolled Greed - 16 for: |cff0070dd|Hitem:5967:0:0:0:0:0:0:0:25:268:0:1:0|h[Girdle of Nobility]|h|r",
+"|HlootHistory:63|h[Loot]|h: You have rolled Greed - 33 for: |cff0070dd|Hitem:10835:0:0:0:0:0:0:0:52:263:0:1:0|h[Crest of Supremacy]|h|r",
+"|HlootHistory:63|h[Loot]|h: You have rolled Greed - 70 for: |cff0070dd|Hitem:6907:0:0:0:0:0:0:0:24:73:0:1:0|h[Tortoise Armor]|h|r",
+"|HlootHistory:63|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10835:0:0:0:0:0:0:0:52:263:0:1:0|h[Crest of Supremacy]|h|r",
+"|HlootHistory:63|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18397:0:0:0:0:0:0:0:43:264:0:1:0|h[Elder Magus Pendant]|h|r",
+"|HlootHistory:63|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:5967:0:0:0:0:0:0:0:25:268:0:1:0|h[Girdle of Nobility]|h|r",
+"|HlootHistory:63|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6907:0:0:0:0:0:0:0:24:73:0:1:0|h[Tortoise Armor]|h|r",
+"|HlootHistory:63|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12034:0:0:0:0:0:-68:2087858560:55:268:0:1:0|h[Marble Necklace of the Bear]|h|r",
+"|HlootHistory:63|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24982:0:0:0:0:0:-9:1812594715:64:64:0:1:0|h[Boulderfist Belt of the Owl]|h|r",
+"|HlootHistory:63|h[Loot]|h: You passed on: |cff1eff00|Hitem:5972:0:0:0:0:0:0:0:24:104:0:1:0|h[Pattern: Fine Leather Pants]|h|r",
+"|HlootHistory:64|h[Loot]|h: |cff0070dd|Hitem:11612:0:0:0:0:0:0:0:55:268:0:1:0|h[Plans: Dark Iron Plate]|h|r",
+"|HlootHistory:64|h[Loot]|h: |cff0070dd|Hitem:6906:0:0:0:0:0:0:0:24:104:0:1:0|h[Algae Fists]|h|r",
+"|HlootHistory:64|h[Loot]|h: |cff1eff00|Hitem:1206:0:0:0:0:0:0:0:25:268:0:0:0|h[Moss Agate]|h|r",
+"|HlootHistory:64|h[Loot]|h: |cff1eff00|Hitem:15584:0:0:0:0:0:-19:1322603136:43:264:0:1:0|h[Sparkleshell Shield of Intellect]|h|r",
+"|HlootHistory:64|h[Loot]|h: |cff1eff00|Hitem:15946:0:0:0:0:0:0:0:24:73:0:1:0|h[Mystic's Sphere]|h|r",
+"|HlootHistory:64|h[Loot]|h: |cff1eff00|Hitem:24765:0:0:0:0:0:-42:1041891355:64:64:0:1:0|h[Clefthoof Belt of the Elder]|h|r",
+"|HlootHistory:64|h[Loot]|h: |cff1eff00|Hitem:8250:0:0:0:0:0:0:0:53:263:0:1:0|h[Imperial Red Mantle]|h|r",
+"|HlootHistory:64|h[Loot]|h: Anestadren (Greed - 10) Won: |cff1eff00|Hitem:15946:0:0:0:0:0:0:0:24:73:0:1:0|h[Mystic's Sphere]|h|r",
+"|HlootHistory:64|h[Loot]|h: Celvariel-Auchindoun (Greed - 89) Won: |cff0070dd|Hitem:11612:0:0:0:0:0:0:0:55:268:0:1:0|h[Plans: Dark Iron Plate]|h|r",
+"|HlootHistory:64|h[Loot]|h: Mitzy-BurningLegion (Greed - 56) Won: |cff1eff00|Hitem:24765:0:0:0:0:0:-42:1041891355:64:64:0:1:0|h[Clefthoof Belt of the Elder]|h|r",
+"|HlootHistory:64|h[Loot]|h: Moaizer-Nemesis (Greed - 76) Won: |cff1eff00|Hitem:15584:0:0:0:0:0:-19:1322603136:43:264:0:1:0|h[Sparkleshell Shield of Intellect]|h|r",
+"|HlootHistory:64|h[Loot]|h: Warriorstump-Kazzak (Need - 57) Won: |cff0070dd|Hitem:6906:0:0:0:0:0:0:0:24:104:0:1:0|h[Algae Fists]|h|r",
+"|HlootHistory:64|h[Loot]|h: You (Greed - 85) Won: |cff1eff00|Hitem:8250:0:0:0:0:0:0:0:53:263:0:1:0|h[Imperial Red Mantle]|h|r",
+"|HlootHistory:64|h[Loot]|h: You have rolled Greed - 37 for: |cff0070dd|Hitem:11612:0:0:0:0:0:0:0:55:268:0:1:0|h[Plans: Dark Iron Plate]|h|r",
+"|HlootHistory:64|h[Loot]|h: You have rolled Greed - 52 for: |cff1eff00|Hitem:24765:0:0:0:0:0:-42:1041891355:64:64:0:1:0|h[Clefthoof Belt of the Elder]|h|r",
+"|HlootHistory:64|h[Loot]|h: You have rolled Greed - 69 for: |cff1eff00|Hitem:15584:0:0:0:0:0:-19:1322603136:43:264:0:1:0|h[Sparkleshell Shield of Intellect]|h|r",
+"|HlootHistory:64|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11612:0:0:0:0:0:0:0:55:268:0:1:0|h[Plans: Dark Iron Plate]|h|r",
+"|HlootHistory:64|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15584:0:0:0:0:0:-19:1322603136:43:264:0:1:0|h[Sparkleshell Shield of Intellect]|h|r",
+"|HlootHistory:64|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24765:0:0:0:0:0:-42:1041891355:64:64:0:1:0|h[Clefthoof Belt of the Elder]|h|r",
+"|HlootHistory:64|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8250:0:0:0:0:0:0:0:53:263:0:1:0|h[Imperial Red Mantle]|h|r",
+"|HlootHistory:64|h[Loot]|h: You passed on: |cff0070dd|Hitem:6906:0:0:0:0:0:0:0:24:104:0:1:0|h[Algae Fists]|h|r",
+"|HlootHistory:64|h[Loot]|h: You passed on: |cff1eff00|Hitem:15946:0:0:0:0:0:0:0:24:73:0:1:0|h[Mystic's Sphere]|h|r",
+"|HlootHistory:65|h[Loot]|h: |cff0070dd|Hitem:120165:0:0:0:0:0:0:0:25:104:0:1:0|h[Thruk's Fillet Knife]|h|r",
+"|HlootHistory:65|h[Loot]|h: |cff0070dd|Hitem:18387:0:0:0:0:0:0:0:43:264:0:1:0|h[Brightspark Gloves]|h|r",
+"|HlootHistory:65|h[Loot]|h: |cff0070dd|Hitem:888:0:0:0:0:0:0:0:24:73:0:1:0|h[Naga Battle Gloves]|h|r",
+"|HlootHistory:65|h[Loot]|h: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:53:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:65|h[Loot]|h: |cff1eff00|Hitem:31952:0:0:0:0:0:0:0:64:64:0:1:0|h[Khorium Lockbox]|h|r",
+"|HlootHistory:65|h[Loot]|h: |cff1eff00|Hitem:8262:0:0:0:0:0:0:0:55:268:0:1:0|h[Serpentskin Leggings]|h|r",
+"|HlootHistory:65|h[Loot]|h: Dadcia-Stormscale (Greed - 77) Won: |cff1eff00|Hitem:8262:0:0:0:0:0:0:0:55:268:0:1:0|h[Serpentskin Leggings]|h|r",
+"|HlootHistory:65|h[Loot]|h: Fennec (Greed - 88) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:53:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:65|h[Loot]|h: Gunnman-Saurfang (Greed - 72) Won: |cff0070dd|Hitem:120165:0:0:0:0:0:0:0:25:104:0:1:0|h[Thruk's Fillet Knife]|h|r",
+"|HlootHistory:65|h[Loot]|h: Saltskruen-TwistingNether (Need - 49) Won: |cff0070dd|Hitem:888:0:0:0:0:0:0:0:24:73:0:1:0|h[Naga Battle Gloves]|h|r",
+"|HlootHistory:65|h[Loot]|h: You (Greed - 83) Won: |cff0070dd|Hitem:18387:0:0:0:0:0:0:0:43:264:0:1:0|h[Brightspark Gloves]|h|r",
+"|HlootHistory:65|h[Loot]|h: You (Greed - 93) Won: |cff1eff00|Hitem:31952:0:0:0:0:0:0:0:64:64:0:1:0|h[Khorium Lockbox]|h|r",
+"|HlootHistory:65|h[Loot]|h: You have rolled Greed - 48 for: |cff1eff00|Hitem:8262:0:0:0:0:0:0:0:55:268:0:1:0|h[Serpentskin Leggings]|h|r",
+"|HlootHistory:65|h[Loot]|h: You have rolled Greed - 82 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:53:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:65|h[Loot]|h: You have rolled Greed - 9 for: |cff0070dd|Hitem:120165:0:0:0:0:0:0:0:25:104:0:1:0|h[Thruk's Fillet Knife]|h|r",
+"|HlootHistory:65|h[Loot]|h: You have rolled Need - 5 for: |cff0070dd|Hitem:888:0:0:0:0:0:0:0:24:73:0:1:0|h[Naga Battle Gloves]|h|r",
+"|HlootHistory:65|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:120165:0:0:0:0:0:0:0:25:104:0:1:0|h[Thruk's Fillet Knife]|h|r",
+"|HlootHistory:65|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18387:0:0:0:0:0:0:0:43:264:0:1:0|h[Brightspark Gloves]|h|r",
+"|HlootHistory:65|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:53:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:65|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:31952:0:0:0:0:0:0:0:64:64:0:1:0|h[Khorium Lockbox]|h|r",
+"|HlootHistory:65|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8262:0:0:0:0:0:0:0:55:268:0:1:0|h[Serpentskin Leggings]|h|r",
+"|HlootHistory:65|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:888:0:0:0:0:0:0:0:24:73:0:1:0|h[Naga Battle Gloves]|h|r",
+"|HlootHistory:66|h[Loot]|h: |cff0070dd|Hitem:11626:0:0:0:0:0:0:0:53:263:0:1:0|h[Blackveil Cape]|h|r",
+"|HlootHistory:66|h[Loot]|h: |cff0070dd|Hitem:6902:0:0:0:0:0:0:0:25:104:0:1:0|h[Bands of Serra'kis]|h|r",
+"|HlootHistory:66|h[Loot]|h: |cff1eff00|Hitem:14261:0:0:0:0:0:-81:589307776:43:264:0:1:0|h[Bloodwoven Cloak of the Whale]|h|r",
+"|HlootHistory:66|h[Loot]|h: |cff1eff00|Hitem:15329:0:0:0:0:0:-9:344413568:24:73:0:1:0|h[Wrangler's Belt of the Owl]|h|r",
+"|HlootHistory:66|h[Loot]|h: |cff1eff00|Hitem:25108:0:0:0:0:0:-5:366018575:64:64:0:1:0|h[Grave Keeper Knife of the Monkey]|h|r",
+"|HlootHistory:66|h[Loot]|h: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:55:268:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:66|h[Loot]|h: Alehara (Greed - 72) Won: |cff1eff00|Hitem:15329:0:0:0:0:0:-9:344413568:24:73:0:1:0|h[Wrangler's Belt of the Owl]|h|r",
+"|HlootHistory:66|h[Loot]|h: Dadcia-Stormscale (Need - 39) Won: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:55:268:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:66|h[Loot]|h: Ezequiel-Draenor (Greed - 64) Won: |cff1eff00|Hitem:25108:0:0:0:0:0:-5:366018575:64:64:0:1:0|h[Grave Keeper Knife of the Monkey]|h|r",
+"|HlootHistory:66|h[Loot]|h: Moaizer-Nemesis (Greed - 69) Won: |cff1eff00|Hitem:14261:0:0:0:0:0:-81:589307776:43:264:0:1:0|h[Bloodwoven Cloak of the Whale]|h|r",
+"|HlootHistory:66|h[Loot]|h: Sickchick-Draenor (Greed - 100) Won: |cff0070dd|Hitem:11626:0:0:0:0:0:0:0:53:263:0:1:0|h[Blackveil Cape]|h|r",
+"|HlootHistory:66|h[Loot]|h: You (Need - 76) Won: |cff0070dd|Hitem:6902:0:0:0:0:0:0:0:25:104:0:1:0|h[Bands of Serra'kis]|h|r",
+"|HlootHistory:66|h[Loot]|h: You have rolled Greed - 27 for: |cff1eff00|Hitem:15329:0:0:0:0:0:-9:344413568:24:73:0:1:0|h[Wrangler's Belt of the Owl]|h|r",
+"|HlootHistory:66|h[Loot]|h: You have rolled Greed - 32 for: |cff1eff00|Hitem:25108:0:0:0:0:0:-5:366018575:64:64:0:1:0|h[Grave Keeper Knife of the Monkey]|h|r",
+"|HlootHistory:66|h[Loot]|h: You have rolled Greed - 37 for: |cff1eff00|Hitem:14261:0:0:0:0:0:-81:589307776:43:264:0:1:0|h[Bloodwoven Cloak of the Whale]|h|r",
+"|HlootHistory:66|h[Loot]|h: You have rolled Greed - 65 for: |cff0070dd|Hitem:11626:0:0:0:0:0:0:0:53:263:0:1:0|h[Blackveil Cape]|h|r",
+"|HlootHistory:66|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11626:0:0:0:0:0:0:0:53:263:0:1:0|h[Blackveil Cape]|h|r",
+"|HlootHistory:66|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14261:0:0:0:0:0:-81:589307776:43:264:0:1:0|h[Bloodwoven Cloak of the Whale]|h|r",
+"|HlootHistory:66|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15329:0:0:0:0:0:-9:344413568:24:73:0:1:0|h[Wrangler's Belt of the Owl]|h|r",
+"|HlootHistory:66|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25108:0:0:0:0:0:-5:366018575:64:64:0:1:0|h[Grave Keeper Knife of the Monkey]|h|r",
+"|HlootHistory:66|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:55:268:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:66|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:6902:0:0:0:0:0:0:0:25:104:0:1:0|h[Bands of Serra'kis]|h|r",
+"|HlootHistory:67|h[Loot]|h: |cff0070dd|Hitem:11610:0:0:0:0:0:0:0:53:263:0:1:0|h[Plans: Dark Iron Pulverizer]|h|r",
+"|HlootHistory:67|h[Loot]|h: |cff0070dd|Hitem:11744:0:0:0:0:0:0:0:55:268:0:1:0|h[Bloodfist]|h|r",
+"|HlootHistory:67|h[Loot]|h: |cff0070dd|Hitem:120167:0:0:0:0:0:0:0:25:104:0:1:0|h[Bloody Twilight Cloak]|h|r",
+"|HlootHistory:67|h[Loot]|h: |cff0070dd|Hitem:12998:0:0:0:0:0:0:0:24:73:0:1:0|h[Magician's Mantle]|h|r",
+"|HlootHistory:67|h[Loot]|h: |cff0070dd|Hitem:18349:0:0:0:0:0:0:0:43:264:0:1:0|h[Gauntlets of Accuracy]|h|r",
+"|HlootHistory:67|h[Loot]|h: |cff0070dd|Hitem:27415:0:0:0:0:0:0:0:65:64:0:1:0|h[Darkguard Face Mask]|h|r",
+"|HlootHistory:67|h[Loot]|h: Anestadren (Need - 14) Won: |cff0070dd|Hitem:12998:0:0:0:0:0:0:0:24:73:0:1:0|h[Magician's Mantle]|h|r",
+"|HlootHistory:67|h[Loot]|h: Graze-TwistingNether (Greed - 94) Won: |cff0070dd|Hitem:11610:0:0:0:0:0:0:0:53:263:0:1:0|h[Plans: Dark Iron Pulverizer]|h|r",
+"|HlootHistory:67|h[Loot]|h: Lunatiki-Thunderhorn (Greed - 85) Won: |cff0070dd|Hitem:27415:0:0:0:0:0:0:0:65:64:0:1:0|h[Darkguard Face Mask]|h|r",
+"|HlootHistory:67|h[Loot]|h: Moaizer-Nemesis (Need - 47) Won: |cff0070dd|Hitem:18349:0:0:0:0:0:0:0:43:264:0:1:0|h[Gauntlets of Accuracy]|h|r",
+"|HlootHistory:67|h[Loot]|h: Warriorstump-Kazzak (Need - 1) Won: |cff0070dd|Hitem:120167:0:0:0:0:0:0:0:25:104:0:1:0|h[Bloody Twilight Cloak]|h|r",
+"|HlootHistory:67|h[Loot]|h: You (Greed - 65) Won: |cff0070dd|Hitem:11744:0:0:0:0:0:0:0:55:268:0:1:0|h[Bloodfist]|h|r",
+"|HlootHistory:67|h[Loot]|h: You have rolled Greed - 11 for: |cff0070dd|Hitem:27415:0:0:0:0:0:0:0:65:64:0:1:0|h[Darkguard Face Mask]|h|r",
+"|HlootHistory:67|h[Loot]|h: You have rolled Greed - 14 for: |cff0070dd|Hitem:11610:0:0:0:0:0:0:0:53:263:0:1:0|h[Plans: Dark Iron Pulverizer]|h|r",
+"|HlootHistory:67|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11610:0:0:0:0:0:0:0:53:263:0:1:0|h[Plans: Dark Iron Pulverizer]|h|r",
+"|HlootHistory:67|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11744:0:0:0:0:0:0:0:55:268:0:1:0|h[Bloodfist]|h|r",
+"|HlootHistory:67|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:120167:0:0:0:0:0:0:0:25:104:0:1:0|h[Bloody Twilight Cloak]|h|r",
+"|HlootHistory:67|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12998:0:0:0:0:0:0:0:24:73:0:1:0|h[Magician's Mantle]|h|r",
+"|HlootHistory:67|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18349:0:0:0:0:0:0:0:43:264:0:1:0|h[Gauntlets of Accuracy]|h|r",
+"|HlootHistory:67|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:27415:0:0:0:0:0:0:0:65:64:0:1:0|h[Darkguard Face Mask]|h|r",
+"|HlootHistory:68|h[Loot]|h: |cff0070dd|Hitem:120166:0:0:0:0:0:0:0:25:104:0:1:0|h[Gorestained Garb]|h|r",
+"|HlootHistory:68|h[Loot]|h: |cff0070dd|Hitem:18393:0:0:0:0:0:0:0:43:264:0:1:0|h[Warpwood Binding]|h|r",
+"|HlootHistory:68|h[Loot]|h: |cff0070dd|Hitem:22270:0:0:0:0:0:0:0:53:263:0:1:0|h[Entrenching Boots]|h|r",
+"|HlootHistory:68|h[Loot]|h: |cff0070dd|Hitem:6905:0:0:0:0:0:0:0:24:73:0:1:0|h[Reef Axe]|h|r",
+"|HlootHistory:68|h[Loot]|h: |cff1eff00|Hitem:10099:0:0:0:0:0:-69:1617235840:55:268:0:1:0|h[Councillor's Gloves of the Eagle]|h|r",
+"|HlootHistory:68|h[Loot]|h: Alehara (Greed - 92) Won: |cff0070dd|Hitem:6905:0:0:0:0:0:0:0:24:73:0:1:0|h[Reef Axe]|h|r",
+"|HlootHistory:68|h[Loot]|h: Celvariel-Auchindoun (Greed - 91) Won: |cff1eff00|Hitem:10099:0:0:0:0:0:-69:1617235840:55:268:0:1:0|h[Councillor's Gloves of the Eagle]|h|r",
+"|HlootHistory:68|h[Loot]|h: Mangoworm (Greed - 58) Won: |cff0070dd|Hitem:120166:0:0:0:0:0:0:0:25:104:0:1:0|h[Gorestained Garb]|h|r",
+"|HlootHistory:68|h[Loot]|h: Moaizer-Nemesis (Need - 13) Won: |cff0070dd|Hitem:18393:0:0:0:0:0:0:0:43:264:0:1:0|h[Warpwood Binding]|h|r",
+"|HlootHistory:68|h[Loot]|h: Sanctisius (Need - 75) Won: |cff0070dd|Hitem:22270:0:0:0:0:0:0:0:53:263:0:1:0|h[Entrenching Boots]|h|r",
+"|HlootHistory:68|h[Loot]|h: You have rolled Greed - 29 for: |cff0070dd|Hitem:6905:0:0:0:0:0:0:0:24:73:0:1:0|h[Reef Axe]|h|r",
+"|HlootHistory:68|h[Loot]|h: You have rolled Greed - 38 for: |cff0070dd|Hitem:120166:0:0:0:0:0:0:0:25:104:0:1:0|h[Gorestained Garb]|h|r",
+"|HlootHistory:68|h[Loot]|h: You have rolled Greed - 46 for: |cff1eff00|Hitem:10099:0:0:0:0:0:-69:1617235840:55:268:0:1:0|h[Councillor's Gloves of the Eagle]|h|r",
+"|HlootHistory:68|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:120166:0:0:0:0:0:0:0:25:104:0:1:0|h[Gorestained Garb]|h|r",
+"|HlootHistory:68|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18393:0:0:0:0:0:0:0:43:264:0:1:0|h[Warpwood Binding]|h|r",
+"|HlootHistory:68|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22270:0:0:0:0:0:0:0:53:263:0:1:0|h[Entrenching Boots]|h|r",
+"|HlootHistory:68|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6905:0:0:0:0:0:0:0:24:73:0:1:0|h[Reef Axe]|h|r",
+"|HlootHistory:68|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10099:0:0:0:0:0:-69:1617235840:55:268:0:1:0|h[Councillor's Gloves of the Eagle]|h|r",
+"|HlootHistory:69|h[Loot]|h: |cff0070dd|Hitem:11809:0:0:0:0:0:0:0:56:268:0:1:0|h[Flame Wrath]|h|r",
+"|HlootHistory:69|h[Loot]|h: |cff1eff00|Hitem:14133:0:0:0:0:0:-69:336686080:25:104:0:1:0|h[Ritual Tunic of the Eagle]|h|r",
+"|HlootHistory:69|h[Loot]|h: |cff1eff00|Hitem:14435:0:0:0:0:0:0:0:43:264:0:1:0|h[Windchaser Cinch]|h|r",
+"|HlootHistory:69|h[Loot]|h: |cff1eff00|Hitem:3577:0:0:0:0:0:0:0:24:73:0:0:0|h[Gold Bar]|h|r",
+"|HlootHistory:69|h[Loot]|h: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:53:263:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:69|h[Loot]|h: Alehara (Greed - 83) Won: |cff1eff00|Hitem:3577:0:0:0:0:0:0:0:24:73:0:0:0|h[Gold Bar]|h|r",
+"|HlootHistory:69|h[Loot]|h: Lerona (Need - 58) Won: |cff0070dd|Hitem:11809:0:0:0:0:0:0:0:56:268:0:1:0|h[Flame Wrath]|h|r",
+"|HlootHistory:69|h[Loot]|h: You (Greed - 100) Won: |cff1eff00|Hitem:14435:0:0:0:0:0:0:0:43:264:0:1:0|h[Windchaser Cinch]|h|r",
+"|HlootHistory:69|h[Loot]|h: You (Greed - 52) Won: |cff1eff00|Hitem:14133:0:0:0:0:0:-69:336686080:25:104:0:1:0|h[Ritual Tunic of the Eagle]|h|r",
+"|HlootHistory:69|h[Loot]|h: You (Greed - 77) Won: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:53:263:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:69|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11809:0:0:0:0:0:0:0:56:268:0:1:0|h[Flame Wrath]|h|r",
+"|HlootHistory:69|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14133:0:0:0:0:0:-69:336686080:25:104:0:1:0|h[Ritual Tunic of the Eagle]|h|r",
+"|HlootHistory:69|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14435:0:0:0:0:0:0:0:43:264:0:1:0|h[Windchaser Cinch]|h|r",
+"|HlootHistory:69|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:53:263:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:69|h[Loot]|h: You passed on: |cff1eff00|Hitem:3577:0:0:0:0:0:0:0:24:73:0:0:0|h[Gold Bar]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff0070dd|Hitem:10767:0:0:0:0:0:0:0:45:270:0:1:0|h[Savage Boar's Guard]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff0070dd|Hitem:109828:0:0:0:0:0:0:0:99:253:4:20:1:521:529|h[Felflame Belt]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff0070dd|Hitem:13401:0:0:0:0:0:0:0:48:263:0:1:0|h[The Cruel Hand of Timmy]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff0070dd|Hitem:18317:0:0:0:0:0:0:0:46:66:0:1:0|h[Tempest Talisman]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff0070dd|Hitem:18352:0:0:0:0:0:0:0:46:66:0:1:0|h[Petrified Bark Shield]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff0070dd|Hitem:18729:0:0:0:0:0:0:0:52:268:0:1:0|h[Screeching Bow]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff0070dd|Hitem:24044:0:0:0:0:0:0:0:60:64:0:1:0|h[Hellreaver]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff0070dd|Hitem:82883:0:0:0:0:0:0:0:16:104:0:1:0|h[Bloodcursed Felblade]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff0070dd|Hitem:88350:0:0:0:0:0:0:0:46:268:0:1:0|h[Leggings of Unleashed Anguish]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff0070dd|Hitem:9445:0:0:0:0:0:0:0:29:104:0:1:0|h[Grubbis Paws]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff1eff00|Hitem:14218:0:0:0:0:0:-19:194622976:35:264:0:1:0|h[Geomancer's Boots of Intellect]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff1eff00|Hitem:14665:0:0:0:0:0:0:0:49:268:0:1:0|h[Keeper's Cloak]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff1eff00|Hitem:4570:0:0:0:0:0:-81:1815584128:15:73:0:1:0|h[Birchwood Maul of the Whale]|h|r",
+"|HlootHistory:7|h[Loot]|h: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:16:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:7|h[Loot]|h: Alehara (Greed - 76) Won: |cff1eff00|Hitem:4570:0:0:0:0:0:-81:1815584128:15:73:0:1:0|h[Birchwood Maul of the Whale]|h|r",
+"|HlootHistory:7|h[Loot]|h: Aramago-Drak'thul (Greed - 80) Won: |cff0070dd|Hitem:82883:0:0:0:0:0:0:0:17:104:0:1:0|h[Bloodcursed Felblade]|h|r",
+"|HlootHistory:7|h[Loot]|h: Bombardacka-Drak'thul (Need - 56) Won: |cff0070dd|Hitem:10767:0:0:0:0:0:0:0:45:270:0:1:0|h[Savage Boar's Guard]|h|r",
+"|HlootHistory:7|h[Loot]|h: Croen-Zenedar (Need - 1) Won: |cff1eff00|Hitem:14218:0:0:0:0:0:-19:194622976:35:264:0:1:0|h[Geomancer's Boots of Intellect]|h|r",
+"|HlootHistory:7|h[Loot]|h: Gibblespark (Greed - 84) Won: |cff0070dd|Hitem:109828:0:0:0:0:0:0:0:99:253:4:20:1:521:529|h[Felflame Belt]|h|r",
+"|HlootHistory:7|h[Loot]|h: Hantarro-EmeraldDream (Need - 24) Won: |cff0070dd|Hitem:11731:0:0:0:0:0:0:0:51:105:0:1:0|h[Savage Gladiator Greaves]|h|r",
+"|HlootHistory:7|h[Loot]|h: Lerona (Greed - 100) Won: |cff1eff00|Hitem:14665:0:0:0:0:0:0:0:49:268:0:1:0|h[Keeper's Cloak]|h|r",
+"|HlootHistory:7|h[Loot]|h: Lerona (Greed - 97) Won: |cff0070dd|Hitem:18729:0:0:0:0:0:0:0:52:268:0:1:0|h[Screeching Bow]|h|r",
+"|HlootHistory:7|h[Loot]|h: Logus-ChamberofAspects (Need - 84) Won: |cff0070dd|Hitem:88350:0:0:0:0:0:0:0:46:268:0:1:0|h[Leggings of Unleashed Anguish]|h|r",
+"|HlootHistory:7|h[Loot]|h: Mangoworm (Greed - 98) Won: |cff0070dd|Hitem:9445:0:0:0:0:0:0:0:29:104:0:1:0|h[Grubbis Paws]|h|r",
+"|HlootHistory:7|h[Loot]|h: Midorìko-Runetotem (Need - 15) Won: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:16:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:7|h[Loot]|h: Obihuan-TwistingNether (Need - 100) Won: |cff0070dd|Hitem:24044:0:0:0:0:0:0:0:60:64:0:1:0|h[Hellreaver]|h|r",
+"|HlootHistory:7|h[Loot]|h: Sanctisius (Greed - 57) Won: |cff0070dd|Hitem:13401:0:0:0:0:0:0:0:48:263:0:1:0|h[The Cruel Hand of Timmy]|h|r",
+"|HlootHistory:7|h[Loot]|h: You (Greed - 78) Won: |cff0070dd|Hitem:18317:0:0:0:0:0:0:0:46:66:0:1:0|h[Tempest Talisman]|h|r",
+"|HlootHistory:7|h[Loot]|h: You (Greed - 78) Won: |cff0070dd|Hitem:18352:0:0:0:0:0:0:0:46:66:0:1:0|h[Petrified Bark Shield]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have rolled Greed - 10 for: |cff0070dd|Hitem:13401:0:0:0:0:0:0:0:48:263:0:1:0|h[The Cruel Hand of Timmy]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have rolled Greed - 60 for: |cff1eff00|Hitem:14665:0:0:0:0:0:0:0:49:268:0:1:0|h[Keeper's Cloak]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have rolled Greed - 63 for: |cff0070dd|Hitem:9445:0:0:0:0:0:0:0:29:104:0:1:0|h[Grubbis Paws]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have rolled Greed - 67 for: |cff0070dd|Hitem:109828:0:0:0:0:0:0:0:99:253:4:20:1:521:529|h[Felflame Belt]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10767:0:0:0:0:0:0:0:45:270:0:1:0|h[Savage Boar's Guard]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:109828:0:0:0:0:0:0:0:99:253:4:20:1:521:529|h[Felflame Belt]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11731:0:0:0:0:0:0:0:51:105:0:1:0|h[Savage Gladiator Greaves]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13401:0:0:0:0:0:0:0:48:263:0:1:0|h[The Cruel Hand of Timmy]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18317:0:0:0:0:0:0:0:46:66:0:1:0|h[Tempest Talisman]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18352:0:0:0:0:0:0:0:46:66:0:1:0|h[Petrified Bark Shield]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24044:0:0:0:0:0:0:0:60:64:0:1:0|h[Hellreaver]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:88350:0:0:0:0:0:0:0:46:268:0:1:0|h[Leggings of Unleashed Anguish]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:9445:0:0:0:0:0:0:0:29:104:0:1:0|h[Grubbis Paws]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14218:0:0:0:0:0:-19:194622976:35:264:0:1:0|h[Geomancer's Boots of Intellect]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14665:0:0:0:0:0:0:0:49:268:0:1:0|h[Keeper's Cloak]|h|r",
+"|HlootHistory:7|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:818:0:0:0:0:0:0:0:16:268:0:0:0|h[Tigerseye]|h|r",
+"|HlootHistory:7|h[Loot]|h: You passed on: |cff0070dd|Hitem:18729:0:0:0:0:0:0:0:52:268:0:1:0|h[Screeching Bow]|h|r",
+"|HlootHistory:7|h[Loot]|h: You passed on: |cff0070dd|Hitem:82883:0:0:0:0:0:0:0:16:104:0:1:0|h[Bloodcursed Felblade]|h|r",
+"|HlootHistory:7|h[Loot]|h: You passed on: |cff1eff00|Hitem:4570:0:0:0:0:0:-81:1815584128:15:73:0:1:0|h[Birchwood Maul of the Whale]|h|r",
+"|HlootHistory:70|h[Loot]|h: |cff0070dd|Hitem:11632:0:0:0:0:0:0:0:53:263:0:1:0|h[Earthslag Shoulders]|h|r",
+"|HlootHistory:70|h[Loot]|h: |cff0070dd|Hitem:11767:0:0:0:0:0:0:0:56:268:0:1:0|h[Emberplate Armguards]|h|r",
+"|HlootHistory:70|h[Loot]|h: |cff0070dd|Hitem:6903:0:0:0:0:0:0:0:25:104:0:1:0|h[Gaze Dreamer Pants]|h|r",
+"|HlootHistory:70|h[Loot]|h: |cff1eff00|Hitem:10603:0:0:0:0:0:0:0:43:264:0:1:0|h[Schematic: Catseye Ultra Goggles]|h|r",
+"|HlootHistory:70|h[Loot]|h: |cff1eff00|Hitem:14133:0:0:0:0:0:-84:1818720768:24:73:0:1:0|h[Ritual Tunic of Stamina]|h|r",
+"|HlootHistory:70|h[Loot]|h: Anestadren (Need - 22) Won: |cff1eff00|Hitem:14133:0:0:0:0:0:-84:1818720768:24:73:0:1:0|h[Ritual Tunic of Stamina]|h|r",
+"|HlootHistory:70|h[Loot]|h: Gunnman-Saurfang (Greed - 53) Won: |cff0070dd|Hitem:6903:0:0:0:0:0:0:0:25:104:0:1:0|h[Gaze Dreamer Pants]|h|r",
+"|HlootHistory:70|h[Loot]|h: Lerona (Need - 89) Won: |cff0070dd|Hitem:11767:0:0:0:0:0:0:0:56:268:0:1:0|h[Emberplate Armguards]|h|r",
+"|HlootHistory:70|h[Loot]|h: Moaizer-Nemesis (Greed - 99) Won: |cff1eff00|Hitem:10603:0:0:0:0:0:0:0:43:264:0:1:0|h[Schematic: Catseye Ultra Goggles]|h|r",
+"|HlootHistory:70|h[Loot]|h: Sanctisius (Need - 30) Won: |cff0070dd|Hitem:11632:0:0:0:0:0:0:0:53:263:0:1:0|h[Earthslag Shoulders]|h|r",
+"|HlootHistory:70|h[Loot]|h: You have rolled Greed - 47 for: |cff0070dd|Hitem:6903:0:0:0:0:0:0:0:25:104:0:1:0|h[Gaze Dreamer Pants]|h|r",
+"|HlootHistory:70|h[Loot]|h: You have rolled Greed - 94 for: |cff1eff00|Hitem:10603:0:0:0:0:0:0:0:43:264:0:1:0|h[Schematic: Catseye Ultra Goggles]|h|r",
+"|HlootHistory:70|h[Loot]|h: You have rolled Need - 40 for: |cff0070dd|Hitem:11767:0:0:0:0:0:0:0:56:268:0:1:0|h[Emberplate Armguards]|h|r",
+"|HlootHistory:70|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11632:0:0:0:0:0:0:0:53:263:0:1:0|h[Earthslag Shoulders]|h|r",
+"|HlootHistory:70|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6903:0:0:0:0:0:0:0:25:104:0:1:0|h[Gaze Dreamer Pants]|h|r",
+"|HlootHistory:70|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10603:0:0:0:0:0:0:0:43:264:0:1:0|h[Schematic: Catseye Ultra Goggles]|h|r",
+"|HlootHistory:70|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:11767:0:0:0:0:0:0:0:56:268:0:1:0|h[Emberplate Armguards]|h|r",
+"|HlootHistory:70|h[Loot]|h: You passed on: |cff1eff00|Hitem:14133:0:0:0:0:0:-84:1818720768:24:73:0:1:0|h[Ritual Tunic of Stamina]|h|r",
+"|HlootHistory:71|h[Loot]|h: |cff0070dd|Hitem:11623:0:0:0:0:0:0:0:53:263:0:1:0|h[Spritecaster Cape]|h|r",
+"|HlootHistory:71|h[Loot]|h: |cff0070dd|Hitem:11841:0:0:0:0:0:0:0:56:268:0:1:0|h[Senior Designer's Pantaloons]|h|r",
+"|HlootHistory:71|h[Loot]|h: |cff0070dd|Hitem:18381:0:0:0:0:0:0:0:43:264:0:1:0|h[Evil Eye Pendant]|h|r",
+"|HlootHistory:71|h[Loot]|h: |cff0070dd|Hitem:6910:0:0:0:0:0:0:0:26:104:0:1:0|h[Leech Pants]|h|r",
+"|HlootHistory:71|h[Loot]|h: |cff1eff00|Hitem:120163:0:0:0:0:0:0:0:24:73:0:1:0|h[Thruk's Fishing Rod]|h|r",
+"|HlootHistory:71|h[Loot]|h: Celvariel-Auchindoun (Greed - 70) Won: |cff0070dd|Hitem:11841:0:0:0:0:0:0:0:56:268:0:1:0|h[Senior Designer's Pantaloons]|h|r",
+"|HlootHistory:71|h[Loot]|h: Gunnman-Saurfang (Greed - 90) Won: |cff0070dd|Hitem:6910:0:0:0:0:0:0:0:26:104:0:1:0|h[Leech Pants]|h|r",
+"|HlootHistory:71|h[Loot]|h: Moaizer-Nemesis (Greed - 88) Won: |cff0070dd|Hitem:18381:0:0:0:0:0:0:0:43:264:0:1:0|h[Evil Eye Pendant]|h|r",
+"|HlootHistory:71|h[Loot]|h: Sanctisius (Greed - 92) Won: |cff0070dd|Hitem:11623:0:0:0:0:0:0:0:53:263:0:1:0|h[Spritecaster Cape]|h|r",
+"|HlootHistory:71|h[Loot]|h: You (Greed - 74) Won: |cff1eff00|Hitem:120163:0:0:0:0:0:0:0:24:73:0:1:0|h[Thruk's Fishing Rod]|h|r",
+"|HlootHistory:71|h[Loot]|h: You have rolled Greed - 43 for: |cff0070dd|Hitem:11623:0:0:0:0:0:0:0:53:263:0:1:0|h[Spritecaster Cape]|h|r",
+"|HlootHistory:71|h[Loot]|h: You have rolled Greed - 71 for: |cff0070dd|Hitem:6910:0:0:0:0:0:0:0:26:104:0:1:0|h[Leech Pants]|h|r",
+"|HlootHistory:71|h[Loot]|h: You have rolled Greed - 84 for: |cff0070dd|Hitem:18381:0:0:0:0:0:0:0:43:264:0:1:0|h[Evil Eye Pendant]|h|r",
+"|HlootHistory:71|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11623:0:0:0:0:0:0:0:53:263:0:1:0|h[Spritecaster Cape]|h|r",
+"|HlootHistory:71|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18381:0:0:0:0:0:0:0:43:264:0:1:0|h[Evil Eye Pendant]|h|r",
+"|HlootHistory:71|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6910:0:0:0:0:0:0:0:26:104:0:1:0|h[Leech Pants]|h|r",
+"|HlootHistory:71|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:120163:0:0:0:0:0:0:0:24:73:0:1:0|h[Thruk's Fishing Rod]|h|r",
+"|HlootHistory:71|h[Loot]|h: You passed on: |cff0070dd|Hitem:11841:0:0:0:0:0:0:0:56:268:0:1:0|h[Senior Designer's Pantaloons]|h|r",
+"|HlootHistory:72|h[Loot]|h: |cff0070dd|Hitem:11805:0:0:0:0:0:0:0:53:263:0:1:0|h[Rubidium Hammer]|h|r",
+"|HlootHistory:72|h[Loot]|h: |cff0070dd|Hitem:120164:0:0:0:0:0:0:0:24:73:0:1:0|h[Thruk's Heavy Duty Fishing Pole]|h|r",
+"|HlootHistory:72|h[Loot]|h: |cff0070dd|Hitem:18391:0:0:0:0:0:0:0:43:264:0:1:0|h[Eyestalk Cord]|h|r",
+"|HlootHistory:72|h[Loot]|h: |cff1eff00|Hitem:15236:0:0:0:0:0:-12:238402048:56:268:0:1:0|h[Moon Cleaver of the Boar]|h|r",
+"|HlootHistory:72|h[Loot]|h: |cff1eff00|Hitem:3039:0:0:0:0:0:0:0:26:104:0:1:0|h[Short Ash Bow]|h|r",
+"|HlootHistory:72|h[Loot]|h: Anestadren (Need - 13) Won: |cff0070dd|Hitem:120164:0:0:0:0:0:0:0:24:73:0:1:0|h[Thruk's Heavy Duty Fishing Pole]|h|r",
+"|HlootHistory:72|h[Loot]|h: Graze-TwistingNether (Greed - 97) Won: |cff0070dd|Hitem:11805:0:0:0:0:0:0:0:53:263:0:1:0|h[Rubidium Hammer]|h|r",
+"|HlootHistory:72|h[Loot]|h: Lerona (Greed - 95) Won: |cff1eff00|Hitem:15236:0:0:0:0:0:-12:238402048:56:268:0:1:0|h[Moon Cleaver of the Boar]|h|r",
+"|HlootHistory:72|h[Loot]|h: Mangoworm (Greed - 88) Won: |cff1eff00|Hitem:3039:0:0:0:0:0:0:0:26:104:0:1:0|h[Short Ash Bow]|h|r",
+"|HlootHistory:72|h[Loot]|h: You (Need - 15) Won: |cff0070dd|Hitem:18391:0:0:0:0:0:0:0:43:264:0:1:0|h[Eyestalk Cord]|h|r",
+"|HlootHistory:72|h[Loot]|h: You have rolled Greed - 14 for: |cff1eff00|Hitem:3039:0:0:0:0:0:0:0:26:104:0:1:0|h[Short Ash Bow]|h|r",
+"|HlootHistory:72|h[Loot]|h: You have rolled Greed - 22 for: |cff0070dd|Hitem:11805:0:0:0:0:0:0:0:53:263:0:1:0|h[Rubidium Hammer]|h|r",
+"|HlootHistory:72|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11805:0:0:0:0:0:0:0:53:263:0:1:0|h[Rubidium Hammer]|h|r",
+"|HlootHistory:72|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:120164:0:0:0:0:0:0:0:24:73:0:1:0|h[Thruk's Heavy Duty Fishing Pole]|h|r",
+"|HlootHistory:72|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:3039:0:0:0:0:0:0:0:26:104:0:1:0|h[Short Ash Bow]|h|r",
+"|HlootHistory:72|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:18391:0:0:0:0:0:0:0:43:264:0:1:0|h[Eyestalk Cord]|h|r",
+"|HlootHistory:72|h[Loot]|h: You passed on: |cff1eff00|Hitem:15236:0:0:0:0:0:-12:238402048:56:268:0:1:0|h[Moon Cleaver of the Boar]|h|r",
+"|HlootHistory:73|h[Loot]|h: |cff0070dd|Hitem:11809:0:0:0:0:0:0:0:56:268:0:1:0|h[Flame Wrath]|h|r",
+"|HlootHistory:73|h[Loot]|h: |cff0070dd|Hitem:12990:0:0:0:0:0:0:0:24:73:0:1:0|h[Razor's Edge]|h|r",
+"|HlootHistory:73|h[Loot]|h: |cff0070dd|Hitem:18376:0:0:0:0:0:0:0:44:264:0:1:0|h[Timeworn Mace]|h|r",
+"|HlootHistory:73|h[Loot]|h: |cff1eff00|Hitem:10174:0:0:0:0:0:-81:223578368:53:263:0:1:0|h[Mystical Cape of the Whale]|h|r",
+"|HlootHistory:73|h[Loot]|h: |cff1eff00|Hitem:3057:0:0:0:0:0:0:0:26:104:0:1:0|h[Forest Leather Boots]|h|r",
+"|HlootHistory:73|h[Loot]|h: Anestadren (Greed - 63) Won: |cff0070dd|Hitem:12990:0:0:0:0:0:0:0:25:73:0:1:0|h[Razor's Edge]|h|r",
+"|HlootHistory:73|h[Loot]|h: Fennec (Greed - 100) Won: |cff1eff00|Hitem:10174:0:0:0:0:0:-81:223578368:53:263:0:1:0|h[Mystical Cape of the Whale]|h|r",
+"|HlootHistory:73|h[Loot]|h: Mehiel-BurningLegion (Greed - 81) Won: |cff1eff00|Hitem:3057:0:0:0:0:0:0:0:26:104:0:1:0|h[Forest Leather Boots]|h|r",
+"|HlootHistory:73|h[Loot]|h: Moaizer-Nemesis (Greed - 93) Won: |cff0070dd|Hitem:18376:0:0:0:0:0:0:0:44:264:0:1:0|h[Timeworn Mace]|h|r",
+"|HlootHistory:73|h[Loot]|h: You (Need - 55) Won: |cff0070dd|Hitem:11809:0:0:0:0:0:0:0:56:268:0:1:0|h[Flame Wrath]|h|r",
+"|HlootHistory:73|h[Loot]|h: You have rolled Greed - 12 for: |cff1eff00|Hitem:3057:0:0:0:0:0:0:0:26:104:0:1:0|h[Forest Leather Boots]|h|r",
+"|HlootHistory:73|h[Loot]|h: You have rolled Greed - 14 for: |cff0070dd|Hitem:18376:0:0:0:0:0:0:0:44:264:0:1:0|h[Timeworn Mace]|h|r",
+"|HlootHistory:73|h[Loot]|h: You have rolled Greed - 39 for: |cff0070dd|Hitem:12990:0:0:0:0:0:0:0:25:73:0:1:0|h[Razor's Edge]|h|r",
+"|HlootHistory:73|h[Loot]|h: You have rolled Greed - 41 for: |cff1eff00|Hitem:10174:0:0:0:0:0:-81:223578368:53:263:0:1:0|h[Mystical Cape of the Whale]|h|r",
+"|HlootHistory:73|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12990:0:0:0:0:0:0:0:25:73:0:1:0|h[Razor's Edge]|h|r",
+"|HlootHistory:73|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18376:0:0:0:0:0:0:0:44:264:0:1:0|h[Timeworn Mace]|h|r",
+"|HlootHistory:73|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10174:0:0:0:0:0:-81:223578368:53:263:0:1:0|h[Mystical Cape of the Whale]|h|r",
+"|HlootHistory:73|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:3057:0:0:0:0:0:0:0:26:104:0:1:0|h[Forest Leather Boots]|h|r",
+"|HlootHistory:73|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:11809:0:0:0:0:0:0:0:56:268:0:1:0|h[Flame Wrath]|h|r",
+"|HlootHistory:74|h[Loot]|h: |cff0070dd|Hitem:18375:0:0:0:0:0:0:0:44:264:0:1:0|h[Bracers of the Eclipse]|h|r",
+"|HlootHistory:74|h[Loot]|h: |cff0070dd|Hitem:63346:0:0:0:0:0:0:0:26:104:0:1:0|h[Wicked Dagger]|h|r",
+"|HlootHistory:74|h[Loot]|h: |cff0070dd|Hitem:6901:0:0:0:0:0:0:0:25:73:0:1:0|h[Glowing Thresher Cape]|h|r",
+"|HlootHistory:74|h[Loot]|h: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:53:263:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:74|h[Loot]|h: |cff1eff00|Hitem:8261:0:0:0:0:0:0:0:56:268:0:1:0|h[Serpentskin Helm]|h|r",
+"|HlootHistory:74|h[Loot]|h: Creepyfukha-TwistingNether (Greed - 96) Won: |cff1eff00|Hitem:8261:0:0:0:0:0:0:0:56:268:0:1:0|h[Serpentskin Helm]|h|r",
+"|HlootHistory:74|h[Loot]|h: Mangoworm (Greed - 96) Won: |cff0070dd|Hitem:63346:0:0:0:0:0:0:0:26:104:0:1:0|h[Wicked Dagger]|h|r",
+"|HlootHistory:74|h[Loot]|h: Moaizer-Nemesis (Need - 53) Won: |cff0070dd|Hitem:18375:0:0:0:0:0:0:0:44:264:0:1:0|h[Bracers of the Eclipse]|h|r",
+"|HlootHistory:74|h[Loot]|h: You (Greed - 69) Won: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:53:263:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:74|h[Loot]|h: You (Greed - 93) Won: |cff0070dd|Hitem:6901:0:0:0:0:0:0:0:25:73:0:1:0|h[Glowing Thresher Cape]|h|r",
+"|HlootHistory:74|h[Loot]|h: You have rolled Greed - 75 for: |cff0070dd|Hitem:63346:0:0:0:0:0:0:0:26:104:0:1:0|h[Wicked Dagger]|h|r",
+"|HlootHistory:74|h[Loot]|h: You have rolled Greed - 92 for: |cff1eff00|Hitem:8261:0:0:0:0:0:0:0:56:268:0:1:0|h[Serpentskin Helm]|h|r",
+"|HlootHistory:74|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18375:0:0:0:0:0:0:0:44:264:0:1:0|h[Bracers of the Eclipse]|h|r",
+"|HlootHistory:74|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:63346:0:0:0:0:0:0:0:26:104:0:1:0|h[Wicked Dagger]|h|r",
+"|HlootHistory:74|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:6901:0:0:0:0:0:0:0:25:73:0:1:0|h[Glowing Thresher Cape]|h|r",
+"|HlootHistory:74|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7910:0:0:0:0:0:0:0:53:263:0:0:0|h[Star Ruby]|h|r",
+"|HlootHistory:74|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8261:0:0:0:0:0:0:0:56:268:0:1:0|h[Serpentskin Helm]|h|r",
+"|HlootHistory:75|h[Loot]|h: |cff0070dd|Hitem:11817:0:0:0:0:0:0:0:53:263:0:1:0|h[Lord General's Sword]|h|r",
+"|HlootHistory:75|h[Loot]|h: |cff0070dd|Hitem:11920:0:0:0:0:0:0:0:56:268:0:1:0|h[Wraith Scythe]|h|r",
+"|HlootHistory:75|h[Loot]|h: |cff0070dd|Hitem:120166:0:0:0:0:0:0:0:25:73:0:1:0|h[Gorestained Garb]|h|r",
+"|HlootHistory:75|h[Loot]|h: |cff1eff00|Hitem:14435:0:0:0:0:0:0:0:44:264:0:1:0|h[Windchaser Cinch]|h|r",
+"|HlootHistory:75|h[Loot]|h: |cff1eff00|Hitem:1705:0:0:0:0:0:0:0:26:104:0:0:0|h[Lesser Moonstone]|h|r",
+"|HlootHistory:75|h[Loot]|h: Anestadren (Need - 87) Won: |cff0070dd|Hitem:120166:0:0:0:0:0:0:0:25:73:0:1:0|h[Gorestained Garb]|h|r",
+"|HlootHistory:75|h[Loot]|h: Merithria-Magtheridon (Greed - 90) Won: |cff1eff00|Hitem:1705:0:0:0:0:0:0:0:26:104:0:0:0|h[Lesser Moonstone]|h|r",
+"|HlootHistory:75|h[Loot]|h: Sanctisius (Need - 24) Won: |cff0070dd|Hitem:11817:0:0:0:0:0:0:0:53:263:0:1:0|h[Lord General's Sword]|h|r",
+"|HlootHistory:75|h[Loot]|h: You (Greed - 84) Won: |cff1eff00|Hitem:14435:0:0:0:0:0:0:0:44:264:0:1:0|h[Windchaser Cinch]|h|r",
+"|HlootHistory:75|h[Loot]|h: You have rolled Greed - 32 for: |cff1eff00|Hitem:1705:0:0:0:0:0:0:0:26:104:0:0:0|h[Lesser Moonstone]|h|r",
+"|HlootHistory:75|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:120166:0:0:0:0:0:0:0:25:73:0:1:0|h[Gorestained Garb]|h|r",
+"|HlootHistory:75|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14435:0:0:0:0:0:0:0:44:264:0:1:0|h[Windchaser Cinch]|h|r",
+"|HlootHistory:75|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:1705:0:0:0:0:0:0:0:26:104:0:0:0|h[Lesser Moonstone]|h|r",
+"|HlootHistory:75|h[Loot]|h: You passed on: |cff0070dd|Hitem:11817:0:0:0:0:0:0:0:53:263:0:1:0|h[Lord General's Sword]|h|r",
+"|HlootHistory:76|h[Loot]|h: |cff0070dd|Hitem:10775:0:0:0:0:0:0:0:44:264:0:1:0|h[Carapace of Tuten'kash]|h|r",
+"|HlootHistory:76|h[Loot]|h: |cff0070dd|Hitem:11927:0:0:0:0:0:0:0:56:268:0:1:0|h[Legplates of the Eternal Guardian]|h|r",
+"|HlootHistory:76|h[Loot]|h: |cff0070dd|Hitem:120167:0:0:0:0:0:0:0:25:73:0:1:0|h[Bloody Twilight Cloak]|h|r",
+"|HlootHistory:76|h[Loot]|h: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:53:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:76|h[Loot]|h: |cff1eff00|Hitem:15223:0:0:0:0:0:-19:456926464:26:104:0:1:0|h[Jagged Star of Intellect]|h|r",
+"|HlootHistory:76|h[Loot]|h: Alehara (Greed - 59) Won: |cff0070dd|Hitem:120167:0:0:0:0:0:0:0:25:73:0:1:0|h[Bloody Twilight Cloak]|h|r",
+"|HlootHistory:76|h[Loot]|h: Graze-TwistingNether (Greed - 33) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:53:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:76|h[Loot]|h: Merithria-Magtheridon (Greed - 80) Won: |cff1eff00|Hitem:15223:0:0:0:0:0:-19:456926464:26:104:0:1:0|h[Jagged Star of Intellect]|h|r",
+"|HlootHistory:76|h[Loot]|h: Moaizer-Nemesis (Greed - 99) Won: |cff0070dd|Hitem:10775:0:0:0:0:0:0:0:44:264:0:1:0|h[Carapace of Tuten'kash]|h|r",
+"|HlootHistory:76|h[Loot]|h: You have rolled Greed - 18 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:53:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:76|h[Loot]|h: You have rolled Greed - 38 for: |cff0070dd|Hitem:120167:0:0:0:0:0:0:0:25:73:0:1:0|h[Bloody Twilight Cloak]|h|r",
+"|HlootHistory:76|h[Loot]|h: You have rolled Greed - 75 for: |cff1eff00|Hitem:15223:0:0:0:0:0:-19:456926464:26:104:0:1:0|h[Jagged Star of Intellect]|h|r",
+"|HlootHistory:76|h[Loot]|h: You have rolled Greed - 84 for: |cff0070dd|Hitem:10775:0:0:0:0:0:0:0:44:264:0:1:0|h[Carapace of Tuten'kash]|h|r",
+"|HlootHistory:76|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10775:0:0:0:0:0:0:0:44:264:0:1:0|h[Carapace of Tuten'kash]|h|r",
+"|HlootHistory:76|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:120167:0:0:0:0:0:0:0:25:73:0:1:0|h[Bloody Twilight Cloak]|h|r",
+"|HlootHistory:76|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:53:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:76|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15223:0:0:0:0:0:-19:456926464:26:104:0:1:0|h[Jagged Star of Intellect]|h|r",
+"|HlootHistory:77|h[Loot]|h: |cff0070dd|Hitem:10771:0:0:0:0:0:0:0:44:264:0:1:0|h[Deathmage Sash]|h|r",
+"|HlootHistory:77|h[Loot]|h: |cff0070dd|Hitem:11746:0:0:0:0:0:0:0:56:268:0:1:0|h[Golem Skull Helm]|h|r",
+"|HlootHistory:77|h[Loot]|h: |cff0070dd|Hitem:11822:0:0:0:0:0:0:0:53:263:0:1:0|h[Omnicast Boots]|h|r",
+"|HlootHistory:77|h[Loot]|h: |cff0070dd|Hitem:5967:0:0:0:0:0:0:0:26:104:0:1:0|h[Girdle of Nobility]|h|r",
+"|HlootHistory:77|h[Loot]|h: |cff1eff00|Hitem:2034:0:0:0:0:0:0:0:25:73:0:1:0|h[Scholarly Robes]|h|r",
+"|HlootHistory:77|h[Loot]|h: Alehara (Greed - 84) Won: |cff1eff00|Hitem:2034:0:0:0:0:0:0:0:25:73:0:1:0|h[Scholarly Robes]|h|r",
+"|HlootHistory:77|h[Loot]|h: Lerona (Greed - 95) Won: |cff0070dd|Hitem:11746:0:0:0:0:0:0:0:56:268:0:1:0|h[Golem Skull Helm]|h|r",
+"|HlootHistory:77|h[Loot]|h: Mehiel-BurningLegion (Need - 58) Won: |cff0070dd|Hitem:5967:0:0:0:0:0:0:0:26:104:0:1:0|h[Girdle of Nobility]|h|r",
+"|HlootHistory:77|h[Loot]|h: Sanctisius (Greed - 93) Won: |cff0070dd|Hitem:11822:0:0:0:0:0:0:0:53:263:0:1:0|h[Omnicast Boots]|h|r",
+"|HlootHistory:77|h[Loot]|h: Sweetable-Bloodhoof (Greed - 86) Won: |cff0070dd|Hitem:10771:0:0:0:0:0:0:0:44:264:0:1:0|h[Deathmage Sash]|h|r",
+"|HlootHistory:77|h[Loot]|h: You have rolled Greed - 34 for: |cff0070dd|Hitem:11746:0:0:0:0:0:0:0:56:268:0:1:0|h[Golem Skull Helm]|h|r",
+"|HlootHistory:77|h[Loot]|h: You have rolled Greed - 44 for: |cff0070dd|Hitem:10771:0:0:0:0:0:0:0:44:264:0:1:0|h[Deathmage Sash]|h|r",
+"|HlootHistory:77|h[Loot]|h: You have rolled Greed - 48 for: |cff1eff00|Hitem:2034:0:0:0:0:0:0:0:25:73:0:1:0|h[Scholarly Robes]|h|r",
+"|HlootHistory:77|h[Loot]|h: You have rolled Greed - 49 for: |cff0070dd|Hitem:11822:0:0:0:0:0:0:0:53:263:0:1:0|h[Omnicast Boots]|h|r",
+"|HlootHistory:77|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10771:0:0:0:0:0:0:0:44:264:0:1:0|h[Deathmage Sash]|h|r",
+"|HlootHistory:77|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11746:0:0:0:0:0:0:0:56:268:0:1:0|h[Golem Skull Helm]|h|r",
+"|HlootHistory:77|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11822:0:0:0:0:0:0:0:53:263:0:1:0|h[Omnicast Boots]|h|r",
+"|HlootHistory:77|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:5967:0:0:0:0:0:0:0:26:104:0:1:0|h[Girdle of Nobility]|h|r",
+"|HlootHistory:77|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:2034:0:0:0:0:0:0:0:25:73:0:1:0|h[Scholarly Robes]|h|r",
+"|HlootHistory:78|h[Loot]|h: |cff0070dd|Hitem:10772:0:0:0:0:0:0:0:44:264:0:1:0|h[Glutton's Cleaver]|h|r",
+"|HlootHistory:78|h[Loot]|h: |cff0070dd|Hitem:1155:0:0:0:0:0:0:0:25:73:0:1:0|h[Rod of the Sleepwalker]|h|r",
+"|HlootHistory:78|h[Loot]|h: |cff1eff00|Hitem:10077:0:0:0:0:0:-11:1391547904:56:268:0:1:0|h[Lord's Breastplate of the Falcon]|h|r",
+"|HlootHistory:78|h[Loot]|h: |cff1eff00|Hitem:12684:0:0:0:0:0:0:0:53:263:0:1:0|h[Plans: Thorium Bracers]|h|r",
+"|HlootHistory:78|h[Loot]|h: |cff1eff00|Hitem:3039:0:0:0:0:0:0:0:27:104:0:1:0|h[Short Ash Bow]|h|r",
+"|HlootHistory:78|h[Loot]|h: Anestadren (Need - 30) Won: |cff0070dd|Hitem:1155:0:0:0:0:0:0:0:25:73:0:1:0|h[Rod of the Sleepwalker]|h|r",
+"|HlootHistory:78|h[Loot]|h: Graze-TwistingNether (Greed - 76) Won: |cff1eff00|Hitem:12684:0:0:0:0:0:0:0:53:263:0:1:0|h[Plans: Thorium Bracers]|h|r",
+"|HlootHistory:78|h[Loot]|h: Lerona (Need - 73) Won: |cff1eff00|Hitem:10077:0:0:0:0:0:-11:1391547904:56:268:0:1:0|h[Lord's Breastplate of the Falcon]|h|r",
+"|HlootHistory:78|h[Loot]|h: Sweetable-Bloodhoof (Greed - 94) Won: |cff0070dd|Hitem:10772:0:0:0:0:0:0:0:44:264:0:1:0|h[Glutton's Cleaver]|h|r",
+"|HlootHistory:78|h[Loot]|h: You (Greed - 33) Won: |cff1eff00|Hitem:3039:0:0:0:0:0:0:0:27:104:0:1:0|h[Short Ash Bow]|h|r",
+"|HlootHistory:78|h[Loot]|h: You have rolled Greed - 43 for: |cff1eff00|Hitem:12684:0:0:0:0:0:0:0:53:263:0:1:0|h[Plans: Thorium Bracers]|h|r",
+"|HlootHistory:78|h[Loot]|h: You have rolled Greed - 74 for: |cff0070dd|Hitem:10772:0:0:0:0:0:0:0:44:264:0:1:0|h[Glutton's Cleaver]|h|r",
+"|HlootHistory:78|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10772:0:0:0:0:0:0:0:44:264:0:1:0|h[Glutton's Cleaver]|h|r",
+"|HlootHistory:78|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:1155:0:0:0:0:0:0:0:25:73:0:1:0|h[Rod of the Sleepwalker]|h|r",
+"|HlootHistory:78|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10077:0:0:0:0:0:-11:1391547904:56:268:0:1:0|h[Lord's Breastplate of the Falcon]|h|r",
+"|HlootHistory:78|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12684:0:0:0:0:0:0:0:53:263:0:1:0|h[Plans: Thorium Bracers]|h|r",
+"|HlootHistory:78|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:3039:0:0:0:0:0:0:0:27:104:0:1:0|h[Short Ash Bow]|h|r",
+"|HlootHistory:79|h[Loot]|h: |cff0070dd|Hitem:1934:0:0:0:0:0:0:0:27:104:0:1:0|h[Hogger's Trousers]|h|r",
+"|HlootHistory:79|h[Loot]|h: |cff0070dd|Hitem:6911:0:0:0:0:0:0:0:26:73:0:1:0|h[Moss Cinch]|h|r",
+"|HlootHistory:79|h[Loot]|h: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:53:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:79|h[Loot]|h: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:56:268:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:79|h[Loot]|h: |cff1eff00|Hitem:14247:0:0:0:0:0:-69:1624259072:44:264:0:1:0|h[Lunar Mantle of the Eagle]|h|r",
+"|HlootHistory:79|h[Loot]|h: Alehara (Greed - 91) Won: |cff0070dd|Hitem:6911:0:0:0:0:0:0:0:26:73:0:1:0|h[Moss Cinch]|h|r",
+"|HlootHistory:79|h[Loot]|h: Mehiel-BurningLegion (Greed - 85) Won: |cff0070dd|Hitem:1934:0:0:0:0:0:0:0:27:104:0:1:0|h[Hogger's Trousers]|h|r",
+"|HlootHistory:79|h[Loot]|h: Sanctisius (Greed - 86) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:53:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:79|h[Loot]|h: Sweetable-Bloodhoof (Greed - 96) Won: |cff1eff00|Hitem:14247:0:0:0:0:0:-69:1624259072:44:264:0:1:0|h[Lunar Mantle of the Eagle]|h|r",
+"|HlootHistory:79|h[Loot]|h: You (Greed - 63) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:56:268:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:79|h[Loot]|h: You have rolled Greed - 3 for: |cff1eff00|Hitem:14247:0:0:0:0:0:-69:1624259072:44:264:0:1:0|h[Lunar Mantle of the Eagle]|h|r",
+"|HlootHistory:79|h[Loot]|h: You have rolled Greed - 57 for: |cff0070dd|Hitem:1934:0:0:0:0:0:0:0:27:104:0:1:0|h[Hogger's Trousers]|h|r",
+"|HlootHistory:79|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:1934:0:0:0:0:0:0:0:27:104:0:1:0|h[Hogger's Trousers]|h|r",
+"|HlootHistory:79|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:56:268:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:79|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:14247:0:0:0:0:0:-69:1624259072:44:264:0:1:0|h[Lunar Mantle of the Eagle]|h|r",
+"|HlootHistory:79|h[Loot]|h: You passed on: |cff0070dd|Hitem:6911:0:0:0:0:0:0:0:26:73:0:1:0|h[Moss Cinch]|h|r",
+"|HlootHistory:79|h[Loot]|h: You passed on: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:53:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:8|h[Loot]|h: |cff0070dd|Hitem:13537:0:0:0:0:0:0:0:52:268:0:1:0|h[Chillhide Bracers]|h|r",
+"|HlootHistory:8|h[Loot]|h: |cff0070dd|Hitem:18083:0:0:0:0:0:0:0:49:268:0:1:0|h[Jumanza Grips]|h|r",
+"|HlootHistory:8|h[Loot]|h: |cff0070dd|Hitem:5200:0:0:0:0:0:0:0:15:73:0:1:0|h[Impaling Harpoon]|h|r",
+"|HlootHistory:8|h[Loot]|h: |cff1eff00|Hitem:12662:0:0:0:0:0:0:0:46:66:0:0:0|h[Demonic Rune]|h|r",
+"|HlootHistory:8|h[Loot]|h: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:46:66:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:8|h[Loot]|h: |cff1eff00|Hitem:15571:0:0:0:0:0:-68:129734656:35:264:0:1:0|h[Marauder's Belt of the Bear]|h|r",
+"|HlootHistory:8|h[Loot]|h: |cff1eff00|Hitem:1705:0:0:0:0:0:0:0:29:104:0:0:0|h[Lesser Moonstone]|h|r",
+"|HlootHistory:8|h[Loot]|h: |cff1eff00|Hitem:3195:0:0:0:0:0:-78:260184448:17:104:0:1:0|h[Barbaric Battle Axe of the Monkey]|h|r",
+"|HlootHistory:8|h[Loot]|h: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:60:64:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:8|h[Loot]|h: |cff1eff00|Hitem:7112:0:0:0:0:0:0:0:46:268:0:1:0|h[Aurora Armor]|h|r",
+"|HlootHistory:8|h[Loot]|h: |cff1eff00|Hitem:8141:0:0:0:0:0:0:0:48:263:0:1:0|h[Chromite Greaves]|h|r",
+"|HlootHistory:8|h[Loot]|h: |cff1eff00|Hitem:9763:0:0:0:0:0:-17:1181276800:16:268:0:1:0|h[Cadet Leggings of Strength]|h|r",
+"|HlootHistory:8|h[Loot]|h: Avirii-BurningLegion (Greed - 89) Won: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:60:64:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:8|h[Loot]|h: Dudika-ChamberofAspects (Need - 19) Won: |cff0070dd|Hitem:5200:0:0:0:0:0:0:0:15:73:0:1:0|h[Impaling Harpoon]|h|r",
+"|HlootHistory:8|h[Loot]|h: Fennec (Greed - 100) Won: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:46:66:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:8|h[Loot]|h: Holrenkaisia-Drak'thul (Need - 1) Won: |cff0070dd|Hitem:18083:0:0:0:0:0:0:0:49:268:0:1:0|h[Jumanza Grips]|h|r",
+"|HlootHistory:8|h[Loot]|h: Lethalundead-Outland (Greed - 76) Won: |cff1eff00|Hitem:8141:0:0:0:0:0:0:0:48:263:0:1:0|h[Chromite Greaves]|h|r",
+"|HlootHistory:8|h[Loot]|h: Midorìko-Runetotem (Greed - 95) Won: |cff1eff00|Hitem:9763:0:0:0:0:0:-17:1181276800:16:268:0:1:0|h[Cadet Leggings of Strength]|h|r",
+"|HlootHistory:8|h[Loot]|h: Smetot-Mazrigos (Greed - 96) Won: |cff1eff00|Hitem:1705:0:0:0:0:0:0:0:29:104:0:0:0|h[Lesser Moonstone]|h|r",
+"|HlootHistory:8|h[Loot]|h: Valhallir-Spinebreaker (Greed - 99) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:8|h[Loot]|h: Wumpsham-TarrenMill (Greed - 52) Won: |cff0070dd|Hitem:13537:0:0:0:0:0:0:0:52:268:0:1:0|h[Chillhide Bracers]|h|r",
+"|HlootHistory:8|h[Loot]|h: Wydad-Draenor (Need - 79) Won: |cff1eff00|Hitem:3195:0:0:0:0:0:-78:260184448:17:104:0:1:0|h[Barbaric Battle Axe of the Monkey]|h|r",
+"|HlootHistory:8|h[Loot]|h: You (Greed - 78) Won: |cff1eff00|Hitem:15571:0:0:0:0:0:-68:129734656:35:264:0:1:0|h[Marauder's Belt of the Bear]|h|r",
+"|HlootHistory:8|h[Loot]|h: You (Greed - 84) Won: |cff1eff00|Hitem:12662:0:0:0:0:0:0:0:46:66:0:0:0|h[Demonic Rune]|h|r",
+"|HlootHistory:8|h[Loot]|h: You (Greed - 96) Won: |cff1eff00|Hitem:7112:0:0:0:0:0:0:0:46:268:0:1:0|h[Aurora Armor]|h|r",
+"|HlootHistory:8|h[Loot]|h: You have rolled Greed - 14 for: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:46:66:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:8|h[Loot]|h: You have rolled Greed - 16 for: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:60:64:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:8|h[Loot]|h: You have rolled Greed - 45 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:8|h[Loot]|h: You have rolled Greed - 63 for: |cff1eff00|Hitem:9763:0:0:0:0:0:-17:1181276800:16:268:0:1:0|h[Cadet Leggings of Strength]|h|r",
+"|HlootHistory:8|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:5200:0:0:0:0:0:0:0:15:73:0:1:0|h[Impaling Harpoon]|h|r",
+"|HlootHistory:8|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:51:105:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:8|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12662:0:0:0:0:0:0:0:46:66:0:0:0|h[Demonic Rune]|h|r",
+"|HlootHistory:8|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12803:0:0:0:0:0:0:0:46:66:0:0:0|h[Living Essence]|h|r",
+"|HlootHistory:8|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:15571:0:0:0:0:0:-68:129734656:35:264:0:1:0|h[Marauder's Belt of the Bear]|h|r",
+"|HlootHistory:8|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:5760:0:0:0:0:0:0:0:60:64:0:1:0|h[Eternium Lockbox]|h|r",
+"|HlootHistory:8|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7112:0:0:0:0:0:0:0:46:268:0:1:0|h[Aurora Armor]|h|r",
+"|HlootHistory:8|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9763:0:0:0:0:0:-17:1181276800:16:268:0:1:0|h[Cadet Leggings of Strength]|h|r",
+"|HlootHistory:8|h[Loot]|h: You passed on: |cff0070dd|Hitem:13537:0:0:0:0:0:0:0:52:268:0:1:0|h[Chillhide Bracers]|h|r",
+"|HlootHistory:8|h[Loot]|h: You passed on: |cff0070dd|Hitem:18083:0:0:0:0:0:0:0:49:268:0:1:0|h[Jumanza Grips]|h|r",
+"|HlootHistory:8|h[Loot]|h: You passed on: |cff1eff00|Hitem:1705:0:0:0:0:0:0:0:29:104:0:0:0|h[Lesser Moonstone]|h|r",
+"|HlootHistory:8|h[Loot]|h: You passed on: |cff1eff00|Hitem:3195:0:0:0:0:0:-78:260184448:17:104:0:1:0|h[Barbaric Battle Axe of the Monkey]|h|r",
+"|HlootHistory:8|h[Loot]|h: You passed on: |cff1eff00|Hitem:8141:0:0:0:0:0:0:0:48:263:0:1:0|h[Chromite Greaves]|h|r",
+"|HlootHistory:80|h[Loot]|h: |cff0070dd|Hitem:10760:0:0:0:0:0:0:0:44:264:0:1:0|h[Swine Fists]|h|r",
+"|HlootHistory:80|h[Loot]|h: |cff0070dd|Hitem:18044:0:0:0:0:0:0:0:54:263:0:1:0|h[Hurley's Tankard]|h|r",
+"|HlootHistory:80|h[Loot]|h: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:56:268:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:80|h[Loot]|h: |cff1eff00|Hitem:6381:0:0:0:0:0:0:0:27:104:0:1:0|h[Bright Cloak]|h|r",
+"|HlootHistory:80|h[Loot]|h: |cff1eff00|Hitem:6568:0:0:0:0:0:-69:1131660032:26:73:0:1:0|h[Shimmering Trousers of the Eagle]|h|r",
+"|HlootHistory:80|h[Loot]|h: Ifpara-ChamberofAspects (Need - 96) Won: |cff1eff00|Hitem:6568:0:0:0:0:0:-69:1131660032:26:73:0:1:0|h[Shimmering Trousers of the Eagle]|h|r",
+"|HlootHistory:80|h[Loot]|h: Mangoworm (Greed - 88) Won: |cff1eff00|Hitem:6381:0:0:0:0:0:0:0:27:104:0:1:0|h[Bright Cloak]|h|r",
+"|HlootHistory:80|h[Loot]|h: Sweetable-Bloodhoof (Greed - 97) Won: |cff0070dd|Hitem:10760:0:0:0:0:0:0:0:44:264:0:1:0|h[Swine Fists]|h|r",
+"|HlootHistory:80|h[Loot]|h: You (Greed - 57) Won: |cff0070dd|Hitem:18044:0:0:0:0:0:0:0:54:263:0:1:0|h[Hurley's Tankard]|h|r",
+"|HlootHistory:80|h[Loot]|h: You (Greed - 93) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:56:268:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:80|h[Loot]|h: You have rolled Greed - 21 for: |cff0070dd|Hitem:10760:0:0:0:0:0:0:0:44:264:0:1:0|h[Swine Fists]|h|r",
+"|HlootHistory:80|h[Loot]|h: You have rolled Greed - 56 for: |cff1eff00|Hitem:6381:0:0:0:0:0:0:0:27:104:0:1:0|h[Bright Cloak]|h|r",
+"|HlootHistory:80|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10760:0:0:0:0:0:0:0:44:264:0:1:0|h[Swine Fists]|h|r",
+"|HlootHistory:80|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18044:0:0:0:0:0:0:0:54:263:0:1:0|h[Hurley's Tankard]|h|r",
+"|HlootHistory:80|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:56:268:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:80|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:6381:0:0:0:0:0:0:0:27:104:0:1:0|h[Bright Cloak]|h|r",
+"|HlootHistory:80|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:6568:0:0:0:0:0:-69:1131660032:26:73:0:1:0|h[Shimmering Trousers of the Eagle]|h|r",
+"|HlootHistory:81|h[Loot]|h: |cff0070dd|Hitem:10762:0:0:0:0:0:0:0:44:264:0:1:0|h[Robes of the Lich]|h|r",
+"|HlootHistory:81|h[Loot]|h: |cff0070dd|Hitem:11742:0:0:0:0:0:0:0:54:263:0:0:0|h[Wayfarer's Knapsack]|h|r",
+"|HlootHistory:81|h[Loot]|h: |cff0070dd|Hitem:63344:0:0:0:0:0:0:0:26:73:0:1:0|h[Standard Issue Prisoner Shoes]|h|r",
+"|HlootHistory:81|h[Loot]|h: |cff1eff00|Hitem:10244:0:0:0:0:0:-10:857453824:56:268:0:1:0|h[Heavy Lamellar Leggings of the Gorilla]|h|r",
+"|HlootHistory:81|h[Loot]|h: |cff1eff00|Hitem:6573:0:0:0:0:0:-68:1465096704:27:104:0:1:0|h[Defender Boots of the Bear]|h|r",
+"|HlootHistory:81|h[Loot]|h: Ampitryon-Stormscale (Greed - 83) Won: |cff1eff00|Hitem:6573:0:0:0:0:0:-68:1465096704:27:104:0:1:0|h[Defender Boots of the Bear]|h|r",
+"|HlootHistory:81|h[Loot]|h: Graze-TwistingNether (Need - 89) Won: |cff0070dd|Hitem:11742:0:0:0:0:0:0:0:54:263:0:0:0|h[Wayfarer's Knapsack]|h|r",
+"|HlootHistory:81|h[Loot]|h: Lerona (Greed - 100) Won: |cff1eff00|Hitem:10244:0:0:0:0:0:-10:857453824:56:268:0:1:0|h[Heavy Lamellar Leggings of the Gorilla]|h|r",
+"|HlootHistory:81|h[Loot]|h: Moaizer-Nemesis (Greed - 92) Won: |cff0070dd|Hitem:10762:0:0:0:0:0:0:0:44:264:0:1:0|h[Robes of the Lich]|h|r",
+"|HlootHistory:81|h[Loot]|h: Vodo-Silvermoon (Need - 43) Won: |cff0070dd|Hitem:63344:0:0:0:0:0:0:0:26:73:0:1:0|h[Standard Issue Prisoner Shoes]|h|r",
+"|HlootHistory:81|h[Loot]|h: You have rolled Greed - 44 for: |cff0070dd|Hitem:10762:0:0:0:0:0:0:0:44:264:0:1:0|h[Robes of the Lich]|h|r",
+"|HlootHistory:81|h[Loot]|h: You have rolled Greed - 86 for: |cff1eff00|Hitem:10244:0:0:0:0:0:-10:857453824:56:268:0:1:0|h[Heavy Lamellar Leggings of the Gorilla]|h|r",
+"|HlootHistory:81|h[Loot]|h: You have rolled Need - 44 for: |cff0070dd|Hitem:11742:0:0:0:0:0:0:0:54:263:0:0:0|h[Wayfarer's Knapsack]|h|r",
+"|HlootHistory:81|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10762:0:0:0:0:0:0:0:44:264:0:1:0|h[Robes of the Lich]|h|r",
+"|HlootHistory:81|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:63344:0:0:0:0:0:0:0:26:73:0:1:0|h[Standard Issue Prisoner Shoes]|h|r",
+"|HlootHistory:81|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10244:0:0:0:0:0:-10:857453824:56:268:0:1:0|h[Heavy Lamellar Leggings of the Gorilla]|h|r",
+"|HlootHistory:81|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:11742:0:0:0:0:0:0:0:54:263:0:0:0|h[Wayfarer's Knapsack]|h|r",
+"|HlootHistory:81|h[Loot]|h: You passed on: |cff1eff00|Hitem:6573:0:0:0:0:0:-68:1465096704:27:104:0:1:0|h[Defender Boots of the Bear]|h|r",
+"|HlootHistory:82|h[Loot]|h: |cff0070dd|Hitem:11934:0:0:0:0:0:0:0:57:268:0:1:0|h[Emperor's Seal]|h|r",
+"|HlootHistory:82|h[Loot]|h: |cff0070dd|Hitem:63344:0:0:0:0:0:0:0:27:104:0:1:0|h[Standard Issue Prisoner Shoes]|h|r",
+"|HlootHistory:82|h[Loot]|h: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:82|h[Loot]|h: |cff1eff00|Hitem:4637:0:0:0:0:0:0:0:45:264:0:1:0|h[Steel Lockbox]|h|r",
+"|HlootHistory:82|h[Loot]|h: |cff1eff00|Hitem:789:0:0:0:0:0:-19:672626304:26:73:0:1:0|h[Stout Battlehammer of Intellect]|h|r",
+"|HlootHistory:82|h[Loot]|h: Ifpara-ChamberofAspects (Greed - 80) Won: |cff1eff00|Hitem:789:0:0:0:0:0:-19:672626304:26:73:0:1:0|h[Stout Battlehammer of Intellect]|h|r",
+"|HlootHistory:82|h[Loot]|h: You (Greed - 47) Won: |cff1eff00|Hitem:4637:0:0:0:0:0:0:0:45:264:0:1:0|h[Steel Lockbox]|h|r",
+"|HlootHistory:82|h[Loot]|h: You (Greed - 72) Won: |cff0070dd|Hitem:11934:0:0:0:0:0:0:0:57:268:0:1:0|h[Emperor's Seal]|h|r",
+"|HlootHistory:82|h[Loot]|h: You (Greed - 94) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:82|h[Loot]|h: You (Need - 87) Won: |cff0070dd|Hitem:63344:0:0:0:0:0:0:0:27:104:0:1:0|h[Standard Issue Prisoner Shoes]|h|r",
+"|HlootHistory:82|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11934:0:0:0:0:0:0:0:57:268:0:1:0|h[Emperor's Seal]|h|r",
+"|HlootHistory:82|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:82|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4637:0:0:0:0:0:0:0:45:264:0:1:0|h[Steel Lockbox]|h|r",
+"|HlootHistory:82|h[Loot]|h: You have selected Need for: |cff0070dd|Hitem:63344:0:0:0:0:0:0:0:27:104:0:1:0|h[Standard Issue Prisoner Shoes]|h|r",
+"|HlootHistory:82|h[Loot]|h: You passed on: |cff1eff00|Hitem:789:0:0:0:0:0:-19:672626304:26:73:0:1:0|h[Stout Battlehammer of Intellect]|h|r",
+"|HlootHistory:83|h[Loot]|h: |cff0070dd|Hitem:11931:0:0:0:0:0:0:0:57:268:0:1:0|h[Dreadforge Retaliator]|h|r",
+"|HlootHistory:83|h[Loot]|h: |cff0070dd|Hitem:13384:0:0:0:0:0:0:0:45:264:0:1:0|h[Rainbow Girdle]|h|r",
+"|HlootHistory:83|h[Loot]|h: |cff0070dd|Hitem:1929:0:0:0:0:0:0:0:26:73:0:1:0|h[Silk-Threaded Trousers]|h|r",
+"|HlootHistory:83|h[Loot]|h: |cff1eff00|Hitem:18653:0:0:0:0:0:0:0:54:263:0:1:0|h[Schematic: Goblin Jumper Cables XL]|h|r",
+"|HlootHistory:83|h[Loot]|h: |cff1eff00|Hitem:6577:0:0:0:0:0:-81:1541908096:27:104:0:1:0|h[Defender Gauntlets of the Whale]|h|r",
+"|HlootHistory:83|h[Loot]|h: Ampitryon-Stormscale (Greed - 86) Won: |cff1eff00|Hitem:6577:0:0:0:0:0:-81:1541908096:27:104:0:1:0|h[Defender Gauntlets of the Whale]|h|r",
+"|HlootHistory:83|h[Loot]|h: Graze-TwistingNether (Greed - 97) Won: |cff1eff00|Hitem:18653:0:0:0:0:0:0:0:54:263:0:1:0|h[Schematic: Goblin Jumper Cables XL]|h|r",
+"|HlootHistory:83|h[Loot]|h: Ifpara-ChamberofAspects (Need - 21) Won: |cff0070dd|Hitem:1929:0:0:0:0:0:0:0:26:73:0:1:0|h[Silk-Threaded Trousers]|h|r",
+"|HlootHistory:83|h[Loot]|h: Lerona (Need - 65) Won: |cff0070dd|Hitem:11931:0:0:0:0:0:0:0:57:268:0:1:0|h[Dreadforge Retaliator]|h|r",
+"|HlootHistory:83|h[Loot]|h: Sholá-DefiasBrotherhood (Need - 17) Won: |cff0070dd|Hitem:13384:0:0:0:0:0:0:0:45:264:0:1:0|h[Rainbow Girdle]|h|r",
+"|HlootHistory:83|h[Loot]|h: You have rolled Greed - 90 for: |cff1eff00|Hitem:18653:0:0:0:0:0:0:0:54:263:0:1:0|h[Schematic: Goblin Jumper Cables XL]|h|r",
+"|HlootHistory:83|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13384:0:0:0:0:0:0:0:45:264:0:1:0|h[Rainbow Girdle]|h|r",
+"|HlootHistory:83|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:18653:0:0:0:0:0:0:0:54:263:0:1:0|h[Schematic: Goblin Jumper Cables XL]|h|r",
+"|HlootHistory:83|h[Loot]|h: You passed on: |cff0070dd|Hitem:11931:0:0:0:0:0:0:0:57:268:0:1:0|h[Dreadforge Retaliator]|h|r",
+"|HlootHistory:83|h[Loot]|h: You passed on: |cff0070dd|Hitem:1929:0:0:0:0:0:0:0:26:73:0:1:0|h[Silk-Threaded Trousers]|h|r",
+"|HlootHistory:83|h[Loot]|h: You passed on: |cff1eff00|Hitem:6577:0:0:0:0:0:-81:1541908096:27:104:0:1:0|h[Defender Gauntlets of the Whale]|h|r",
+"|HlootHistory:84|h[Loot]|h: |cff0070dd|Hitem:12557:0:0:0:0:0:0:0:57:268:0:1:0|h[Ebonsteel Spaulders]|h|r",
+"|HlootHistory:84|h[Loot]|h: |cff0070dd|Hitem:13408:0:0:0:0:0:0:0:45:264:0:1:0|h[Soul Breaker]|h|r",
+"|HlootHistory:84|h[Loot]|h: |cff0070dd|Hitem:1929:0:0:0:0:0:0:0:27:104:0:1:0|h[Silk-Threaded Trousers]|h|r",
+"|HlootHistory:84|h[Loot]|h: |cff0070dd|Hitem:1959:0:0:0:0:0:0:0:27:73:0:1:0|h[Cold Iron Pick]|h|r",
+"|HlootHistory:84|h[Loot]|h: |cff1eff00|Hitem:10096:0:0:0:0:0:-19:1597526912:54:263:0:1:0|h[Councillor's Cuffs of Intellect]|h|r",
+"|HlootHistory:84|h[Loot]|h: Ahlqvist-ChamberofAspects (Greed - 97) Won: |cff0070dd|Hitem:1929:0:0:0:0:0:0:0:27:104:0:1:0|h[Silk-Threaded Trousers]|h|r",
+"|HlootHistory:84|h[Loot]|h: Anestadren (Greed - 87) Won: |cff0070dd|Hitem:1959:0:0:0:0:0:0:0:27:73:0:1:0|h[Cold Iron Pick]|h|r",
+"|HlootHistory:84|h[Loot]|h: Lerona (Need - 56) Won: |cff0070dd|Hitem:12557:0:0:0:0:0:0:0:57:268:0:1:0|h[Ebonsteel Spaulders]|h|r",
+"|HlootHistory:84|h[Loot]|h: Moaizer-Nemesis (Greed - 38) Won: |cff0070dd|Hitem:13408:0:0:0:0:0:0:0:45:264:0:1:0|h[Soul Breaker]|h|r",
+"|HlootHistory:84|h[Loot]|h: You (Greed - 93) Won: |cff1eff00|Hitem:10096:0:0:0:0:0:-19:1597526912:54:263:0:1:0|h[Councillor's Cuffs of Intellect]|h|r",
+"|HlootHistory:84|h[Loot]|h: You have rolled Greed - 17 for: |cff0070dd|Hitem:13408:0:0:0:0:0:0:0:45:264:0:1:0|h[Soul Breaker]|h|r",
+"|HlootHistory:84|h[Loot]|h: You have rolled Greed - 75 for: |cff0070dd|Hitem:1959:0:0:0:0:0:0:0:27:73:0:1:0|h[Cold Iron Pick]|h|r",
+"|HlootHistory:84|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13408:0:0:0:0:0:0:0:45:264:0:1:0|h[Soul Breaker]|h|r",
+"|HlootHistory:84|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:1959:0:0:0:0:0:0:0:27:73:0:1:0|h[Cold Iron Pick]|h|r",
+"|HlootHistory:84|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10096:0:0:0:0:0:-19:1597526912:54:263:0:1:0|h[Councillor's Cuffs of Intellect]|h|r",
+"|HlootHistory:84|h[Loot]|h: You passed on: |cff0070dd|Hitem:12557:0:0:0:0:0:0:0:57:268:0:1:0|h[Ebonsteel Spaulders]|h|r",
+"|HlootHistory:84|h[Loot]|h: You passed on: |cff0070dd|Hitem:1929:0:0:0:0:0:0:0:27:104:0:1:0|h[Silk-Threaded Trousers]|h|r",
+"|HlootHistory:85|h[Loot]|h: |cff0070dd|Hitem:10846:0:0:0:0:0:0:0:57:268:0:1:0|h[Bloodshot Greaves]|h|r",
+"|HlootHistory:85|h[Loot]|h: |cff0070dd|Hitem:13400:0:0:0:0:0:0:0:45:264:0:1:0|h[Vambraces of the Sadist]|h|r",
+"|HlootHistory:85|h[Loot]|h: |cff0070dd|Hitem:22212:0:0:0:0:0:0:0:54:263:0:1:0|h[Golem Fitted Pauldrons]|h|r",
+"|HlootHistory:85|h[Loot]|h: |cff1eff00|Hitem:24839:0:0:0:0:0:-39:378732567:65:64:0:1:0|h[Wrathfin Greaves of the Invoker]|h|r",
+"|HlootHistory:85|h[Loot]|h: |cff1eff00|Hitem:9805:0:0:0:0:0:-13:336026880:27:104:0:1:0|h[Superior Cloak of the Wolf]|h|r",
+"|HlootHistory:85|h[Loot]|h: Ampitryon-Stormscale (Greed - 89) Won: |cff1eff00|Hitem:9805:0:0:0:0:0:-13:336026880:28:104:0:1:0|h[Superior Cloak of the Wolf]|h|r",
+"|HlootHistory:85|h[Loot]|h: Celvariel-Auchindoun (Need - 92) Won: |cff0070dd|Hitem:10846:0:0:0:0:0:0:0:57:268:0:1:0|h[Bloodshot Greaves]|h|r",
+"|HlootHistory:85|h[Loot]|h: Graze-TwistingNether (Greed - 90) Won: |cff0070dd|Hitem:22212:0:0:0:0:0:0:0:54:263:0:1:0|h[Golem Fitted Pauldrons]|h|r",
+"|HlootHistory:85|h[Loot]|h: Qxie-TwistingNether (Greed - 61) Won: |cff1eff00|Hitem:24839:0:0:0:0:0:-39:378732567:65:64:0:1:0|h[Wrathfin Greaves of the Invoker]|h|r",
+"|HlootHistory:85|h[Loot]|h: Sholá-DefiasBrotherhood (Need - 37) Won: |cff0070dd|Hitem:13400:0:0:0:0:0:0:0:45:264:0:1:0|h[Vambraces of the Sadist]|h|r",
+"|HlootHistory:85|h[Loot]|h: You have rolled Greed - 46 for: |cff1eff00|Hitem:9805:0:0:0:0:0:-13:336026880:28:104:0:1:0|h[Superior Cloak of the Wolf]|h|r",
+"|HlootHistory:85|h[Loot]|h: You have rolled Greed - 78 for: |cff0070dd|Hitem:22212:0:0:0:0:0:0:0:54:263:0:1:0|h[Golem Fitted Pauldrons]|h|r",
+"|HlootHistory:85|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10846:0:0:0:0:0:0:0:57:268:0:1:0|h[Bloodshot Greaves]|h|r",
+"|HlootHistory:85|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13400:0:0:0:0:0:0:0:45:264:0:1:0|h[Vambraces of the Sadist]|h|r",
+"|HlootHistory:85|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22212:0:0:0:0:0:0:0:54:263:0:1:0|h[Golem Fitted Pauldrons]|h|r",
+"|HlootHistory:85|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9805:0:0:0:0:0:-13:336026880:27:104:0:1:0|h[Superior Cloak of the Wolf]|h|r",
+"|HlootHistory:85|h[Loot]|h: You passed on: |cff1eff00|Hitem:24839:0:0:0:0:0:-39:378732567:65:64:0:1:0|h[Wrathfin Greaves of the Invoker]|h|r",
+"|HlootHistory:86|h[Loot]|h: |cff0070dd|Hitem:10842:0:0:0:0:0:0:0:57:268:0:1:0|h[Windscale Sarong]|h|r",
+"|HlootHistory:86|h[Loot]|h: |cff0070dd|Hitem:1959:0:0:0:0:0:0:0:28:104:0:1:0|h[Cold Iron Pick]|h|r",
+"|HlootHistory:86|h[Loot]|h: |cff0070dd|Hitem:24452:0:0:0:0:0:0:0:65:64:0:1:0|h[Starlight Gauntlets]|h|r",
+"|HlootHistory:86|h[Loot]|h: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:86|h[Loot]|h: |cff1eff00|Hitem:8108:0:0:0:0:0:0:0:45:264:0:1:0|h[Hibernal Bracers]|h|r",
+"|HlootHistory:86|h[Loot]|h: Beeferano-TwistingNether (Greed - 33) Won: |cff0070dd|Hitem:24452:0:0:0:0:0:0:0:65:64:0:1:0|h[Starlight Gauntlets]|h|r",
+"|HlootHistory:86|h[Loot]|h: Lerona (Greed - 89) Won: |cff0070dd|Hitem:10842:0:0:0:0:0:0:0:57:268:0:1:0|h[Windscale Sarong]|h|r",
+"|HlootHistory:86|h[Loot]|h: Mangoworm (Greed - 86) Won: |cff0070dd|Hitem:1959:0:0:0:0:0:0:0:28:104:0:1:0|h[Cold Iron Pick]|h|r",
+"|HlootHistory:86|h[Loot]|h: Sanctisius (Greed - 43) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:86|h[Loot]|h: You (Greed - 100) Won: |cff1eff00|Hitem:8108:0:0:0:0:0:0:0:45:264:0:1:0|h[Hibernal Bracers]|h|r",
+"|HlootHistory:86|h[Loot]|h: You have rolled Greed - 16 for: |cff0070dd|Hitem:10842:0:0:0:0:0:0:0:57:268:0:1:0|h[Windscale Sarong]|h|r",
+"|HlootHistory:86|h[Loot]|h: You have rolled Greed - 38 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:86|h[Loot]|h: You have rolled Greed - 69 for: |cff0070dd|Hitem:1959:0:0:0:0:0:0:0:28:104:0:1:0|h[Cold Iron Pick]|h|r",
+"|HlootHistory:86|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10842:0:0:0:0:0:0:0:57:268:0:1:0|h[Windscale Sarong]|h|r",
+"|HlootHistory:86|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:1959:0:0:0:0:0:0:0:28:104:0:1:0|h[Cold Iron Pick]|h|r",
+"|HlootHistory:86|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:86|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8108:0:0:0:0:0:0:0:45:264:0:1:0|h[Hibernal Bracers]|h|r",
+"|HlootHistory:86|h[Loot]|h: You passed on: |cff0070dd|Hitem:24452:0:0:0:0:0:0:0:65:64:0:1:0|h[Starlight Gauntlets]|h|r",
+"|HlootHistory:87|h[Loot]|h: |cff0070dd|Hitem:63344:0:0:0:0:0:0:0:28:104:0:1:0|h[Standard Issue Prisoner Shoes]|h|r",
+"|HlootHistory:87|h[Loot]|h: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:87|h[Loot]|h: |cff1eff00|Hitem:24848:0:0:0:0:0:-40:455475233:65:64:0:1:0|h[Fenclaw Armor of the Bandit]|h|r",
+"|HlootHistory:87|h[Loot]|h: |cff1eff00|Hitem:8269:0:0:0:0:0:0:0:57:268:0:1:0|h[Ebonhold Boots]|h|r",
+"|HlootHistory:87|h[Loot]|h: |cff1eff00|Hitem:9925:0:0:0:0:0:-78:1587262592:45:264:0:1:0|h[Tracker's Wristguards of the Monkey]|h|r",
+"|HlootHistory:87|h[Loot]|h: Celvariel-Auchindoun (Need - 18) Won: |cff1eff00|Hitem:8269:0:0:0:0:0:0:0:57:268:0:1:0|h[Ebonhold Boots]|h|r",
+"|HlootHistory:87|h[Loot]|h: Graze-TwistingNether (Greed - 90) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:87|h[Loot]|h: Salvaror-TwistingNether (Greed - 76) Won: |cff1eff00|Hitem:24848:0:0:0:0:0:-40:455475233:65:64:0:1:0|h[Fenclaw Armor of the Bandit]|h|r",
+"|HlootHistory:87|h[Loot]|h: Yarizz-Draenor (Need - 95) Won: |cff0070dd|Hitem:63344:0:0:0:0:0:0:0:28:104:0:1:0|h[Standard Issue Prisoner Shoes]|h|r",
+"|HlootHistory:87|h[Loot]|h: You (Greed - 76) Won: |cff1eff00|Hitem:9925:0:0:0:0:0:-78:1587262592:45:264:0:1:0|h[Tracker's Wristguards of the Monkey]|h|r",
+"|HlootHistory:87|h[Loot]|h: You have rolled Greed - 2 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:87|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:63344:0:0:0:0:0:0:0:28:104:0:1:0|h[Standard Issue Prisoner Shoes]|h|r",
+"|HlootHistory:87|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:87|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:9925:0:0:0:0:0:-78:1587262592:45:264:0:1:0|h[Tracker's Wristguards of the Monkey]|h|r",
+"|HlootHistory:87|h[Loot]|h: You passed on: |cff1eff00|Hitem:24848:0:0:0:0:0:-40:455475233:65:64:0:1:0|h[Fenclaw Armor of the Bandit]|h|r",
+"|HlootHistory:87|h[Loot]|h: You passed on: |cff1eff00|Hitem:8269:0:0:0:0:0:0:0:57:268:0:1:0|h[Ebonhold Boots]|h|r",
+"|HlootHistory:88|h[Loot]|h: |cff0070dd|Hitem:4676:0:0:0:0:0:0:0:28:104:0:1:0|h[Skeletal Gauntlets]|h|r",
+"|HlootHistory:88|h[Loot]|h: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:88|h[Loot]|h: |cff1eff00|Hitem:24629:0:0:0:0:0:-16:436666394:65:64:0:1:0|h[Feralfen Sash of Stamina]|h|r",
+"|HlootHistory:88|h[Loot]|h: |cff1eff00|Hitem:5216:0:0:0:0:0:-13:1280764672:45:264:0:1:0|h[Umbral Wand of the Wolf]|h|r",
+"|HlootHistory:88|h[Loot]|h: |cff1eff00|Hitem:8268:0:0:0:0:0:0:0:57:268:0:1:0|h[Ebonhold Girdle]|h|r",
+"|HlootHistory:88|h[Loot]|h: Beeferano-TwistingNether (Greed - 94) Won: |cff1eff00|Hitem:24629:0:0:0:0:0:-16:436666394:65:64:0:1:0|h[Feralfen Sash of Stamina]|h|r",
+"|HlootHistory:88|h[Loot]|h: Celvariel-Auchindoun (Need - 2) Won: |cff1eff00|Hitem:8268:0:0:0:0:0:0:0:57:268:0:1:0|h[Ebonhold Girdle]|h|r",
+"|HlootHistory:88|h[Loot]|h: Fennec (Greed - 90) Won: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:88|h[Loot]|h: Moaizer-Nemesis (Greed - 69) Won: |cff1eff00|Hitem:5216:0:0:0:0:0:-13:1280764672:45:264:0:1:0|h[Umbral Wand of the Wolf]|h|r",
+"|HlootHistory:88|h[Loot]|h: You (Greed - 75) Won: |cff0070dd|Hitem:4676:0:0:0:0:0:0:0:28:104:0:1:0|h[Skeletal Gauntlets]|h|r",
+"|HlootHistory:88|h[Loot]|h: You have rolled Greed - 79 for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:88|h[Loot]|h: You have rolled Greed - 9 for: |cff1eff00|Hitem:5216:0:0:0:0:0:-13:1280764672:45:264:0:1:0|h[Umbral Wand of the Wolf]|h|r",
+"|HlootHistory:88|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:4676:0:0:0:0:0:0:0:28:104:0:1:0|h[Skeletal Gauntlets]|h|r",
+"|HlootHistory:88|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11754:0:0:0:0:0:0:0:54:263:0:0:0|h[Black Diamond]|h|r",
+"|HlootHistory:88|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:5216:0:0:0:0:0:-13:1280764672:45:264:0:1:0|h[Umbral Wand of the Wolf]|h|r",
+"|HlootHistory:88|h[Loot]|h: You passed on: |cff1eff00|Hitem:24629:0:0:0:0:0:-16:436666394:65:64:0:1:0|h[Feralfen Sash of Stamina]|h|r",
+"|HlootHistory:88|h[Loot]|h: You passed on: |cff1eff00|Hitem:8268:0:0:0:0:0:0:0:57:268:0:1:0|h[Ebonhold Girdle]|h|r",
+"|HlootHistory:89|h[Loot]|h: |cff0070dd|Hitem:10803:0:0:0:0:0:0:0:57:268:0:1:0|h[Blade of the Wretched]|h|r",
+"|HlootHistory:89|h[Loot]|h: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:45:264:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:89|h[Loot]|h: |cff1eff00|Hitem:25034:0:0:0:0:0:-20:1754464273:65:64:0:1:0|h[Elementalist Cloak of Power]|h|r",
+"|HlootHistory:89|h[Loot]|h: |cff1eff00|Hitem:3039:0:0:0:0:0:0:0:28:104:0:1:0|h[Short Ash Bow]|h|r",
+"|HlootHistory:89|h[Loot]|h: |cff1eff00|Hitem:7078:0:0:0:0:0:0:0:54:263:0:0:0|h[Essence of Fire]|h|r",
+"|HlootHistory:89|h[Loot]|h: Beeferano-TwistingNether (Greed - 99) Won: |cff1eff00|Hitem:25034:0:0:0:0:0:-20:1754464273:65:64:0:1:0|h[Elementalist Cloak of Power]|h|r",
+"|HlootHistory:89|h[Loot]|h: Lerona (Greed - 94) Won: |cff0070dd|Hitem:10803:0:0:0:0:0:0:0:57:268:0:1:0|h[Blade of the Wretched]|h|r",
+"|HlootHistory:89|h[Loot]|h: Sanctisius (Greed - 92) Won: |cff1eff00|Hitem:7078:0:0:0:0:0:0:0:54:263:0:0:0|h[Essence of Fire]|h|r",
+"|HlootHistory:89|h[Loot]|h: You (Greed - 100) Won: |cff1eff00|Hitem:3039:0:0:0:0:0:0:0:28:104:0:1:0|h[Short Ash Bow]|h|r",
+"|HlootHistory:89|h[Loot]|h: You (Greed - 58) Won: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:45:264:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:89|h[Loot]|h: You have rolled Greed - 17 for: |cff1eff00|Hitem:7078:0:0:0:0:0:0:0:54:263:0:0:0|h[Essence of Fire]|h|r",
+"|HlootHistory:89|h[Loot]|h: You have rolled Greed - 69 for: |cff0070dd|Hitem:10803:0:0:0:0:0:0:0:57:268:0:1:0|h[Blade of the Wretched]|h|r",
+"|HlootHistory:89|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10803:0:0:0:0:0:0:0:57:268:0:1:0|h[Blade of the Wretched]|h|r",
+"|HlootHistory:89|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:45:264:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:89|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:3039:0:0:0:0:0:0:0:28:104:0:1:0|h[Short Ash Bow]|h|r",
+"|HlootHistory:89|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:7078:0:0:0:0:0:0:0:54:263:0:0:0|h[Essence of Fire]|h|r",
+"|HlootHistory:89|h[Loot]|h: You passed on: |cff1eff00|Hitem:25034:0:0:0:0:0:-20:1754464273:65:64:0:1:0|h[Elementalist Cloak of Power]|h|r",
+"|HlootHistory:9|h[Loot]|h: |cff0070dd|Hitem:17749:0:0:0:0:0:0:0:36:264:0:1:0|h[Phytoskin Spaulders]|h|r",
+"|HlootHistory:9|h[Loot]|h: |cff0070dd|Hitem:18394:0:0:0:0:0:0:0:47:66:0:1:0|h[Demon Howl Wristguards]|h|r",
+"|HlootHistory:9|h[Loot]|h: |cff0070dd|Hitem:18735:0:0:0:0:0:0:0:53:268:0:1:0|h[Maleki's Footwraps]|h|r",
+"|HlootHistory:9|h[Loot]|h: |cff0070dd|Hitem:1937:0:0:0:0:0:0:0:16:73:0:1:0|h[Buzz Saw]|h|r",
+"|HlootHistory:9|h[Loot]|h: |cff0070dd|Hitem:24384:0:0:0:0:0:0:0:61:64:0:1:0|h[Diamond-Core Sledgemace]|h|r",
+"|HlootHistory:9|h[Loot]|h: |cff0070dd|Hitem:5443:0:0:0:0:0:0:0:16:268:0:1:0|h[Gold-Plated Buckler]|h|r",
+"|HlootHistory:9|h[Loot]|h: |cff0070dd|Hitem:9475:0:0:0:0:0:0:0:49:268:0:1:0|h[Diabolic Skiver]|h|r",
+"|HlootHistory:9|h[Loot]|h: |cff1eff00|Hitem:12662:0:0:0:0:0:0:0:46:66:0:0:0|h[Demonic Rune]|h|r",
+"|HlootHistory:9|h[Loot]|h: |cff1eff00|Hitem:15114:0:0:0:0:0:-9:1395041152:17:104:0:1:0|h[Rigid Cape of the Owl]|h|r",
+"|HlootHistory:9|h[Loot]|h: |cff1eff00|Hitem:3186:0:0:0:0:0:-78:550939648:29:104:0:1:0|h[Viking Sword of the Monkey]|h|r",
+"|HlootHistory:9|h[Loot]|h: |cff1eff00|Hitem:4637:0:0:0:0:0:0:0:48:263:0:1:0|h[Steel Lockbox]|h|r",
+"|HlootHistory:9|h[Loot]|h: |cff1eff00|Hitem:8196:0:0:0:0:0:-78:720169472:46:268:0:1:0|h[Ebon Scimitar of the Monkey]|h|r",
+"|HlootHistory:9|h[Loot]|h: Bowjack-ChamberofAspects (Greed - 84) Won: |cff0070dd|Hitem:1937:0:0:0:0:0:0:0:16:73:0:1:0|h[Buzz Saw]|h|r",
+"|HlootHistory:9|h[Loot]|h: Celvariel-Auchindoun (Greed - 83) Won: |cff1eff00|Hitem:8196:0:0:0:0:0:-78:720169472:46:268:0:1:0|h[Ebon Scimitar of the Monkey]|h|r",
+"|HlootHistory:9|h[Loot]|h: Eternalwitch-Draenor (Need - 85) Won: |cff0070dd|Hitem:18735:0:0:0:0:0:0:0:53:268:0:1:0|h[Maleki's Footwraps]|h|r",
+"|HlootHistory:9|h[Loot]|h: Jorelemental-Ragnaros (Greed - 98) Won: |cff1eff00|Hitem:15114:0:0:0:0:0:-9:1395041152:17:104:0:1:0|h[Rigid Cape of the Owl]|h|r",
+"|HlootHistory:9|h[Loot]|h: Larku-Magtheridon (Greed - 68) Won: |cff0070dd|Hitem:18394:0:0:0:0:0:0:0:47:66:0:1:0|h[Demon Howl Wristguards]|h|r",
+"|HlootHistory:9|h[Loot]|h: Lillelonely-ChamberofAspects (Need - 3) Won: |cff0070dd|Hitem:17749:0:0:0:0:0:0:0:36:264:0:1:0|h[Phytoskin Spaulders]|h|r",
+"|HlootHistory:9|h[Loot]|h: Smetot-Mazrigos (Greed - 72) Won: |cff1eff00|Hitem:3186:0:0:0:0:0:-78:550939648:29:104:0:1:0|h[Viking Sword of the Monkey]|h|r",
+"|HlootHistory:9|h[Loot]|h: Uoyssimi-ArgentDawn (Greed - 47) Won: |cff0070dd|Hitem:24384:0:0:0:0:0:0:0:61:64:0:1:0|h[Diamond-Core Sledgemace]|h|r",
+"|HlootHistory:9|h[Loot]|h: Valhallir-Spinebreaker (Greed - 96) Won: |cff1eff00|Hitem:5758:0:0:0:0:0:0:0:51:105:0:1:0|h[Mithril Lockbox]|h|r",
+"|HlootHistory:9|h[Loot]|h: You (Greed - 60) Won: |cff1eff00|Hitem:12662:0:0:0:0:0:0:0:46:66:0:0:0|h[Demonic Rune]|h|r",
+"|HlootHistory:9|h[Loot]|h: You (Greed - 92) Won: |cff0070dd|Hitem:9475:0:0:0:0:0:0:0:49:268:0:1:0|h[Diabolic Skiver]|h|r",
+"|HlootHistory:9|h[Loot]|h: You (Greed - 94) Won: |cff0070dd|Hitem:5443:0:0:0:0:0:0:0:16:268:0:1:0|h[Gold-Plated Buckler]|h|r",
+"|HlootHistory:9|h[Loot]|h: You (Greed - 96) Won: |cff1eff00|Hitem:4637:0:0:0:0:0:0:0:48:263:0:1:0|h[Steel Lockbox]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have rolled Greed - 18 for: |cff1eff00|Hitem:8196:0:0:0:0:0:-78:720169472:46:268:0:1:0|h[Ebon Scimitar of the Monkey]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have rolled Greed - 28 for: |cff1eff00|Hitem:5758:0:0:0:0:0:0:0:51:105:0:1:0|h[Mithril Lockbox]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have rolled Greed - 37 for: |cff0070dd|Hitem:24384:0:0:0:0:0:0:0:61:64:0:1:0|h[Diamond-Core Sledgemace]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have rolled Greed - 38 for: |cff0070dd|Hitem:18394:0:0:0:0:0:0:0:47:66:0:1:0|h[Demon Howl Wristguards]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:17749:0:0:0:0:0:0:0:36:264:0:1:0|h[Phytoskin Spaulders]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18394:0:0:0:0:0:0:0:47:66:0:1:0|h[Demon Howl Wristguards]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18735:0:0:0:0:0:0:0:53:268:0:1:0|h[Maleki's Footwraps]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24384:0:0:0:0:0:0:0:61:64:0:1:0|h[Diamond-Core Sledgemace]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:5443:0:0:0:0:0:0:0:16:268:0:1:0|h[Gold-Plated Buckler]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:9475:0:0:0:0:0:0:0:49:268:0:1:0|h[Diabolic Skiver]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12662:0:0:0:0:0:0:0:46:66:0:0:0|h[Demonic Rune]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:4637:0:0:0:0:0:0:0:48:263:0:1:0|h[Steel Lockbox]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:5758:0:0:0:0:0:0:0:51:105:0:1:0|h[Mithril Lockbox]|h|r",
+"|HlootHistory:9|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8196:0:0:0:0:0:-78:720169472:46:268:0:1:0|h[Ebon Scimitar of the Monkey]|h|r",
+"|HlootHistory:9|h[Loot]|h: You passed on: |cff0070dd|Hitem:1937:0:0:0:0:0:0:0:16:73:0:1:0|h[Buzz Saw]|h|r",
+"|HlootHistory:9|h[Loot]|h: You passed on: |cff1eff00|Hitem:15114:0:0:0:0:0:-9:1395041152:17:104:0:1:0|h[Rigid Cape of the Owl]|h|r",
+"|HlootHistory:9|h[Loot]|h: You passed on: |cff1eff00|Hitem:3186:0:0:0:0:0:-78:550939648:29:104:0:1:0|h[Viking Sword of the Monkey]|h|r",
+"|HlootHistory:90|h[Loot]|h: |cff0070dd|Hitem:10806:0:0:0:0:0:0:0:57:268:0:1:0|h[Vestments of the Atal'ai Prophet]|h|r",
+"|HlootHistory:90|h[Loot]|h: |cff0070dd|Hitem:11809:0:0:0:0:0:0:0:54:263:0:1:0|h[Flame Wrath]|h|r",
+"|HlootHistory:90|h[Loot]|h: |cff0070dd|Hitem:13380:0:0:0:0:0:0:0:45:264:0:1:0|h[Willey's Portable Howitzer]|h|r",
+"|HlootHistory:90|h[Loot]|h: |cff0070dd|Hitem:31200:0:0:0:0:0:0:0:65:64:0:1:0|h[Shield of the Wayward Footman]|h|r",
+"|HlootHistory:90|h[Loot]|h: |cff1eff00|Hitem:6573:0:0:0:0:0:-68:631006080:28:104:0:1:0|h[Defender Boots of the Bear]|h|r",
+"|HlootHistory:90|h[Loot]|h: Fennec (Greed - 99) Won: |cff0070dd|Hitem:11809:0:0:0:0:0:0:0:54:263:0:1:0|h[Flame Wrath]|h|r",
+"|HlootHistory:90|h[Loot]|h: Herxi-Ragnaros (Greed - 63) Won: |cff0070dd|Hitem:10806:0:0:0:0:0:0:0:57:268:0:1:0|h[Vestments of the Atal'ai Prophet]|h|r",
+"|HlootHistory:90|h[Loot]|h: Moaizer-Nemesis (Greed - 100) Won: |cff0070dd|Hitem:13380:0:0:0:0:0:0:0:45:264:0:1:0|h[Willey's Portable Howitzer]|h|r",
+"|HlootHistory:90|h[Loot]|h: Qxie-TwistingNether (Greed - 76) Won: |cff0070dd|Hitem:31200:0:0:0:0:0:0:0:65:64:0:1:0|h[Shield of the Wayward Footman]|h|r",
+"|HlootHistory:90|h[Loot]|h: You (Greed - 90) Won: |cff1eff00|Hitem:6573:0:0:0:0:0:-68:631006080:28:104:0:1:0|h[Defender Boots of the Bear]|h|r",
+"|HlootHistory:90|h[Loot]|h: You have rolled Greed - 18 for: |cff0070dd|Hitem:10806:0:0:0:0:0:0:0:57:268:0:1:0|h[Vestments of the Atal'ai Prophet]|h|r",
+"|HlootHistory:90|h[Loot]|h: You have rolled Greed - 19 for: |cff0070dd|Hitem:13380:0:0:0:0:0:0:0:45:264:0:1:0|h[Willey's Portable Howitzer]|h|r",
+"|HlootHistory:90|h[Loot]|h: You have rolled Greed - 47 for: |cff0070dd|Hitem:11809:0:0:0:0:0:0:0:54:263:0:1:0|h[Flame Wrath]|h|r",
+"|HlootHistory:90|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10806:0:0:0:0:0:0:0:57:268:0:1:0|h[Vestments of the Atal'ai Prophet]|h|r",
+"|HlootHistory:90|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11809:0:0:0:0:0:0:0:54:263:0:1:0|h[Flame Wrath]|h|r",
+"|HlootHistory:90|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13380:0:0:0:0:0:0:0:45:264:0:1:0|h[Willey's Portable Howitzer]|h|r",
+"|HlootHistory:90|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:6573:0:0:0:0:0:-68:631006080:28:104:0:1:0|h[Defender Boots of the Bear]|h|r",
+"|HlootHistory:90|h[Loot]|h: You passed on: |cff0070dd|Hitem:31200:0:0:0:0:0:0:0:65:64:0:1:0|h[Shield of the Wayward Footman]|h|r",
+"|HlootHistory:91|h[Loot]|h: |cff0070dd|Hitem:12465:0:0:0:0:0:0:0:57:268:0:1:0|h[Nightfall Drape]|h|r",
+"|HlootHistory:91|h[Loot]|h: |cff0070dd|Hitem:1934:0:0:0:0:0:0:0:28:104:0:1:0|h[Hogger's Trousers]|h|r",
+"|HlootHistory:91|h[Loot]|h: |cff0070dd|Hitem:22404:0:0:0:0:0:0:0:45:264:0:1:0|h[Willey's Back Scratcher]|h|r",
+"|HlootHistory:91|h[Loot]|h: |cff1eff00|Hitem:10125:0:0:0:0:0:-324:1612014592:54:263:0:1:0|h[Ornate Pauldrons of Arcane Resistance]|h|r",
+"|HlootHistory:91|h[Loot]|h: |cff1eff00|Hitem:24956:0:0:0:0:0:-13:1128333335:65:64:0:1:0|h[Bogslayer Pauldrons of the Wolf]|h|r",
+"|HlootHistory:91|h[Loot]|h: Beeferano-TwistingNether (Greed - 94) Won: |cff1eff00|Hitem:24956:0:0:0:0:0:-13:1128333335:65:64:0:1:0|h[Bogslayer Pauldrons of the Wolf]|h|r",
+"|HlootHistory:91|h[Loot]|h: Lerona (Greed - 78) Won: |cff0070dd|Hitem:12465:0:0:0:0:0:0:0:57:268:0:1:0|h[Nightfall Drape]|h|r",
+"|HlootHistory:91|h[Loot]|h: Sronakter-Ravenholdt (Need - 88) Won: |cff0070dd|Hitem:1934:0:0:0:0:0:0:0:28:104:0:1:0|h[Hogger's Trousers]|h|r",
+"|HlootHistory:91|h[Loot]|h: You (Greed - 73) Won: |cff1eff00|Hitem:10125:0:0:0:0:0:-324:1612014592:54:263:0:1:0|h[Ornate Pauldrons of Arcane Resistance]|h|r",
+"|HlootHistory:91|h[Loot]|h: You (Greed - 98) Won: |cff0070dd|Hitem:22404:0:0:0:0:0:0:0:45:264:0:1:0|h[Willey's Back Scratcher]|h|r",
+"|HlootHistory:91|h[Loot]|h: You have rolled Greed - 20 for: |cff0070dd|Hitem:12465:0:0:0:0:0:0:0:57:268:0:1:0|h[Nightfall Drape]|h|r",
+"|HlootHistory:91|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12465:0:0:0:0:0:0:0:57:268:0:1:0|h[Nightfall Drape]|h|r",
+"|HlootHistory:91|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:1934:0:0:0:0:0:0:0:28:104:0:1:0|h[Hogger's Trousers]|h|r",
+"|HlootHistory:91|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22404:0:0:0:0:0:0:0:45:264:0:1:0|h[Willey's Back Scratcher]|h|r",
+"|HlootHistory:91|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10125:0:0:0:0:0:-324:1612014592:54:263:0:1:0|h[Ornate Pauldrons of Arcane Resistance]|h|r",
+"|HlootHistory:91|h[Loot]|h: You passed on: |cff1eff00|Hitem:24956:0:0:0:0:0:-13:1128333335:65:64:0:1:0|h[Bogslayer Pauldrons of the Wolf]|h|r",
+"|HlootHistory:92|h[Loot]|h: |cff0070dd|Hitem:11929:0:0:0:0:0:0:0:54:263:0:1:0|h[Haunting Specter Leggings]|h|r",
+"|HlootHistory:92|h[Loot]|h: |cff0070dd|Hitem:24462:0:0:0:0:0:0:0:65:64:0:1:0|h[Luminous Pearls of Insight]|h|r",
+"|HlootHistory:92|h[Loot]|h: |cff1eff00|Hitem:10196:0:0:0:0:0:-9:1628231424:57:268:0:1:0|h[Crusader's Gauntlets of the Owl]|h|r",
+"|HlootHistory:92|h[Loot]|h: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:46:264:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:92|h[Loot]|h: Celvariel-Auchindoun (Need - 89) Won: |cff1eff00|Hitem:10196:0:0:0:0:0:-9:1628231424:57:268:0:1:0|h[Crusader's Gauntlets of the Owl]|h|r",
+"|HlootHistory:92|h[Loot]|h: Moaizer-Nemesis (Greed - 87) Won: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:46:264:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:92|h[Loot]|h: Qxie-TwistingNether (Greed - 93) Won: |cff0070dd|Hitem:24462:0:0:0:0:0:0:0:65:64:0:1:0|h[Luminous Pearls of Insight]|h|r",
+"|HlootHistory:92|h[Loot]|h: You have rolled Greed - 37 for: |cff0070dd|Hitem:24462:0:0:0:0:0:0:0:65:64:0:1:0|h[Luminous Pearls of Insight]|h|r",
+"|HlootHistory:92|h[Loot]|h: You have rolled Greed - 47 for: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:46:264:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:92|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24462:0:0:0:0:0:0:0:65:64:0:1:0|h[Luminous Pearls of Insight]|h|r",
+"|HlootHistory:92|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:10196:0:0:0:0:0:-9:1628231424:57:268:0:1:0|h[Crusader's Gauntlets of the Owl]|h|r",
+"|HlootHistory:92|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:12811:0:0:0:0:0:0:0:46:264:0:0:0|h[Righteous Orb]|h|r",
+"|HlootHistory:93|h[Loot]|h: |cff0070dd|Hitem:11925:0:0:0:0:0:0:0:54:263:0:1:0|h[Ghostshroud]|h|r",
+"|HlootHistory:93|h[Loot]|h: |cff0070dd|Hitem:12466:0:0:0:0:0:0:0:57:268:0:1:0|h[Dawnspire Cord]|h|r",
+"|HlootHistory:93|h[Loot]|h: |cff1eff00|Hitem:25190:0:0:0:0:0:-45:45875215:65:64:0:1:0|h[Wight's Claws of the Champion]|h|r",
+"|HlootHistory:93|h[Loot]|h: |cff1eff00|Hitem:8114:0:0:0:0:0:0:0:46:264:0:1:0|h[Hibernal Sash]|h|r",
+"|HlootHistory:93|h[Loot]|h: Morphinder-Ragnaros (Need - 79) Won: |cff0070dd|Hitem:12466:0:0:0:0:0:0:0:57:268:0:1:0|h[Dawnspire Cord]|h|r",
+"|HlootHistory:93|h[Loot]|h: Qxie-TwistingNether (Greed - 97) Won: |cff1eff00|Hitem:25190:0:0:0:0:0:-45:45875215:65:64:0:1:0|h[Wight's Claws of the Champion]|h|r",
+"|HlootHistory:93|h[Loot]|h: You (Greed - 97) Won: |cff1eff00|Hitem:8114:0:0:0:0:0:0:0:46:264:0:1:0|h[Hibernal Sash]|h|r",
+"|HlootHistory:93|h[Loot]|h: You have rolled Greed - 44 for: |cff1eff00|Hitem:25190:0:0:0:0:0:-45:45875215:65:64:0:1:0|h[Wight's Claws of the Champion]|h|r",
+"|HlootHistory:93|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12466:0:0:0:0:0:0:0:57:268:0:1:0|h[Dawnspire Cord]|h|r",
+"|HlootHistory:93|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:25190:0:0:0:0:0:-45:45875215:65:64:0:1:0|h[Wight's Claws of the Champion]|h|r",
+"|HlootHistory:93|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:8114:0:0:0:0:0:0:0:46:264:0:1:0|h[Hibernal Sash]|h|r",
+"|HlootHistory:94|h[Loot]|h: |cff0070dd|Hitem:10829:0:0:0:0:0:0:0:57:268:0:1:0|h[The Dragon's Eye]|h|r",
+"|HlootHistory:94|h[Loot]|h: |cff0070dd|Hitem:13386:0:0:0:0:0:0:0:46:264:0:1:0|h[Archivist Cape]|h|r",
+"|HlootHistory:94|h[Loot]|h: |cff1eff00|Hitem:11977:0:0:0:0:0:-329:2038826368:54:264:0:1:0|h[Serpentine Loop of Shadow Resistance]|h|r",
+"|HlootHistory:94|h[Loot]|h: |cff1eff00|Hitem:25300:0:0:0:0:0:-19:1673003021:65:64:0:1:0|h[Lightning Dagger of Intellect]|h|r",
+"|HlootHistory:94|h[Loot]|h: Beeferano-TwistingNether (Greed - 68) Won: |cff1eff00|Hitem:25300:0:0:0:0:0:-19:1673003021:65:64:0:1:0|h[Lightning Dagger of Intellect]|h|r",
+"|HlootHistory:94|h[Loot]|h: Celvariel-Auchindoun (Greed - 91) Won: |cff0070dd|Hitem:10829:0:0:0:0:0:0:0:57:268:0:1:0|h[The Dragon's Eye]|h|r",
+"|HlootHistory:94|h[Loot]|h: Fennec (Greed - 100) Won: |cff1eff00|Hitem:11977:0:0:0:0:0:-329:2038826368:54:264:0:1:0|h[Serpentine Loop of Shadow Resistance]|h|r",
+"|HlootHistory:94|h[Loot]|h: Thecrusader-Karazhan (Greed - 63) Won: |cff0070dd|Hitem:13386:0:0:0:0:0:0:0:46:264:0:1:0|h[Archivist Cape]|h|r",
+"|HlootHistory:94|h[Loot]|h: You have rolled Greed - 2 for: |cff1eff00|Hitem:11977:0:0:0:0:0:-329:2038826368:54:264:0:1:0|h[Serpentine Loop of Shadow Resistance]|h|r",
+"|HlootHistory:94|h[Loot]|h: You have rolled Greed - 6 for: |cff0070dd|Hitem:13386:0:0:0:0:0:0:0:46:264:0:1:0|h[Archivist Cape]|h|r",
+"|HlootHistory:94|h[Loot]|h: You have rolled Greed - 61 for: |cff0070dd|Hitem:10829:0:0:0:0:0:0:0:57:268:0:1:0|h[The Dragon's Eye]|h|r",
+"|HlootHistory:94|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10829:0:0:0:0:0:0:0:57:268:0:1:0|h[The Dragon's Eye]|h|r",
+"|HlootHistory:94|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13386:0:0:0:0:0:0:0:46:264:0:1:0|h[Archivist Cape]|h|r",
+"|HlootHistory:94|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:11977:0:0:0:0:0:-329:2038826368:54:264:0:1:0|h[Serpentine Loop of Shadow Resistance]|h|r",
+"|HlootHistory:94|h[Loot]|h: You passed on: |cff1eff00|Hitem:25300:0:0:0:0:0:-19:1673003021:65:64:0:1:0|h[Lightning Dagger of Intellect]|h|r",
+"|HlootHistory:95|h[Loot]|h: |cff0070dd|Hitem:10835:0:0:0:0:0:0:0:57:268:0:1:0|h[Crest of Supremacy]|h|r",
+"|HlootHistory:95|h[Loot]|h: |cff0070dd|Hitem:11935:0:0:0:0:0:0:0:54:263:0:1:0|h[Magmus Stone]|h|r",
+"|HlootHistory:95|h[Loot]|h: |cff0070dd|Hitem:13358:0:0:0:0:0:0:0:46:264:0:1:0|h[Wyrmtongue Shoulders]|h|r",
+"|HlootHistory:95|h[Loot]|h: |cff0070dd|Hitem:24455:0:0:0:0:0:0:0:65:64:0:1:0|h[Tunic of the Nightwatcher]|h|r",
+"|HlootHistory:95|h[Loot]|h: Beeferano-TwistingNether (Greed - 92) Won: |cff0070dd|Hitem:24455:0:0:0:0:0:0:0:65:64:0:1:0|h[Tunic of the Nightwatcher]|h|r",
+"|HlootHistory:95|h[Loot]|h: Fennec (Greed - 72) Won: |cff0070dd|Hitem:11935:0:0:0:0:0:0:0:54:263:0:1:0|h[Magmus Stone]|h|r",
+"|HlootHistory:95|h[Loot]|h: Lerona (Greed - 80) Won: |cff0070dd|Hitem:10835:0:0:0:0:0:0:0:57:268:0:1:0|h[Crest of Supremacy]|h|r",
+"|HlootHistory:95|h[Loot]|h: Moaizer-Nemesis (Greed - 71) Won: |cff0070dd|Hitem:13358:0:0:0:0:0:0:0:46:264:0:1:0|h[Wyrmtongue Shoulders]|h|r",
+"|HlootHistory:95|h[Loot]|h: You have rolled Greed - 39 for: |cff0070dd|Hitem:10835:0:0:0:0:0:0:0:57:268:0:1:0|h[Crest of Supremacy]|h|r",
+"|HlootHistory:95|h[Loot]|h: You have rolled Greed - 56 for: |cff0070dd|Hitem:13358:0:0:0:0:0:0:0:46:264:0:1:0|h[Wyrmtongue Shoulders]|h|r",
+"|HlootHistory:95|h[Loot]|h: You have rolled Greed - 9 for: |cff0070dd|Hitem:11935:0:0:0:0:0:0:0:54:263:0:1:0|h[Magmus Stone]|h|r",
+"|HlootHistory:95|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10835:0:0:0:0:0:0:0:57:268:0:1:0|h[Crest of Supremacy]|h|r",
+"|HlootHistory:95|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11935:0:0:0:0:0:0:0:54:263:0:1:0|h[Magmus Stone]|h|r",
+"|HlootHistory:95|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13358:0:0:0:0:0:0:0:46:264:0:1:0|h[Wyrmtongue Shoulders]|h|r",
+"|HlootHistory:95|h[Loot]|h: You passed on: |cff0070dd|Hitem:24455:0:0:0:0:0:0:0:65:64:0:1:0|h[Tunic of the Nightwatcher]|h|r",
+"|HlootHistory:96|h[Loot]|h: |cff0070dd|Hitem:11924:0:0:0:0:0:0:0:58:268:0:1:0|h[Robes of the Royal Crown]|h|r",
+"|HlootHistory:96|h[Loot]|h: |cff0070dd|Hitem:11928:0:0:0:0:0:0:0:54:263:0:1:0|h[Thaurissan's Royal Scepter]|h|r",
+"|HlootHistory:96|h[Loot]|h: |cff0070dd|Hitem:13369:0:0:0:0:0:0:0:46:264:0:1:0|h[Fire Striders]|h|r",
+"|HlootHistory:96|h[Loot]|h: |cff0070dd|Hitem:24464:0:0:0:0:0:0:0:65:64:0:1:0|h[The Stalker's Fangs]|h|r",
+"|HlootHistory:96|h[Loot]|h: Lerona (Greed - 52) Won: |cff0070dd|Hitem:11924:0:0:0:0:0:0:0:58:268:0:1:0|h[Robes of the Royal Crown]|h|r",
+"|HlootHistory:96|h[Loot]|h: Moaizer-Nemesis (Greed - 87) Won: |cff0070dd|Hitem:13369:0:0:0:0:0:0:0:46:264:0:1:0|h[Fire Striders]|h|r",
+"|HlootHistory:96|h[Loot]|h: Qxie-TwistingNether (Greed - 69) Won: |cff0070dd|Hitem:24464:0:0:0:0:0:0:0:65:64:0:1:0|h[The Stalker's Fangs]|h|r",
+"|HlootHistory:96|h[Loot]|h: You have rolled Greed - 28 for: |cff0070dd|Hitem:24464:0:0:0:0:0:0:0:65:64:0:1:0|h[The Stalker's Fangs]|h|r",
+"|HlootHistory:96|h[Loot]|h: You have rolled Greed - 48 for: |cff0070dd|Hitem:11924:0:0:0:0:0:0:0:58:268:0:1:0|h[Robes of the Royal Crown]|h|r",
+"|HlootHistory:96|h[Loot]|h: You have rolled Greed - 54 for: |cff0070dd|Hitem:13369:0:0:0:0:0:0:0:46:264:0:1:0|h[Fire Striders]|h|r",
+"|HlootHistory:96|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11924:0:0:0:0:0:0:0:58:268:0:1:0|h[Robes of the Royal Crown]|h|r",
+"|HlootHistory:96|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11928:0:0:0:0:0:0:0:54:263:0:1:0|h[Thaurissan's Royal Scepter]|h|r",
+"|HlootHistory:96|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:13369:0:0:0:0:0:0:0:46:264:0:1:0|h[Fire Striders]|h|r",
+"|HlootHistory:96|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:24464:0:0:0:0:0:0:0:65:64:0:1:0|h[The Stalker's Fangs]|h|r",
+"|HlootHistory:97|h[Loot]|h: |cff0070dd|Hitem:11815:0:0:0:0:0:0:0:58:268:0:1:0|h[Hand of Justice]|h|r",
+"|HlootHistory:97|h[Loot]|h: |cff0070dd|Hitem:18497:0:0:0:0:0:0:0:47:264:0:1:0|h[Sublime Wristguards]|h|r",
+"|HlootHistory:97|h[Loot]|h: |cff0070dd|Hitem:22204:0:0:0:0:0:0:0:54:263:0:1:0|h[Wristguards of Renown]|h|r",
+"|HlootHistory:97|h[Loot]|h: |cff1eff00|Hitem:24968:0:0:0:0:0:-27:480837667:65:64:0:1:0|h[Talonguard Armor of Nimbleness]|h|r",
+"|HlootHistory:97|h[Loot]|h: Halvard-Bladefist (Greed - 99) Won: |cff0070dd|Hitem:11815:0:0:0:0:0:0:0:58:268:0:1:0|h[Hand of Justice]|h|r",
+"|HlootHistory:97|h[Loot]|h: Sanctisius (Greed - 82) Won: |cff0070dd|Hitem:22204:0:0:0:0:0:0:0:54:263:0:1:0|h[Wristguards of Renown]|h|r",
+"|HlootHistory:97|h[Loot]|h: You (Greed - 82) Won: |cff0070dd|Hitem:18497:0:0:0:0:0:0:0:47:264:0:1:0|h[Sublime Wristguards]|h|r",
+"|HlootHistory:97|h[Loot]|h: You (Greed - 92) Won: |cff1eff00|Hitem:24968:0:0:0:0:0:-27:480837667:65:64:0:1:0|h[Talonguard Armor of Nimbleness]|h|r",
+"|HlootHistory:97|h[Loot]|h: You have rolled Greed - 2 for: |cff0070dd|Hitem:11815:0:0:0:0:0:0:0:58:268:0:1:0|h[Hand of Justice]|h|r",
+"|HlootHistory:97|h[Loot]|h: You have rolled Greed - 39 for: |cff0070dd|Hitem:22204:0:0:0:0:0:0:0:54:263:0:1:0|h[Wristguards of Renown]|h|r",
+"|HlootHistory:97|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11815:0:0:0:0:0:0:0:58:268:0:1:0|h[Hand of Justice]|h|r",
+"|HlootHistory:97|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18497:0:0:0:0:0:0:0:47:264:0:1:0|h[Sublime Wristguards]|h|r",
+"|HlootHistory:97|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:22204:0:0:0:0:0:0:0:54:263:0:1:0|h[Wristguards of Renown]|h|r",
+"|HlootHistory:97|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24968:0:0:0:0:0:-27:480837667:65:64:0:1:0|h[Talonguard Armor of Nimbleness]|h|r",
+"|HlootHistory:98|h[Loot]|h: |cff0070dd|Hitem:12556:0:0:0:0:0:0:0:54:263:0:1:0|h[High Priestess Boots]|h|r",
+"|HlootHistory:98|h[Loot]|h: |cff0070dd|Hitem:12556:0:0:0:0:0:0:0:58:268:0:1:0|h[High Priestess Boots]|h|r",
+"|HlootHistory:98|h[Loot]|h: |cff0070dd|Hitem:18425:0:0:0:0:0:0:0:47:264:0:1:0|h[Kreeg's Mug]|h|r",
+"|HlootHistory:98|h[Loot]|h: |cff0070dd|Hitem:25939:0:0:0:0:0:0:0:65:64:0:1:0|h[Voidfire Wand]|h|r",
+"|HlootHistory:98|h[Loot]|h: Eucalyptus-Twilight'sHammer (Greed - 61) Won: |cff0070dd|Hitem:12556:0:0:0:0:0:0:0:58:268:0:1:0|h[High Priestess Boots]|h|r",
+"|HlootHistory:98|h[Loot]|h: Sokinlife-Draenor (Greed - 86) Won: |cff0070dd|Hitem:25939:0:0:0:0:0:0:0:65:64:0:1:0|h[Voidfire Wand]|h|r",
+"|HlootHistory:98|h[Loot]|h: You (Greed - 100) Won: |cff0070dd|Hitem:12556:0:0:0:0:0:0:0:54:263:0:1:0|h[High Priestess Boots]|h|r",
+"|HlootHistory:98|h[Loot]|h: You (Greed - 59) Won: |cff0070dd|Hitem:18425:0:0:0:0:0:0:0:47:264:0:1:0|h[Kreeg's Mug]|h|r",
+"|HlootHistory:98|h[Loot]|h: You have rolled Greed - 32 for: |cff0070dd|Hitem:12556:0:0:0:0:0:0:0:58:268:0:1:0|h[High Priestess Boots]|h|r",
+"|HlootHistory:98|h[Loot]|h: You have rolled Greed - 45 for: |cff0070dd|Hitem:25939:0:0:0:0:0:0:0:65:64:0:1:0|h[Voidfire Wand]|h|r",
+"|HlootHistory:98|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12556:0:0:0:0:0:0:0:54:263:0:1:0|h[High Priestess Boots]|h|r",
+"|HlootHistory:98|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:12556:0:0:0:0:0:0:0:58:268:0:1:0|h[High Priestess Boots]|h|r",
+"|HlootHistory:98|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18425:0:0:0:0:0:0:0:47:264:0:1:0|h[Kreeg's Mug]|h|r",
+"|HlootHistory:98|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:25939:0:0:0:0:0:0:0:65:64:0:1:0|h[Voidfire Wand]|h|r",
+"|HlootHistory:99|h[Loot]|h: |cff0070dd|Hitem:10846:0:0:0:0:0:0:0:58:268:0:1:0|h[Bloodshot Greaves]|h|r",
+"|HlootHistory:99|h[Loot]|h: |cff0070dd|Hitem:11767:0:0:0:0:0:0:0:54:263:0:1:0|h[Emberplate Armguards]|h|r",
+"|HlootHistory:99|h[Loot]|h: |cff0070dd|Hitem:18462:0:0:0:0:0:0:0:47:264:0:1:0|h[Jagged Bone Fist]|h|r",
+"|HlootHistory:99|h[Loot]|h: |cff1eff00|Hitem:24843:0:0:0:0:0:-20:850264095:65:64:0:1:0|h[Wrathfin Legguards of Power]|h|r",
+"|HlootHistory:99|h[Loot]|h: Lerona (Greed - 50) Won: |cff0070dd|Hitem:10846:0:0:0:0:0:0:0:58:268:0:1:0|h[Bloodshot Greaves]|h|r",
+"|HlootHistory:99|h[Loot]|h: Sanctisius (Need - 43) Won: |cff0070dd|Hitem:11767:0:0:0:0:0:0:0:54:263:0:1:0|h[Emberplate Armguards]|h|r",
+"|HlootHistory:99|h[Loot]|h: Sokinlife-Draenor (Greed - 55) Won: |cff1eff00|Hitem:24843:0:0:0:0:0:-20:850264095:65:64:0:1:0|h[Wrathfin Legguards of Power]|h|r",
+"|HlootHistory:99|h[Loot]|h: Sweetable-Bloodhoof (Greed - 60) Won: |cff0070dd|Hitem:18462:0:0:0:0:0:0:0:47:264:0:1:0|h[Jagged Bone Fist]|h|r",
+"|HlootHistory:99|h[Loot]|h: You have rolled Greed - 29 for: |cff0070dd|Hitem:10846:0:0:0:0:0:0:0:58:268:0:1:0|h[Bloodshot Greaves]|h|r",
+"|HlootHistory:99|h[Loot]|h: You have rolled Greed - 40 for: |cff1eff00|Hitem:24843:0:0:0:0:0:-20:850264095:65:64:0:1:0|h[Wrathfin Legguards of Power]|h|r",
+"|HlootHistory:99|h[Loot]|h: You have rolled Greed - 51 for: |cff0070dd|Hitem:18462:0:0:0:0:0:0:0:47:264:0:1:0|h[Jagged Bone Fist]|h|r",
+"|HlootHistory:99|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:10846:0:0:0:0:0:0:0:58:268:0:1:0|h[Bloodshot Greaves]|h|r",
+"|HlootHistory:99|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:11767:0:0:0:0:0:0:0:54:263:0:1:0|h[Emberplate Armguards]|h|r",
+"|HlootHistory:99|h[Loot]|h: You have selected Greed for: |cff0070dd|Hitem:18462:0:0:0:0:0:0:0:47:264:0:1:0|h[Jagged Bone Fist]|h|r",
+"|HlootHistory:99|h[Loot]|h: You have selected Greed for: |cff1eff00|Hitem:24843:0:0:0:0:0:-20:850264095:65:64:0:1:0|h[Wrathfin Legguards of Power]|h|r",
+}
+--/dump T("","")
+--/dump X()
+--]]
