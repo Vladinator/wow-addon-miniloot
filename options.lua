@@ -243,6 +243,12 @@ do
 					description = "Hover death links in chat and display their tooltip.",
 					key = "CHAT_TOOLTIP_DEATH"
 				},
+				{
+					checkbox = true,
+					label = "Show glyph tooltips",
+					description = "Hover glyph links in chat and display their tooltip.",
+					key = "CHAT_TOOLTIP_GLYPH"
+				},
 			},
 		},
 	}

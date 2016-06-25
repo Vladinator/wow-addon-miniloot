@@ -153,6 +153,10 @@ do
 			key = "CHAT_TOOLTIP_INSTANCELOCK"
 		},
 		{
+			pattern = {"^glyph:"},
+			key = "CHAT_TOOLTIP_GLYPH"
+		},
+		{
 			pattern = {"^battlepet:"},
 			key = "CHAT_TOOLTIP_BATTLEPET",
 			show = function(handler, chatFrame, linkData, link)

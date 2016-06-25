@@ -43,6 +43,7 @@ ns.config.defaults = {
 	{ key = "CHAT_TOOLTIP_DEATH", value = false, bool = true },
 	{ key = "CHAT_TOOLTIP_GARRISON", value = false, bool = true },
 	{ key = "CHAT_TOOLTIP_INSTANCELOCK", value = false, bool = true },
+	{ key = "CHAT_TOOLTIP_GLYPH", value = false, bool = true },
 	-- Categories
 	{ key = "CATEGORY_FLAGS", value = {} },
 }
