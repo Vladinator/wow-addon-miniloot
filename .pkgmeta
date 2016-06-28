@@ -1,6 +1,2 @@
-package-as: MiniLoot2
+package-as: MiniLoot
 enable-nolib-creation: no
-tools-used:
-		- ace3
-		- callbackhandler
-		- libstub
