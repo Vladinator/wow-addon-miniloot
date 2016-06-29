@@ -258,6 +258,36 @@ do
 				format(COMBATLOG_GUILD_XPGAIN, 10000),
 			}
 		},
+		-- experience (followers)
+		-- { experience, follower[, target[, value]] }
+		not IS_LEGION and NOOP_ENTRY or {
+			group = "FOLLOWER_EXPERIENCE",
+			label = ns.locale.LABEL_FOLLOWER_EXPERIENCE,
+			description = ns.locale.DESCRIPTION_FOLLOWER_EXPERIENCE,
+			events = {
+				"CHAT_MSG_SYSTEM",
+				"CHAT_MSG_COMBAT_XP_GAIN",
+			},
+			formats = {
+				{ GARRISON_FOLLOWER_XP_ADDED_ZONE_SUPPORT,     token.TARGET,    token.NUMBER                                                    }, -- "%s has earned %d xp."
+			},
+			parse = function(self, tokens, matches)
+				local data = { experience = true, follower = true }
+
+				if tokens[2] == token.TARGET then
+					data.target = matches[2]
+
+					if tokens[3] == token.NUMBER then
+						data.value = matches[3]
+					end
+				end
+
+				return data
+			end,
+			tests = {
+				format(GARRISON_FOLLOWER_XP_ADDED_ZONE_SUPPORT, "Follower", 500),
+			}
+		},
 		-- currency
 		-- { currency[, item[, count]] }
 		{
@@ -1343,8 +1373,7 @@ do
 			end
 		end
 
-		print("Test results.", temp.success, "success", temp.failed, "failed", "=", temp.total, "total")
-
+		-- print("Test results.", temp.success, "success", temp.failed, "failed", "=", temp.total, "total") -- DEBUG
 		return temp
 	end
 end
@@ -1353,7 +1382,7 @@ end
 do
 	function ns.util:toNumber(i, prefix)
 		i = floor(i * 10) / 10 -- round to one decimal at the most
-		return "|cff" .. (i < 0 and "FF0000" or "00FF00") .. (prefix and (i < 0 and "-" or "+") or "") .. i .. "|r"
+		return "|cff" .. (i < 0 and "FF0000" or "00FF00") .. (prefix and (i < 0 and "-" or "+") or "") .. abs(i) .. "|r"
 	end
 
 	function ns.util:toTarget(name, fallback)

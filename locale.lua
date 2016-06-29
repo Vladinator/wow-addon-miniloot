@@ -21,6 +21,8 @@ L.LABEL_GROUP_EXPERIENCE = "Experience"
 L.DESCRIPTION_GROUP_EXPERIENCE = "Experience gain"
 L.LABEL_GROUP_GUILD_EXPERIENCE = "Guild experience"
 L.DESCRIPTION_GROUP_GUILD_EXPERIENCE = "Guild experience gain"
+L.LABEL_GROUP_FOLLOWER_EXPERIENCE = "Follower experience"
+L.DESCRIPTION_GROUP_FOLLOWER_EXPERIENCE = "Follower experience gain"
 L.LABEL_GROUP_CURRENCY = "Currency"
 L.DESCRIPTION_GROUP_CURRENCY = "Currency gain"
 L.LABEL_GROUP_MONEY = "Money"
@@ -39,6 +41,8 @@ L.LABEL_GROUP_TRANSMOGRIFICATION = "Transmogrification unlocks"
 L.DESCRIPTION_GROUP_TRANSMOGRIFICATION = "The default message when looks are added to your collection."
 L.LABEL_GROUP_ARTIFACT = "Artifact power"
 L.DESCRIPTION_GROUP_ARTIFACT = "The default message when you add power to your artifact."
+
+-- [[ TODO: OBSCOLETE?
 -- reputation
 L.LABEL_REPUTATION = "Reputation"
 L.DESCRIPTION_REPUTATION = "Shows reputation earned."
@@ -123,6 +127,7 @@ L.DESCRIPTION_TRANSMOGRIFICATION = "Check to disable filtering transmogrificatio
 -- ignore
 L.LABEL_IGNORE = "Ignore"
 L.DESCRIPTION_IGNORE = "Check to disable filtering handled messages."
+--]]
 
 -- German (Germany)
 if locale == "deDE" then
