@@ -87,6 +87,8 @@ do
 		end
 	end
 
+	local lastRollMessage -- HOTFIX: weird bug where the CHAT_MSG_LOOT fires twice for every message (but the default UI isn't affected by it...)
+
 	local function outputRoll(data)
 		local temp -- do we wish to return anything for later report use?
 
@@ -274,6 +276,10 @@ do
 				temp.key = "loot"
 
 				if data.roll then
+
+					-- HOTFIX: weird bug where the CHAT_MSG_LOOT fires twice for every message (but the default UI isn't affected by it...)
+					if lastRollMessage == text then return true else lastRollMessage = text end
+
 					temp.key = "roll"
 					temp.value = outputRoll(data)
 
