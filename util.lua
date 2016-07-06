@@ -1413,8 +1413,10 @@ do
 		return GetCoinTextureString(copper, fontSize) or ""
 	end
 
+	local legacyTempTexture = CreateFrame("Frame"):CreateTexture() -- PRE-LEGION HOTFIX
+
 	function ns.util:toLootIcon(link, hyperlink, simple, customColor)
-		local color, data, text = link:match("|c([0-9a-f]+)|H(.-)%[(.-)%]|h|r")
+		local color, data, text = link:match("|c([0-9a-f]+)|H(.-)|h%[(.-)%]|h|r")
 		local icon
 
 		if data then
@@ -1424,25 +1426,15 @@ do
 				icon = GetItemIcon(link)
 			elseif prefix == "currency" then
 				icon = select(3, GetCurrencyInfo(id))
+			elseif prefix == "garrfollower" then
+				icon = C_Garrison.GetFollowerPortraitIconIDByID(id)
+				if not icon or icon == 0 then icon = "Interface\\Garrison\\Portraits\\FollowerPortrait_NoPortrait" end
+				if type(icon) == "number" and not IS_LEGION then legacyTempTexture:SetToFileData(icon) icon = legacyTempTexture:GetTexture() end -- PRE-LEGION HOTFIX
 			end
 		end
 
 		if icon then
-			local temp = ns.util:getChatIconString(icon)
-
-			if hyperlink then
-				temp = "|H" .. data .. temp .. "|h"
-			end
-
-			if not simple then
-				temp = "[" .. temp .. "]"
-			end
-
-			if customColor then
-				color = customColor
-			end
-
-			return "|c" .. color .. temp .. "|r"
+			return ns.util:getChatIconOutput(color, data, icon, hyperlink, simple, customColor)
 		end
 
 		return link
@@ -1455,7 +1447,25 @@ do
 		return ""
 	end
 
-	function ns.util:getChatIconString(icon, ignoreOptions)
+	function ns.util:getChatIconOutput(color, data, icon, hyperlink, simple, customColor)
+		local temp = ns.util:getChatIconTextureString(icon)
+
+		if hyperlink then
+			temp = "|H" .. data .. "|h" .. temp .. "|h"
+		end
+
+		if not simple then
+			temp = "[" .. temp .. "]"
+		end
+
+		if customColor then
+			color = customColor
+		end
+
+		return "|c" .. color .. temp .. "|r"
+	end
+
+	function ns.util:getChatIconTextureString(icon, ignoreOptions)
 		local temp = ":0:0"
 
 		if not ignoreOptions then

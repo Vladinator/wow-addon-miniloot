@@ -468,7 +468,7 @@ do
 						local sorted = summarySort.firstValue(tempData)
 						for j = 1, #sorted do
 							local target, value = sorted[j][1], sorted[j][2]
-							tempLine = target .. ns.util:toNumber(value, true)
+							tempLine = ns.util:toLootIcon(target, true) .. ns.util:toNumber(value, true)
 							table.insert(report.sorted, tempLine)
 						end
 

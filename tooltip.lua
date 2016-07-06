@@ -1,6 +1,9 @@
 local addonName, ns = ...
 ns.tooltip = {}
 
+-- legion check
+local IS_LEGION = select(4, GetBuildInfo()) >= 70000
+
 -- tooltip scanning
 do
 	-- tooltip frame
@@ -187,17 +190,26 @@ do
 			key = "CHAT_TOOLTIP_GARRISON",
 			show = function(handler, chatFrame, linkData, link)
 				local _, garrisonFollowerID, quality, level, itemLevel, ability1, ability2, ability3, ability4, trait1, trait2, trait3, trait4, spec1 = strsplit(":", linkData)
-				FloatingGarrisonFollower_Toggle(tonumber(garrisonFollowerID), tonumber(quality), tonumber(level), tonumber(itemLevel), tonumber(spec1), tonumber(ability1), tonumber(ability2), tonumber(ability3), tonumber(ability4), tonumber(trait1), tonumber(trait2), tonumber(trait3), tonumber(trait4))
-				AnchorTooltip(FloatingGarrisonFollowerTooltip, chatFrame)
+				if IS_LEGION then
+					FloatingGarrisonFollower_Toggle(tonumber(garrisonFollowerID), tonumber(quality), tonumber(level), tonumber(itemLevel), tonumber(spec1), tonumber(ability1), tonumber(ability2), tonumber(ability3), tonumber(ability4), tonumber(trait1), tonumber(trait2), tonumber(trait3), tonumber(trait4))
+				else
+					FloatingGarrisonFollower_Toggle(tonumber(garrisonFollowerID), tonumber(quality), tonumber(level), tonumber(itemLevel), tonumber(ability1), tonumber(ability2), tonumber(ability3), tonumber(ability4), tonumber(trait1), tonumber(trait2), tonumber(trait3), tonumber(trait4))
+				end
+				if C_Garrison.GetFollowerTypeByID(garrisonFollowerID) == LE_FOLLOWER_TYPE_SHIPYARD_6_2 then
+					AnchorTooltip(FloatingGarrisonShipyardFollowerTooltip, chatFrame)
+				else
+					AnchorTooltip(FloatingGarrisonFollowerTooltip, chatFrame)
+				end
 			end,
 			hide = function()
+				FloatingGarrisonShipyardFollowerTooltip:Hide()
 				FloatingGarrisonFollowerTooltip:Hide()
 			end
 		},
 		{
 			pattern = {"^garrfollowerability:"},
 			key = "CHAT_TOOLTIP_GARRISON",
-			func = function(handler, chatFrame, linkData, link)
+			show = function(handler, chatFrame, linkData, link)
 				local _, garrFollowerAbilityID = strsplit(":", linkData)
 				FloatingGarrisonFollowerAbility_Toggle(tonumber(garrFollowerAbilityID))
 				AnchorTooltip(FloatingGarrisonFollowerAbilityTooltip, chatFrame)
