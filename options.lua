@@ -6,37 +6,29 @@ do
 	local loaded
 
 	local function PrintExampleIcon()
-		DEFAULT_CHAT_FRAME:AddMessage("Example: " .. ns.util:toLootIcon("|cff00ccff|Hitem:122284:::::::::::::::|h[WoW Token]|h|r", true, false), YELLOW_FONT_COLOR.r, YELLOW_FONT_COLOR.g, YELLOW_FONT_COLOR.b)
+		DEFAULT_CHAT_FRAME:AddMessage(format(ns.locale.OPTION_EXAMPLE, ns.util:toLootIcon("|cff00ccff|Hitem:122284:::::::::::::::|h[WoW Token]|h|r", true, false)), YELLOW_FONT_COLOR.r, YELLOW_FONT_COLOR.g, YELLOW_FONT_COLOR.b)
 	end
 
 	local optionGroups = {
 		{
-			label = "Common",
-			description = "These options affect multiple type of messages.",
+			label = ns.locale.OPTION_COMMON_TITLE,
+			description = ns.locale.OPTION_COMMON_DESC,
 			options = {
 				{
 					checkbox = true,
-					label = "Remove realm names",
-					description = "Enable to hide the realm name on characters from other realms.",
 					key = "NAME_SHORT"
 				},
 				{
 					checkbox = true,
-					label = "Prefix own messages",
-					description = "Enable to prepend \"" .. YOU .. "\" to your own messages.",
 					key = "ITEM_SELF_PREFIX"
 				},
 				{
 					checkbox = true,
-					label = "Prefix using character name",
-					description = "Enable to use your character name in your own messages.",
 					key = "ITEM_SELF_PREFIX_NAME",
 					depends = "ITEM_SELF_PREFIX"
 				},
 				{
 					checkbox = true,
-					label = "Remove prefix if solo",
-					description = "Enable to remove the \"" .. YOU .. "\" prefix to your own messages. This only affects you when playing solo.",
 					key = "ITEM_SELF_TRIM_SOLO",
 					depends = "ITEM_SELF_PREFIX"
 				},
@@ -44,8 +36,6 @@ do
 					number = true,
 					min = 0,
 					max = 50,
-					label = "Icon trim",
-					description = "The amount of trim around icon textures. Set to 8 for default and recommended value. Set to 0 to disable trim behavior.",
 					key = "ICON_TRIM",
 					onSave = PrintExampleIcon
 				},
@@ -53,200 +43,143 @@ do
 					number = true,
 					min = 0,
 					max = 100,
-					label = "Icon size",
-					description = "The size of icons used in the chat. Set to 0 for automatic height.",
 					key = "ICON_SIZE",
 					onSave = PrintExampleIcon
 				},
 			},
 		},
 		{
-			label = "Items",
-			description = "Customize how item related messages appear.",
+			label = ns.locale.OPTION_ITEMS_TITLE,
+			description = ns.locale.OPTION_ITEMS_DESC,
 			options = {
 				{
 					checkbox = true,
-					label = "Count items in bag",
-					description = "Enable to append the amount of items you have in your bags.",
 					key = "ITEM_COUNT_BAGS"
 				},
 				{
 					checkbox = true,
-					label = "Include bank",
-					description = "Check to include items in bank.",
 					key = "ITEM_COUNT_BAGS_INCLUDE_BANK",
 					depends = "ITEM_COUNT_BAGS"
 				},
 				{
 					checkbox = true,
-					label = "Include charges",
-					description = "Check to include amount of charges.",
 					key = "ITEM_COUNT_BAGS_INCLUDE_CHARGES",
 					depends = "ITEM_COUNT_BAGS"
 				},
 			},
 		},
 		{
-			label = "Transmogrification",
-			description = "Customize how items with appearances appear.",
+			label = ns.locale.OPTION_TRANSMOGRIFICATION_TITLE,
+			description = ns.locale.OPTION_TRANSMOGRIFICATION_DESC,
 			options = {
 				{
 					checkbox = true,
-					label = "Color uncollected appearances",
-					description = "Enable to color uncollected appearances you are eligible for to obtain.",
 					key = "ITEM_ALERT_TRANSMOG"
 				},
-				-- {
-				-- 	checkbox = true,
-				-- 	label = "Include items I am not eligible to obtain",
-				-- 	description = "Enable to color uncollected appearances across all classes.",
-				-- 	key = "ITEM_ALERT_TRANSMOG_UNCOLLECTED",
-				-- 	depends = "ITEM_ALERT_TRANSMOG"
-				-- },
 				{
 					checkbox = true,
-					label = "Include items looted by others",
-					description = "Enable to color uncollected appearances on items looted by others.",
 					key = "ITEM_ALERT_TRANSMOG_EVERYTHING",
 					depends = "ITEM_ALERT_TRANSMOG"
 				},
 			},
 		},
 		{
-			label = "Quality",
-			description = "Customize what item qualities are included. Only items at or above the selected thresholds will appear.",
+			label = ns.locale.OPTION_QUALITY_TITLE,
+			description = ns.locale.OPTION_QUALITY_DESC,
 			options = {
 				{
 					checkbox = true,
-					label = "Hide junk items",
-					description = "Check to hide junk loot regardless of the options below.",
 					key = "ITEM_HIDE_JUNK"
 				},
 				{
 					dropdown = true,
-					label = "Player (Solo)",
-					description = "Select the minimum or greater quality of items you wish to display.",
 					key = "ITEM_QUALITY_PLAYER"
 				},
 				{
 					dropdown = true,
-					label = "Group (5-man)",
-					description = "Select the minimum or greater quality of items you wish to display.",
 					key = "ITEM_QUALITY_GROUP"
 				},
 				{
 					dropdown = true,
-					label = "Raid",
-					description = "Select the minimum or greater quality of items you wish to display.",
 					key = "ITEM_QUALITY_RAID"
 				},
 			},
 		},
 		{
-			label = "Artifact",
-			description = "Customize how artifact related messages appear.",
+			label = ns.locale.OPTION_ARTIFACT_TITLE,
+			description = ns.locale.OPTION_ARTIFACT_DESC,
 			options = {
 				{
 					checkbox = true,
-					label = "Show artifact power as loot",
-					description = "Enable to summarize the gained power.",
 					key = "ARTIFACT_POWER"
 				},
 			},
 		},
 		{
-			label = "Reputation",
-			-- description = "Customize how faction names are reported.",
+			label = ns.locale.OPTION_REPUTATION_TITLE,
+			description = ns.locale.OPTION_REPUTATION_DESC,
 			options = {
 				{
 					checkbox = true,
-					label = "Shorten faction name",
-					description = "Enable to shorten names like \"Court of Farondis\" into \"CouOfFar\", and longer names like \"Order of the Awakened\" into \"OrOfThAw\".",
 					key = "FACTION_NAME_MINIFY"
 				},
 				{
 					number = true,
-					label = "Maximum length",
-					description = "Set the desired length before shortening. Setting this to 10 means that \"Dalaran\" is shown as it is because it is less than ten characters.",
 					key = "FACTION_NAME_MINIFY_LENGTH",
 					depends = "FACTION_NAME_MINIFY",
 				},
 			},
 		},
 		{
-			label = "Tooltips",
-			description = "Select what kind of hyperlinks you wish to automatically appear when you hover over them in the chat.",
+			label = ns.locale.OPTION_TOOLTIPS_TITLE,
+			description = ns.locale.OPTION_TOOLTIPS_DESC,
 			options = {
 				{
 					checkbox = true,
-					label = "Show item tooltips",
-					description = "Hover items in chat and display their tooltip.",
 					key = "CHAT_TOOLTIP_ITEM"
 				},
 				{
 					checkbox = true,
-					label = "Show currency tooltips",
-					description = "Hover currency in chat and display their tooltip.",
 					key = "CHAT_TOOLTIP_CURRENCY"
 				},
 				{
 					checkbox = true,
-					label = "Show spell tooltips",
-					description = "Hover spells in chat and display their tooltip.",
 					key = "CHAT_TOOLTIP_SPELL"
 				},
 				{
 					checkbox = true,
-					label = "Show talent tooltips",
-					description = "Hover talents in chat and display their tooltip.",
 					key = "CHAT_TOOLTIP_TALENT"
 				},
 				{
 					checkbox = true,
-					label = "Show quest tooltips",
-					description = "Hover quests in chat and display their tooltip.",
 					key = "CHAT_TOOLTIP_QUEST"
 				},
 				{
 					checkbox = true,
-					label = "Show achievement tooltips",
-					description = "Hover achievements in chat and display their tooltip.",
 					key = "CHAT_TOOLTIP_ACHIEVEMENT"
 				},
 				{
 					checkbox = true,
-					label = "Show trade tooltips",
-					description = "Hover trade links in chat and display their tooltip.",
 					key = "CHAT_TOOLTIP_TRADE"
 				},
 				{
 					checkbox = true,
-					label = "Show Battle Pet tooltips",
-					description = "Hover battle pet links in chat and display their tooltip.",
 					key = "CHAT_TOOLTIP_BATTLEPET"
 				},
 				{
 					checkbox = true,
-					label = "Show Garrison and Order Hall tooltips",
-					description = "Hover Garrison and Order Hall links in chat and display their tooltip.",
 					key = "CHAT_TOOLTIP_GARRISON"
 				},
 				{
 					checkbox = true,
-					label = "Show instance lock tooltips",
-					description = "Hover instance lock links in chat and display their tooltip.",
 					key = "CHAT_TOOLTIP_INSTANCELOCK"
 				},
 				{
 					checkbox = true,
-					label = "Show death tooltips",
-					description = "Hover death links in chat and display their tooltip.",
 					key = "CHAT_TOOLTIP_DEATH"
 				},
 				{
 					checkbox = true,
-					label = "Show glyph tooltips",
-					description = "Hover glyph links in chat and display their tooltip.",
 					key = "CHAT_TOOLTIP_GLYPH"
 				},
 			},
@@ -680,6 +613,9 @@ do
 					for j = 1, #optionGroup.options do
 						local option = optionGroup.options[j]
 
+						option.label = option.label or (option.key and ns.locale["OPTION_" .. option.key .. "_TITLE"] or "")
+						option.description = option.description or (option.key and ns.locale["OPTION_" .. option.key .. "_DESC"] or "")
+
 						if option.checkbox then
 							last = CreateCheckbox(last, option.label, option.description)
 							last.option = option
@@ -712,20 +648,12 @@ do
 
 				for i = 1, #categories do
 					local group = categories[i]
-					local temp = ns.locale["DESCRIPTION_GROUP_" .. group.group]
 
-					if not temp then
-						for j = 1, #group.categories do
-							local category = group.categories[j]
-
-							temp = (temp and (temp .. "\n") or "") .. " • " .. category.label .. ": " .. category.description
-						end
-					end
-
-					last = CreateCheckbox(last, group.label, temp)
+					last = CreateCheckbox(last, group.label, group.description)
 					last.group = group
 					last.refresh = handlers.group.update
 					last:SetScript("OnClick", handlers.group.click)
+
 					table.insert(panel.widgets, last)
 				end
 			end

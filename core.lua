@@ -97,32 +97,32 @@ do
 				if data.everyone then
 					-- data.history
 					-- data.item
-					chatOutput(format("%s: Everyone Passed", ns.util:toLootIcon(data.item, true)))
+					chatOutput(format(ns.locale.ITEM_ROLL_PASS_EVERYONE, ns.util:toLootIcon(data.item, true)))
 
 				else
 					-- data.history
 					-- data.target
 					-- data.item
-					chatOutput(format("%s: %s Passed", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
+					chatOutput(format(ns.locale.ITEM_ROLL_PASS, ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
 				end
 
 			elseif data.disenchant then
 				-- data.history
 				-- data.target
 				-- data.item
-				chatOutput(format("%s: %s rolling for Disenchant", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
+				chatOutput(format(ns.locale.ITEM_ROLL_DE, ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
 
 			elseif data.greed then
 				-- data.history
 				-- data.target
 				-- data.item
-				chatOutput(format("%s: %s rolling for Greed", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
+				chatOutput(format(ns.locale.ITEM_ROLL_GREED, ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
 
 			elseif data.need then
 				-- data.history
 				-- data.target
 				-- data.item
-				chatOutput(format("%s: %s rolling for Need", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
+				chatOutput(format(ns.locale.ITEM_ROLL_NEED, ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
 			end
 
 		elseif data.rolled then
@@ -151,38 +151,38 @@ do
 				-- data.type
 				-- data.number
 				-- data.item
-				chatOutput(format("%s: %s %s rolled %d |cffFF4800and lost|r", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.type, data.number))
+				chatOutput(format(ns.locale.ITEM_ROLL_LOST, ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.type, data.number))
 
 			elseif data.ineligible then
 				-- data.target
 				-- data.item
-				chatOutput(format("%s: %s is ineligible", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
+				chatOutput(format(ns.locale.ITEM_ROLL_INELIGIBLE, ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
 
 			elseif data.disenchanted then
 				-- data.item
 				-- data.target
-				chatOutput(format("%s: Disenchanted by %s", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
+				chatOutput(format(ns.locale.ITEM_ROLL_DE_BY, ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
 
 			elseif data.disenchant then
 				-- data.history
 				-- data.number
 				-- data.target
 				-- data.item
-				chatOutput(format("%s: %s Disenchant rolled %d", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.number))
+				chatOutput(format(ns.locale.ITEM_ROLL_DE_RESULT, ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.number))
 
 			elseif data.greed then
 				-- data.history
 				-- data.number
 				-- data.target
 				-- data.item
-				chatOutput(format("%s: %s Greed rolled %d", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.number))
+				chatOutput(format(ns.locale.ITEM_ROLL_GREED_RESULT, ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.number))
 
 			elseif data.need then
 				-- data.history
 				-- data.number
 				-- data.target
 				-- data.item
-				chatOutput(format("%s: %s Need rolled %d", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.number))
+				chatOutput(format(ns.locale.ITEM_ROLL_NEED_RESULT, ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU), data.number))
 
 			elseif data.started then -- TODO: matches wrong string
 				-- data.history
@@ -192,7 +192,7 @@ do
 			elseif data.winner then
 				-- data.target
 				-- data.item
-				chatOutput(format("%s: |cff00FF00%s won!|r", ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
+				chatOutput(format(ns.locale.ITEM_ROLL_WON, ns.util:toLootIcon(data.item, true), ns.util:toTarget(data.target or YOU)))
 			end
 		end
 
@@ -307,8 +307,8 @@ do
 			interval:Check()
 			return true
 
-		elseif event ~= "CHAT_MSG_SYSTEM" and (not temp or temp.key ~= "roll") then -- DEBUG: AVOID FLOOD!
-			print("PARSE_CHAT", event, text, data, "") -- DEBUG
+		--elseif event ~= "CHAT_MSG_SYSTEM" and (not temp or temp.key ~= "roll") then -- DEBUG: AVOID FLOOD!
+		--	print("PARSE_CHAT", event, text, data, "") -- DEBUG
 		end
 
 		return false
@@ -316,9 +316,9 @@ do
 
 	-- need this to read how much money we received from a quest (not experience, otherwise we get duplicate values parsed from the PARSE_CHAT handler)
 	function ns.core:QUEST_COMPLETE(event, questID, experience, money)
-		if experience and experience > 0 then
-			-- ns.core.PARSE_CHAT(self, "CHAT_MSG_COMBAT_XP_GAIN", format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED, experience))
-		end
+		--if experience and experience > 0 then
+		--	ns.core.PARSE_CHAT(self, "CHAT_MSG_COMBAT_XP_GAIN", format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED, experience))
+		--end
 		if money and money > 0 then
 			ns.core.PARSE_CHAT(self, "CHAT_MSG_MONEY", format(YOU_LOOT_MONEY, GetCoinText(money)))
 		end
@@ -747,7 +747,7 @@ local function ADDON_LOADED(self, event, name)
 		-- check if the parser is functioning with the current patterns and locale
 		local tests = ns.util:parseTests()
 		if tests.failed > 0 then
-			print(format("%s: %d/%d parsing tests succeeded. %d failed. The addon needs an update to fix this issue.", addonName, tests.success, tests.total, tests.failed))
+			print(format(ns.locale.PARSER_OUTDATED_ERROR, addonName, tests.success, tests.total, tests.failed))
 		end
 	end
 end

@@ -22,8 +22,6 @@ do
 		-- { reputation[, faction[, value]] }
 		{
 			group = "REPUTATION",
-			label = ns.locale.LABEL_REPUTATION,
-			description = ns.locale.DESCRIPTION_REPUTATION,
 			events = {
 				"CHAT_MSG_COMBAT_FACTION_CHANGE",
 			},
@@ -59,8 +57,6 @@ do
 		-- { reputation, loss[, faction[, value]] }
 		{
 			group = "REPUTATION",
-			label = ns.locale.LABEL_REPUTATION_LOSS,
-			description = ns.locale.DESCRIPTION_REPUTATION_LOSS,
 			events = {
 				"CHAT_MSG_COMBAT_FACTION_CHANGE",
 			},
@@ -90,8 +86,6 @@ do
 		-- { honor[, target[, rank[, value]]] }
 		{
 			group = "HONOR",
-			label = ns.locale.LABEL_HONOR,
-			description = ns.locale.DESCRIPTION_HONOR,
 			events = {
 				"CHAT_MSG_COMBAT_HONOR_GAIN",
 			},
@@ -133,8 +127,6 @@ do
 		-- { experience[, value[, target[, zone]]] }
 		{
 			group = "EXPERIENCE",
-			label = ns.locale.LABEL_EXPERIENCE,
-			description = ns.locale.DESCRIPTION_EXPERIENCE,
 			events = {
 				"CHAT_MSG_SYSTEM",
 				"CHAT_MSG_COMBAT_XP_GAIN",
@@ -211,8 +203,6 @@ do
 		-- { experience, loss[, value] }
 		{
 			group = "EXPERIENCE",
-			label = ns.locale.LABEL_EXPERIENCE_LOSS,
-			description = ns.locale.DESCRIPTION_EXPERIENCE_LOSS,
 			events = {
 				"CHAT_MSG_SYSTEM",
 				"CHAT_MSG_COMBAT_XP_GAIN",
@@ -237,8 +227,6 @@ do
 		-- { experience, guild[, value] }
 		{
 			group = "GUILD_EXPERIENCE",
-			label = ns.locale.LABEL_EXPERIENCE_GUILD,
-			description = ns.locale.DESCRIPTION_EXPERIENCE_GUILD,
 			events = {
 				"CHAT_MSG_COMBAT_GUILD_XP_GAIN",
 			},
@@ -262,8 +250,6 @@ do
 		-- { experience, follower[, target[, value]] }
 		not IS_LEGION and NOOP_ENTRY or {
 			group = "FOLLOWER_EXPERIENCE",
-			label = ns.locale.LABEL_FOLLOWER_EXPERIENCE,
-			description = ns.locale.DESCRIPTION_FOLLOWER_EXPERIENCE,
 			events = {
 				"CHAT_MSG_SYSTEM",
 				"CHAT_MSG_COMBAT_XP_GAIN",
@@ -292,8 +278,6 @@ do
 		-- { currency[, item[, count]] }
 		{
 			group = "CURRENCY",
-			label = ns.locale.LABEL_CURRENCY,
-			description = ns.locale.DESCRIPTION_CURRENCY,
 			events = {
 				"CHAT_MSG_CURRENCY",
 			},
@@ -327,8 +311,6 @@ do
 		-- { money[, value[, guild[, target]]] }
 		{
 			group = "MONEY",
-			label = ns.locale.LABEL_MONEY,
-			description = ns.locale.DESCRIPTION_MONEY,
 			events = {
 				"CHAT_MSG_MONEY",
 			},
@@ -373,8 +355,6 @@ do
 		-- { loot[, item[, count]] }
 		{
 			group = "LOOT_ITEM",
-			label = ns.locale.LABEL_LOOT,
-			description = ns.locale.DESCRIPTION_LOOT,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -431,8 +411,6 @@ do
 		-- { loot[, item[, count]] }
 		{
 			group = "LOOT_ITEM",
-			label = ns.locale.LABEL_LOOT,
-			description = ns.locale.DESCRIPTION_LOOT,
 			events = {
 				"CHAT_MSG_SYSTEM",
 			},
@@ -469,8 +447,6 @@ do
 		-- { loot[, target[, item[, count]]] }
 		{
 			group = "LOOT_ITEM",
-			label = ns.locale.LABEL_LOOT_TARGET,
-			description = ns.locale.DESCRIPTION_LOOT_TARGET,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -516,8 +492,6 @@ do
 		-- { loot, roll, decision, pass, everyone[, history[, item]] }
 		{
 			group = "LOOT_ROLL_DECISION",
-			label = ns.locale.LABEL_LOOT_ROLL_DECISION_EVERYONE_PASS,
-			description = ns.locale.DESCRIPTION_LOOT_ROLL_DECISION_EVERYONE_PASS,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -545,8 +519,6 @@ do
 		-- { loot, roll, decision, pass[, history[, target[, item]]] }
 		{
 			group = "LOOT_ROLL_DECISION",
-			label = ns.locale.LABEL_LOOT_ROLL_DECISION_PASS,
-			description = ns.locale.DESCRIPTION_LOOT_ROLL_DECISION_PASS,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -589,8 +561,6 @@ do
 		-- { loot, roll, decision, disenchant[, history[, target[, item]]] }
 		{
 			group = "LOOT_ROLL_DECISION",
-			label = ns.locale.LABEL_LOOT_ROLL_DECISION_DE,
-			description = ns.locale.DESCRIPTION_LOOT_ROLL_DECISION_DE,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -627,8 +597,6 @@ do
 		-- { loot, roll, decision, greed[, history[, target[, item]]] }
 		{
 			group = "LOOT_ROLL_DECISION",
-			label = ns.locale.LABEL_LOOT_ROLL_DECISION_GREED,
-			description = ns.locale.DESCRIPTION_LOOT_ROLL_DECISION_GREED,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -665,8 +633,6 @@ do
 		-- { loot, roll, decision, need[, history[, target[, item]]] }
 		{
 			group = "LOOT_ROLL_DECISION",
-			label = ns.locale.LABEL_LOOT_ROLL_DECISION_NEED,
-			description = ns.locale.DESCRIPTION_LOOT_ROLL_DECISION_NEED,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -703,8 +669,6 @@ do
 		-- { loot, roll, rolled, disenchant[, number[, item[, target]]] }
 		{
 			group = "LOOT_ROLL_ROLLED",
-			label = ns.locale.LABEL_LOOT_ROLLED_DE,
-			description = ns.locale.DESCRIPTION_LOOT_ROLLED_DE,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -736,8 +700,6 @@ do
 		-- { loot, roll, rolled, greed[, number[, item[, target]]] }
 		{
 			group = "LOOT_ROLL_ROLLED",
-			label = ns.locale.LABEL_LOOT_ROLLED_GREED,
-			description = ns.locale.DESCRIPTION_LOOT_ROLLED_GREED,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -769,8 +731,6 @@ do
 		-- { loot, roll, rolled, need[, number[, item[, target]]] }
 		{
 			group = "LOOT_ROLL_ROLLED",
-			label = ns.locale.LABEL_LOOT_ROLLED_NEED,
-			description = ns.locale.DESCRIPTION_LOOT_ROLLED_NEED,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -804,8 +764,6 @@ do
 		-- { loot, roll, result, disenchanted[, item[, target]] }
 		{
 			group = "LOOT_ROLL_RESULT",
-			label = ns.locale.LABEL_LOOT_RESULT_DE_ENCHANTER,
-			description = ns.locale.DESCRIPTION_LOOT_RESULT_DE_ENCHANTER,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -833,8 +791,6 @@ do
 		-- { loot, roll, result, ineligible[, target[, item]] }
 		{
 			group = "LOOT_ROLL_RESULT",
-			label = ns.locale.LABEL_LOOT_RESULT_INELIGIBLE,
-			description = ns.locale.DESCRIPTION_LOOT_RESULT_INELIGIBLE,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -862,8 +818,6 @@ do
 		-- { loot, roll, result, disenchant[, history[, number[, target[, item]]]] }
 		{
 			group = "LOOT_ROLL_RESULT",
-			label = ns.locale.LABEL_LOOT_RESULT_DE,
-			description = ns.locale.DESCRIPTION_LOOT_RESULT_DE,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -908,8 +862,6 @@ do
 		-- { loot, roll, result, greed[, history[, number[, target[, item]]]] }
 		{
 			group = "LOOT_ROLL_RESULT",
-			label = ns.locale.LABEL_LOOT_RESULT_GREED,
-			description = ns.locale.DESCRIPTION_LOOT_RESULT_GREED,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -954,8 +906,6 @@ do
 		-- { loot, roll, result, need[, history[, number[, target[, item]]]] }
 		{
 			group = "LOOT_ROLL_RESULT",
-			label = ns.locale.LABEL_LOOT_RESULT_NEED,
-			description = ns.locale.DESCRIPTION_LOOT_RESULT_NEED,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -1000,8 +950,6 @@ do
 		-- { loot, roll, result, lost[, history[, type[, number[, item]]]] }
 		{
 			group = "LOOT_ROLL_RESULT",
-			label = ns.locale.LABEL_LOOT_RESULT_DYNAMIC,
-			description = ns.locale.DESCRIPTION_LOOT_RESULT_DYNAMIC,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -1037,8 +985,6 @@ do
 		-- { loot, roll, result, winner[, target[, item]] }
 		{
 			group = "LOOT_ROLL_RESULT",
-			label = ns.locale.LABEL_LOOT_RESULT_WINNER,
-			description = ns.locale.DESCRIPTION_LOOT_RESULT_WINNER,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -1071,8 +1017,6 @@ do
 		-- { loot, roll, result, started[, history[, item]] }
 		{
 			group = "LOOT_ROLL_RESULT",
-			label = ns.locale.LABEL_LOOT_ROLL_STARTED,
-			description = ns.locale.DESCRIPTION_LOOT_ROLL_STARTED,
 			events = {
 				"CHAT_MSG_LOOT",
 			},
@@ -1101,8 +1045,6 @@ do
 		not IS_LEGION and NOOP_ENTRY or {
 			skipTests = true, -- because it depends on the config if the pattern matches something or not
 			group = "ARTIFACT",
-			label = ns.locale.LABEL_ARTIFACT,
-			description = ns.locale.DESCRIPTION_ARTIFACT,
 			events = {
 				"CHAT_MSG_SYSTEM",
 			},
@@ -1134,8 +1076,6 @@ do
 		not IS_LEGION and NOOP_ENTRY or {
 			skipTests = true, -- because it depends on the config if the pattern matches something or not
 			group = "TRANSMOGRIFICATION",
-			label = ns.locale.LABEL_TRANSMOGRIFICATION,
-			description = ns.locale.DESCRIPTION_TRANSMOGRIFICATION,
 			events = {
 				"CHAT_MSG_SYSTEM",
 			},
@@ -1156,8 +1096,6 @@ do
 		-- ignore
 		{
 			group = "IGNORE",
-			label = ns.locale.LABEL_IGNORE,
-			description = ns.locale.DESCRIPTION_IGNORE,
 			events = {
 				"CHAT_MSG_SYSTEM",
 			},
@@ -1189,7 +1127,8 @@ do
 					categoriesOptions.groups[category.group] = {
 						id = i,
 						group = category.group,
-						label = ns.locale["LABEL_GROUP_" .. category.group],
+						label = ns.locale["OPTION_IGNORE_GROUP_"  .. category.group .. "_TITLE"],
+						description = ns.locale["OPTION_IGNORE_GROUP_"  .. category.group .. "_DESC"],
 						categories = {}
 					}
 				end
@@ -1197,8 +1136,6 @@ do
 				table.insert(categoriesOptions.groups[category.group].categories, {
 					group = category.group,
 					id = category.id,
-					label = category.label,
-					description = category.description,
 					object = category
 				})
 			end

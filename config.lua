@@ -20,7 +20,6 @@ ns.config.defaults = {
 	{ key = "ITEM_COUNT_BAGS_INCLUDE_CHARGES", value = true, bool = true },
 	-- Transmogrification
 	{ key = "ITEM_ALERT_TRANSMOG", value = false, bool = true },
-	{ key = "ITEM_ALERT_TRANSMOG_UNCOLLECTED", value = false, bool = true },
 	{ key = "ITEM_ALERT_TRANSMOG_EVERYTHING", value = false, bool = true },
 	-- Quality
 	{ key = "ITEM_HIDE_JUNK", value = false, bool = true },
