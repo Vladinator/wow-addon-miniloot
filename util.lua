@@ -1070,6 +1070,10 @@ do
 			end,
 			tests = {
 				format(ARTIFACT_XP_GAIN, "Itemlink", 1337),
+				format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456"),
+				format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456" .. DECIMAL_SEPERATOR .. "99"),
+				format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456" .. LARGE_NUMBER_SEPERATOR .. "789"),
+				format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456" .. LARGE_NUMBER_SEPERATOR .. "789" .. DECIMAL_SEPERATOR .. "99"),
 			}
 		},
 		-- transmogrification
@@ -1198,8 +1202,15 @@ do
 		elseif id == token.NUMBER or
 					id == token.FLOAT then
 
+			-- strip non-digits from strings (try to properly hande number separator/decimal)
+			if type(value) == "string" then
+				value = value:gsub("[\\" .. LARGE_NUMBER_SEPERATOR .. "]+", "")
+				value = value:gsub("[\\" .. DECIMAL_SEPERATOR .. "]", ".")
+				value = value:gsub("[^%d\.]+", "")
+			end
+
 			-- convert what ever it is into a number
-			value = tonumber(value, 10)
+			value = tonumber(value)
 
 		elseif id == token.MONEY then
 

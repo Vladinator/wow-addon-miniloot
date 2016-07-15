@@ -460,3 +460,38 @@ do
 	DEFAULT_CHAT_FRAME:HookScript("OnHyperlinkEnter", ns.tooltip.HYPERLINK_ENTER)
 	DEFAULT_CHAT_FRAME:HookScript("OnHyperlinkLeave", ns.tooltip.HYPERLINK_LEAVE)
 end
+
+-- chat hyperlink fix links
+do
+	local oSetItemRef = SetItemRef
+
+	local function FixHyperlink(link, oldText, newText, quality)
+		-- the "link" is always the proper
+		-- the "oldText" contains corrupted hyperlink from our addon
+		-- the "newText" is a freshly generated link, but it ignores the "link" attributes
+		-- the "quality" is an override in case the quality is different than the API generating "newText"
+
+		-- use provided quality color, or from old/new text
+		local color = quality or oldText:match("|c([a-fA-F0-9]+)|H") or newText:match("|c([a-fA-F0-9]+)|H")
+
+		-- get content from new/old text
+		local text = newText:match("|h(.+)|h") or oldText:match("|h(.+)|h")
+
+		-- create the link
+		return "|c" .. color .. "|H" .. link .. "|h" .. text .. "|h|r"
+	end
+
+	function SetItemRef(link, text, button, chatFrame, ...)
+		if IsModifiedClick("CHATLINK") then
+			local linkType, arg1, arg2 = strsplit(":", link)
+
+			if linkType == "garrfollower" then
+				text = FixHyperlink(link, text, C_Garrison.GetFollowerLinkByID(arg1), select(4, GetItemQualityColor(arg2)))
+			elseif linkType == "currency" then
+				text = FixHyperlink(link, text, GetCurrencyLink(arg1))
+			end
+		end
+
+		return oSetItemRef(link, text, button, chatFrame, ...)
+	end
+end

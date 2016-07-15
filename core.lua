@@ -326,11 +326,10 @@ do
 
 	-- report intervals
 	do
-		local UPDATE_INTERVAL = 5 -- DEBUG
+		local UPDATE_INTERVAL = 5 -- TODO: let users specify UPDATE_INTERVAL?
 		local elapsed = 0
 		interval = CreateFrame("Frame")
 
-		-- TODO
 		function interval:Tick()
 			local playerName = UnitName("player") or YOU or "You"
 			local guildName = GetGuildInfo("player") or GUILD or "Guild"
@@ -677,13 +676,29 @@ do
 			table.wipe(lines)
 		end
 
+		function interval:SafeTick()
+			local success, err = pcall(interval.Tick, interval)
+
+			if not success then
+				print(format(ns.locale.PARSER_FATAL_ERROR, addonName, err))
+
+				for i = 1, #summaryOrder do
+					local key = summaryOrder[i]
+
+					table.wipe(summary[key])
+				end
+
+				summary.count = 0
+			end
+		end
+
 		function interval:OnUpdate(e)
 			elapsed = elapsed + e
 
 			if elapsed > UPDATE_INTERVAL and not InCombatLockdown() then
 				elapsed = 0
 
-				interval:Tick()
+				interval:SafeTick()
 			end
 		end
 

@@ -21,6 +21,7 @@ local L = ns.locale
 
 -- English
 L.PARSER_OUTDATED_ERROR = "%s: %d/%d parsing tests succeeded. %d failed. The addon needs an update to fix this issue."
+L.PARSER_FATAL_ERROR = "%s: Unable to show recent loot report. Please report this error to the developer: %s"
 L.ITEM_ROLL_PASS_EVERYONE = "%s: Everyone Passed"
 L.ITEM_ROLL_PASS = "%s: %s Passed"
 L.ITEM_ROLL_DE = "%s: %s rolling for Disenchant"
