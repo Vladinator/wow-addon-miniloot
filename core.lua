@@ -768,7 +768,7 @@ local function ADDON_LOADED(self, event, name)
 		-- DEBUG:
 		-- /dump MiniLootTestResults
 		-- /run print(MiniLootTestResults.log[1]and"Locale: "..GetLocale().." - Failed tests:"or"")for _,t in ipairs(MiniLootTestResults.log)do if not t.success then print(t.input)end end
-		-- /run for _,t in ipairs(MiniLootTestResults.log)do if t.expected then MiniLootTestResults.T={t.input,t.output[1],t.expected}SlashCmdList.DUMP("MiniLootTestResults.T")MiniLootTestResults.T=nil end end
+		-- /run for _,t in ipairs(MiniLootTestResults.log)do if not t.success and t.expected then MiniLootTestResults.T={t.input,t.output[1],t.expected}SlashCmdList.DUMP("MiniLootTestResults.T")MiniLootTestResults.T=nil end end
 		-- _G.MiniLootTestResults = tests
 	end
 end

@@ -46,11 +46,11 @@ do
 				return data
 			end,
 			tests = {
-				format(FACTION_STANDING_INCREASED_DOUBLE_BONUS, "Factionname", 500, 1.234, 5.678),
-				format(FACTION_STANDING_INCREASED_BONUS, "Factionname", 600, 9.1011),
-				format(FACTION_STANDING_INCREASED_ACH_BONUS, "Factionname", 700, 12.1314),
-				format(FACTION_STANDING_INCREASED, "Factionname", 800),
-				format(FACTION_STANDING_INCREASED_GENERIC, "Factionname"),
+				{ format(FACTION_STANDING_INCREASED_DOUBLE_BONUS, "Factionname", 500, 1.234, 5.678), { reputation = true, faction = "Factionname", value = 500 } },
+				{ format(FACTION_STANDING_INCREASED_BONUS, "Factionname", 600, 9.1011), { reputation = true, faction = "Factionname", value = 600 } },
+				{ format(FACTION_STANDING_INCREASED_ACH_BONUS, "Factionname", 700, 12.1314), { reputation = true, faction = "Factionname", value = 700 } },
+				{ format(FACTION_STANDING_INCREASED, "Factionname", 800), { reputation = true, faction = "Factionname", value = 800 } },
+				{ format(FACTION_STANDING_INCREASED_GENERIC, "Factionname"), { reputation = true, faction = "Factionname" } },
 			}
 		},
 		-- reputation (loss)
@@ -78,8 +78,8 @@ do
 				return data
 			end,
 			tests = {
-				format(FACTION_STANDING_DECREASED, "Factionname", 5000),
-				format(FACTION_STANDING_DECREASED_GENERIC, "Factionname"),
+				{ format(FACTION_STANDING_DECREASED, "Factionname", 5000), { reputation = true, loss = true, faction = "Factionname", value = 5000 } },
+				{ format(FACTION_STANDING_DECREASED_GENERIC, "Factionname"), { reputation = true, loss = true, faction = "Factionname" } },
 			}
 		},
 		-- honor
@@ -118,9 +118,9 @@ do
 				return data
 			end,
 			tests = {
-				format(COMBATLOG_HONORGAIN, "Targetname", "Grand Marshal", 1.234),
-				format(COMBATLOG_HONORGAIN_NO_RANK, "Targetname", 5.678),
-				format(COMBATLOG_HONORAWARD, 9.1011),
+				{ format(COMBATLOG_HONORGAIN, "Targetname", "Grand Marshal", 1.234), { honor = true, target = "Targetname", rank = "Grand Marshal", value = 1 } },
+				{ format(COMBATLOG_HONORGAIN_NO_RANK, "Targetname", 5.678), { honor = true, target = "Targetname", value = 5 } },
+				{ format(COMBATLOG_HONORAWARD, 9.1011), { honor = true, value = 9 } },
 			}
 		},
 		-- experience
@@ -177,26 +177,26 @@ do
 				return data
 			end,
 			tests = {
-				{ format(ERR_ZONE_EXPLORED_XP, "Zonename", 10000), { experience = true, zone = "Zonename", value = 10000 } },
-				format(COMBATLOG_XPGAIN_EXHAUSTION1_RAID, "Targetname", 10000, "EXP?", "BONUS?", 0),
-				format(COMBATLOG_XPGAIN_EXHAUSTION1_GROUP, "Targetname", 10000, "EXP?", "BONUS?", 0),
-				format(COMBATLOG_XPGAIN_EXHAUSTION1, "Targetname", 10000, "EXP?", "BONUS?"),
-				format(COMBATLOG_XPGAIN_EXHAUSTION2_RAID, "Targetname", 10000, "EXP?", "BONUS?", 0),
-				format(COMBATLOG_XPGAIN_EXHAUSTION2_GROUP, "Targetname", 10000, "EXP?", "BONUS?", 0),
-				format(COMBATLOG_XPGAIN_EXHAUSTION2, "Targetname", 10000, "EXP?", "BONUS?"),
-				format(COMBATLOG_XPGAIN_EXHAUSTION4_RAID, "Targetname", 10000, "EXP?", "BONUS?", 0),
-				format(COMBATLOG_XPGAIN_EXHAUSTION4_GROUP, "Targetname", 10000, "EXP?", "BONUS?", 0),
-				format(COMBATLOG_XPGAIN_EXHAUSTION4, "Targetname", 10000, "EXP?", "BONUS?"),
-				format(COMBATLOG_XPGAIN_EXHAUSTION5_RAID, "Targetname", 10000, "EXP?", "BONUS?", 0),
-				format(COMBATLOG_XPGAIN_EXHAUSTION5_GROUP, "Targetname", 10000, "EXP?", "BONUS?", 0),
-				format(COMBATLOG_XPGAIN_EXHAUSTION5, "Targetname", 10000, "EXP?", "BONUS?"),
-				format(COMBATLOG_XPGAIN_FIRSTPERSON_RAID, "Targetname", 10000, 0),
-				format(COMBATLOG_XPGAIN_FIRSTPERSON_GROUP, "Targetname", 10000, 0),
-				format(COMBATLOG_XPGAIN_FIRSTPERSON, "Targetname", 10000),
-				format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED_RAID, 10000, 0),
-				format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED_GROUP, 10000, 0),
-				format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED, 10000),
-				format(COMBATLOG_XPGAIN_QUEST, 10000, "EXP?", "BONUS?"),
+				{ format(ERR_ZONE_EXPLORED_XP, "Zonename", 10001), { experience = true, zone = "Zonename", value = 10001 } },
+				{ format(COMBATLOG_XPGAIN_EXHAUSTION1_RAID, "Targetname", 10002, "EXP?", "BONUS?", 0), { experience = true, target = "Targetname", value = 10002 } },
+				{ format(COMBATLOG_XPGAIN_EXHAUSTION1_GROUP, "Targetname", 10003, "EXP?", "BONUS?", 0), { experience = true, target = "Targetname", value = 10003 } },
+				{ format(COMBATLOG_XPGAIN_EXHAUSTION1, "Targetname", 10004, "EXP?", "BONUS?"), { experience = true, target = "Targetname", value = 10004 } },
+				{ format(COMBATLOG_XPGAIN_EXHAUSTION2_RAID, "Targetname", 10005, "EXP?", "BONUS?", 0), { experience = true, target = "Targetname", value = 10005 } },
+				{ format(COMBATLOG_XPGAIN_EXHAUSTION2_GROUP, "Targetname", 10006, "EXP?", "BONUS?", 0), { experience = true, target = "Targetname", value = 10006 } },
+				{ format(COMBATLOG_XPGAIN_EXHAUSTION2, "Targetname", 10007, "EXP?", "BONUS?"), { experience = true, target = "Targetname", value = 10007 } },
+				{ format(COMBATLOG_XPGAIN_EXHAUSTION4_RAID, "Targetname", 10008, "EXP?", "BONUS?", 0), { experience = true, target = "Targetname", value = 10008 } },
+				{ format(COMBATLOG_XPGAIN_EXHAUSTION4_GROUP, "Targetname", 10009, "EXP?", "BONUS?", 0), { experience = true, target = "Targetname", value = 10009 } },
+				{ format(COMBATLOG_XPGAIN_EXHAUSTION4, "Targetname", 10010, "EXP?", "BONUS?"), { experience = true, target = "Targetname", value = 10010 } },
+				{ format(COMBATLOG_XPGAIN_EXHAUSTION5_RAID, "Targetname", 10011, "EXP?", "BONUS?", 0), { experience = true, target = "Targetname", value = 10011 } },
+				{ format(COMBATLOG_XPGAIN_EXHAUSTION5_GROUP, "Targetname", 10012, "EXP?", "BONUS?", 0), { experience = true, target = "Targetname", value = 10012 } },
+				{ format(COMBATLOG_XPGAIN_EXHAUSTION5, "Targetname", 10013, "EXP?", "BONUS?"), { experience = true, target = "Targetname", value = 10013 } },
+				{ format(COMBATLOG_XPGAIN_FIRSTPERSON_RAID, "Targetname", 10014, 0), { experience = true, target = "Targetname", value = 10014 } },
+				{ format(COMBATLOG_XPGAIN_FIRSTPERSON_GROUP, "Targetname", 10015, 0), { experience = true, target = "Targetname", value = 10015 } },
+				{ format(COMBATLOG_XPGAIN_FIRSTPERSON, "Targetname", 10016), { experience = true, target = "Targetname", value = 10016 } },
+				{ format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED_RAID, 10017, 0), { experience = true, value = 10017 } },
+				{ format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED_GROUP, 10018, 0), { experience = true, value = 10018 } },
+				{ format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED, 10019), { experience = true, value = 10019 } },
+				{ format(COMBATLOG_XPGAIN_QUEST, 10020, "EXP?", "BONUS?"), { experience = true, value = 10020 } },
 			}
 		},
 		-- experience (loss)
@@ -220,7 +220,7 @@ do
 				return data
 			end,
 			tests = {
-				format(COMBATLOG_XPLOSS_FIRSTPERSON_UNNAMED, 10000),
+				{ format(COMBATLOG_XPLOSS_FIRSTPERSON_UNNAMED, 10000), { experience = true, loss = true, value = 10000 } },
 			}
 		},
 		-- experience (guild)
@@ -243,7 +243,7 @@ do
 				return data
 			end,
 			tests = {
-				format(COMBATLOG_GUILD_XPGAIN, 10000),
+				{ format(COMBATLOG_GUILD_XPGAIN, 10000), { experience = true, guild = true, value = 10000 } },
 			}
 		},
 		-- experience (followers)
@@ -271,7 +271,7 @@ do
 				return data
 			end,
 			tests = {
-				format(GARRISON_FOLLOWER_XP_ADDED_ZONE_SUPPORT, "Follower", 500),
+				{ format(GARRISON_FOLLOWER_XP_ADDED_ZONE_SUPPORT, "Follower", 500), { experience = true, follower = true, target = "Follower", value = 500 } },
 			}
 		},
 		-- currency
@@ -301,10 +301,10 @@ do
 				return data
 			end,
 			tests = {
-				format(CURRENCY_GAINED_MULTIPLE_BONUS, "Currencylink", 10),
-				format(CURRENCY_GAINED_MULTIPLE, "Currencylink", 20),
-				format(CURRENCY_GAINED, "Currencylink"),
-				format(LOOT_CURRENCY_REFUND, "Currencylink", 30),
+				{ format(CURRENCY_GAINED_MULTIPLE_BONUS, "Currencylink", 10), { currency = true, item = "Currencylink", count = 10 } },
+				{ format(CURRENCY_GAINED_MULTIPLE, "Currencylink", 20), { currency = true, item = "Currencylink", count = 20 } },
+				{ format(CURRENCY_GAINED, "Currencylink"), { currency = true, item = "Currencylink" } },
+				{ format(LOOT_CURRENCY_REFUND, "Currencylink", 30), { currency = true, item = "Currencylink", count = 30 } },
 			}
 		},
 		-- money
@@ -343,12 +343,12 @@ do
 				return data
 			end,
 			tests = {
-				format(YOU_LOOT_MONEY_GUILD, GetCoinText(1234567), GetCoinText(102030)),
-				format(YOU_LOOT_MONEY, GetCoinText(450607)),
-				format(LOOT_MONEY_SPLIT_GUILD, GetCoinText(12345), GetCoinText(1234)),
-				format(LOOT_MONEY_SPLIT, GetCoinText(123)),
-				format(LOOT_MONEY_REFUND, GetCoinText(5000000)),
-				format(LOOT_MONEY, "Targetname", GetCoinText(9000000)),
+				{ format(YOU_LOOT_MONEY_GUILD, GetCoinText(1234567), GetCoinText(102030)), { money = true, value = 1234567, guild = 102030 } },
+				{ format(YOU_LOOT_MONEY, GetCoinText(450607)), { money = true, value = 450607 } },
+				{ format(LOOT_MONEY_SPLIT_GUILD, GetCoinText(12345), GetCoinText(1234)), { money = true, value = 12345, guild = 1234 } },
+				{ format(LOOT_MONEY_SPLIT, GetCoinText(123)), { money = true, value = 123 } },
+				{ format(LOOT_MONEY_REFUND, GetCoinText(5000000)), { money = true, value = 5000000 } },
+				{ format(LOOT_MONEY, "Targetname", GetCoinText(9000000)), { money = true, value = 9000000, target = "Targetname" } },
 			}
 		},
 		-- loot
@@ -393,18 +393,18 @@ do
 				return data
 			end,
 			tests = {
-				format(LOOT_ITEM_BONUS_ROLL_SELF_MULTIPLE, "Itemlink", 90),
-				format(LOOT_ITEM_BONUS_ROLL_SELF, "Itemlink"),
-				format(LOOT_ITEM_SELF_MULTIPLE, "Itemlink", 80),
-				format(LOOT_ITEM_SELF, "Itemlink"),
-				format(LOOT_ITEM_PUSHED_SELF_MULTIPLE, "Itemlink", 70),
-				format(LOOT_ITEM_PUSHED_SELF, "Itemlink"),
-				format(LOOT_ITEM_CREATED_SELF_MULTIPLE, "Itemlink", 60),
-				format(LOOT_ITEM_CREATED_SELF, "Itemlink"),
-				format(LOOT_ITEM_REFUND_MULTIPLE, "Itemlink", 50),
-				format(LOOT_ITEM_REFUND, "Itemlink"),
-				-- format(ERR_QUEST_REWARD_ITEM_MULT_IS, 40, "Itemlink"),
-				-- format(ERR_QUEST_REWARD_ITEM_S, "Itemlink"),
+				{ format(LOOT_ITEM_BONUS_ROLL_SELF_MULTIPLE, "Itemlink", 90), { loot = true, item = "Itemlink", count = 90 } },
+				{ format(LOOT_ITEM_BONUS_ROLL_SELF, "Itemlink"), { loot = true, item = "Itemlink" } },
+				{ format(LOOT_ITEM_SELF_MULTIPLE, "Itemlink", 80), { loot = true, item = "Itemlink", count = 80 } },
+				{ format(LOOT_ITEM_SELF, "Itemlink"), { loot = true, item = "Itemlink" } },
+				{ format(LOOT_ITEM_PUSHED_SELF_MULTIPLE, "Itemlink", 70), { loot = true, item = "Itemlink", count = 70 } },
+				{ format(LOOT_ITEM_PUSHED_SELF, "Itemlink"), { loot = true, item = "Itemlink" } },
+				{ format(LOOT_ITEM_CREATED_SELF_MULTIPLE, "Itemlink", 60), { loot = true, item = "Itemlink", count = 60 } },
+				{ format(LOOT_ITEM_CREATED_SELF, "Itemlink"), { loot = true, item = "Itemlink" } },
+				{ format(LOOT_ITEM_REFUND_MULTIPLE, "Itemlink", 50), { loot = true, item = "Itemlink", count = 50 } },
+				{ format(LOOT_ITEM_REFUND, "Itemlink"), { loot = true, item = "Itemlink" } },
+				-- format(ERR_QUEST_REWARD_ITEM_MULT_IS, 40, "Itemlink"), -- DEPRECATED: LEGION
+				-- format(ERR_QUEST_REWARD_ITEM_S, "Itemlink"), -- DEPRECATED: LEGION
 			}
 		},
 		-- loot
@@ -439,8 +439,8 @@ do
 				return data
 			end,
 			tests = {
-				-- format(ERR_QUEST_REWARD_ITEM_MULT_IS, 40, "Itemlink"),
-				-- format(ERR_QUEST_REWARD_ITEM_S, "Itemlink"),
+				-- format(ERR_QUEST_REWARD_ITEM_MULT_IS, 40, "Itemlink"), -- DEPRECATED: LEGION
+				-- format(ERR_QUEST_REWARD_ITEM_S, "Itemlink"), -- DEPRECATED: LEGION
 			}
 		},
 		-- loot (target)
@@ -478,14 +478,14 @@ do
 				return data
 			end,
 			tests = {
-				format(LOOT_ITEM_BONUS_ROLL_MULTIPLE, "Targetname", "Itemlink", 90),
-				format(LOOT_ITEM_BONUS_ROLL, "Targetname", "Itemlink"),
-				format(LOOT_ITEM_MULTIPLE, "Targetname", "Itemlink", 80),
-				format(LOOT_ITEM, "Targetname", "Itemlink"),
-				format(LOOT_ITEM_PUSHED_MULTIPLE, "Targetname", "Itemlink", 70),
-				format(LOOT_ITEM_PUSHED, "Targetname", "Itemlink"),
-				format(CREATED_ITEM_MULTIPLE, "Targetname", "Itemlink", 70),
-				format(CREATED_ITEM, "Targetname", "Itemlink"),
+				{ format(LOOT_ITEM_BONUS_ROLL_MULTIPLE, "Targetname", "Itemlink", 90), { loot = true, target = "Targetname", item = "Itemlink", count = 90 } },
+				{ format(LOOT_ITEM_BONUS_ROLL, "Targetname", "Itemlink"), { loot = true, target = "Targetname", item = "Itemlink" } },
+				{ format(LOOT_ITEM_MULTIPLE, "Targetname", "Itemlink", 80), { loot = true, target = "Targetname", item = "Itemlink", count = 80 } },
+				{ format(LOOT_ITEM, "Targetname", "Itemlink"), { loot = true, target = "Targetname", item = "Itemlink" } },
+				{ format(LOOT_ITEM_PUSHED_MULTIPLE, "Targetname", "Itemlink", 70), { loot = true, target = "Targetname", item = "Itemlink", count = 70 } },
+				{ format(LOOT_ITEM_PUSHED, "Targetname", "Itemlink"), { loot = true, target = "Targetname", item = "Itemlink" } },
+				{ format(CREATED_ITEM_MULTIPLE, "Targetname", "Itemlink", 70), { loot = true, target = "Targetname", item = "Itemlink", count = 70 } },
+				{ format(CREATED_ITEM, "Targetname", "Itemlink"), { loot = true, target = "Targetname", item = "Itemlink" } },
 			}
 		},
 		-- loot (roll, decision, pass, everyone)
@@ -1069,14 +1069,15 @@ do
 				return data
 			end,
 			tests = {
-				format(ARTIFACT_XP_GAIN, "Itemlink", 1337),
-				format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456"),
-				format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456" .. DECIMAL_SEPERATOR .. "99"),
-				format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456" .. LARGE_NUMBER_SEPERATOR .. "789"),
-				format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456" .. LARGE_NUMBER_SEPERATOR .. "789" .. DECIMAL_SEPERATOR .. "99"),
+				{ format(ARTIFACT_XP_GAIN, "Itemlink", 1337), { artifact = true, item = "Itemlink", power = 1337 } },
+				{ format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456"), { artifact = true, item = "Itemlink", power = 123456 } },
+				{ format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456" .. DECIMAL_SEPERATOR .. "99"), { artifact = true, item = "Itemlink", power = 123456.99 } },
+				{ format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456" .. LARGE_NUMBER_SEPERATOR .. "789"), { artifact = true, item = "Itemlink", power = 123456789 } },
+				{ format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456" .. LARGE_NUMBER_SEPERATOR .. "789" .. DECIMAL_SEPERATOR .. "99"), { artifact = true, item = "Itemlink", power = 123456789.99 } },
 			}
 		},
 		-- transmogrification
+		-- { ignore }
 		not IS_LEGION and NOOP_ENTRY or {
 			skipTests = true, -- because it depends on the config if the pattern matches something or not
 			group = "TRANSMOGRIFICATION",
@@ -1098,6 +1099,7 @@ do
 			}
 		},
 		-- ignore
+		-- { ignore }
 		{
 			group = "IGNORE",
 			events = {
