@@ -177,7 +177,7 @@ do
 				return data
 			end,
 			tests = {
-				format(ERR_ZONE_EXPLORED_XP, "Zonename", 10000),
+				{ format(ERR_ZONE_EXPLORED_XP, "Zonename", 10000), { experience = true, zone = "Zonename", value = 10000 } },
 				format(COMBATLOG_XPGAIN_EXHAUSTION1_RAID, "Targetname", 10000, "EXP?", "BONUS?", 0),
 				format(COMBATLOG_XPGAIN_EXHAUSTION1_GROUP, "Targetname", 10000, "EXP?", "BONUS?", 0),
 				format(COMBATLOG_XPGAIN_EXHAUSTION1, "Targetname", 10000, "EXP?", "BONUS?"),
@@ -1159,6 +1159,10 @@ do
 	end
 
 	local function convert(pattern)
+		for i = 1, 20 do
+			pattern = pattern:gsub("%%" .. i .. "$s", "%%s")
+			pattern = pattern:gsub("%%" .. i .. "$d", "%%d")
+		end
 		pattern = pattern:gsub("%%", "%%%%")
 		pattern = pattern:gsub("%.", "%%%.")
 		pattern = pattern:gsub("%?", "%%%?")
@@ -1299,19 +1303,36 @@ do
 
 		for i = 1, #categories do
 			local category = categories[i]
+			local skipCategoryTests = not not category.skipTests
 
 			for j = 1, #category.tests do
 				local test = category.tests[j]
-				local event
+				local event, expected
 
 				if type(category.events) == "table" then
 					event = category.events[1]
 				end
 
-				local results = { ns.util:parse(test, event) }
-				table.insert(temp.log, { input = test, output = results })
+				if type(test) == "table" then
+					test, expected = test[1], test[2]
+				end
 
-				if category.skipTests or (results and results[1]) then
+				local results = { ns.util:parse(test, event) }
+				local success = not not (results and results[1])
+
+				if success and expected then
+					for x, y in pairs(expected) do
+						if results[1][x] ~= y then
+							success = false
+
+							break
+						end
+					end
+				end
+
+				table.insert(temp.log, { input = test, output = results, success = success, expected = expected, skipped = skipCategoryTests })
+
+				if skipCategoryTests or success then
 					temp.success = temp.success + 1
 				else
 					temp.failed = temp.failed + 1
@@ -1321,7 +1342,6 @@ do
 			end
 		end
 
-		-- print("Test results.", temp.success, "success", temp.failed, "failed", "=", temp.total, "total") -- DEBUG
 		return temp
 	end
 end

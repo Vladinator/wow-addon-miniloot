@@ -764,6 +764,12 @@ local function ADDON_LOADED(self, event, name)
 		if tests.failed > 0 then
 			print(format(ns.locale.PARSER_OUTDATED_ERROR, addonName, tests.success, tests.total, tests.failed))
 		end
+
+		-- DEBUG:
+		-- /dump MiniLootTestResults
+		-- /run print(MiniLootTestResults.log[1]and"Locale: "..GetLocale().." - Failed tests:"or"")for _,t in ipairs(MiniLootTestResults.log)do if not t.success then print(t.input)end end
+		-- /run for _,t in ipairs(MiniLootTestResults.log)do if t.expected then MiniLootTestResults.T={t.input,t.output[1],t.expected}SlashCmdList.DUMP("MiniLootTestResults.T")MiniLootTestResults.T=nil end end
+		-- _G.MiniLootTestResults = tests
 	end
 end
 
