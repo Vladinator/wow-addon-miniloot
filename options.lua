@@ -569,7 +569,7 @@ do
 
 		-- create scroll, bar, and content frame
 		do
-			local PANEL_SCROLL_HEIGHT = 1100 -- TODO: dynamic max?
+			local PANEL_SCROLL_HEIGHT = 1300 -- TODO: dynamic max?
 
 			panel.scroll = CreateFrame("ScrollFrame", nil, panel)
 			panel.scroll:SetPoint("TOPLEFT", 10, -10)

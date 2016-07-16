@@ -351,6 +351,40 @@ do
 				{ format(LOOT_MONEY, "Targetname", GetCoinText(9000000)), { money = true, value = 9000000, target = "Targetname" } },
 			}
 		},
+		-- loot (target)
+		-- { loot[, target[, item[, count]]] }
+		-- NB: koKR prefers these before the next category
+		{
+			group = "LOOT_ITEM",
+			events = {
+				"CHAT_MSG_LOOT",
+			},
+			formats = {
+				{ CREATED_ITEM_MULTIPLE,                       token.TARGET,    token.STRING,    token.NUMBER                                   }, -- "%s creates: %sx%d."
+				{ CREATED_ITEM,                                token.TARGET,    token.STRING                                                    }, -- "%s creates: %s."
+			},
+			parse = function(self, tokens, matches)
+				local data = { loot = true }
+
+				if tokens[2] == token.TARGET then
+					data.target = matches[2]
+
+					if tokens[3] == token.STRING then
+						data.item = matches[3]
+
+						if tokens[4] == token.NUMBER then
+							data.count = matches[4]
+						end
+					end
+				end
+
+				return data
+			end,
+			tests = {
+				{ format(CREATED_ITEM_MULTIPLE, "Targetname", "Itemlink", 70), { loot = true, target = "Targetname", item = "Itemlink", count = 70 } },
+				{ format(CREATED_ITEM, "Targetname", "Itemlink"), { loot = true, target = "Targetname", item = "Itemlink" } },
+			}
+		},
 		-- loot
 		-- { loot[, item[, count]] }
 		{
@@ -407,42 +441,6 @@ do
 				-- format(ERR_QUEST_REWARD_ITEM_S, "Itemlink"), -- DEPRECATED: LEGION
 			}
 		},
-		-- loot
-		-- { loot[, item[, count]] }
-		{
-			group = "LOOT_ITEM",
-			events = {
-				"CHAT_MSG_SYSTEM",
-			},
-			formats = {
-				-- { ERR_QUEST_REWARD_ITEM_MULT_IS,               token.NUMBER,    token.STRING                                                    }, -- "Received %d of item: %s."
-				-- { ERR_QUEST_REWARD_ITEM_S,                     token.STRING                                                                     }, -- "Received item: %s."
-			},
-			parse = function(self, tokens, matches)
-				local data = { loot = true }
-
-				if tokens[2] == token.STRING then
-					data.item = matches[2]
-
-					if tokens[3] == token.NUMBER then
-						data.count = matches[3]
-					end
-
-				elseif tokens[2] == token.NUMBER then
-					data.count = matches[2]
-
-					if tokens[3] == token.STRING then
-						data.item = matches[3]
-					end
-				end
-
-				return data
-			end,
-			tests = {
-				-- format(ERR_QUEST_REWARD_ITEM_MULT_IS, 40, "Itemlink"), -- DEPRECATED: LEGION
-				-- format(ERR_QUEST_REWARD_ITEM_S, "Itemlink"), -- DEPRECATED: LEGION
-			}
-		},
 		-- loot (target)
 		-- { loot[, target[, item[, count]]] }
 		{
@@ -457,8 +455,6 @@ do
 				{ LOOT_ITEM,                                   token.TARGET,    token.STRING                                                    }, -- "%s receives loot: %s."
 				{ LOOT_ITEM_PUSHED_MULTIPLE,                   token.TARGET,    token.STRING,    token.NUMBER                                   }, -- "%s receives item: %sx%d."
 				{ LOOT_ITEM_PUSHED,                            token.TARGET,    token.STRING                                                    }, -- "%s receives item: %s."
-				{ CREATED_ITEM_MULTIPLE,                       token.TARGET,    token.STRING,    token.NUMBER                                   }, -- "%s creates: %sx%d."
-				{ CREATED_ITEM,                                token.TARGET,    token.STRING                                                    }, -- "%s creates: %s."
 			},
 			parse = function(self, tokens, matches)
 				local data = { loot = true }
@@ -484,8 +480,6 @@ do
 				{ format(LOOT_ITEM, "Targetname", "Itemlink"), { loot = true, target = "Targetname", item = "Itemlink" } },
 				{ format(LOOT_ITEM_PUSHED_MULTIPLE, "Targetname", "Itemlink", 70), { loot = true, target = "Targetname", item = "Itemlink", count = 70 } },
 				{ format(LOOT_ITEM_PUSHED, "Targetname", "Itemlink"), { loot = true, target = "Targetname", item = "Itemlink" } },
-				{ format(CREATED_ITEM_MULTIPLE, "Targetname", "Itemlink", 70), { loot = true, target = "Targetname", item = "Itemlink", count = 70 } },
-				{ format(CREATED_ITEM, "Targetname", "Itemlink"), { loot = true, target = "Targetname", item = "Itemlink" } },
 			}
 		},
 		-- loot (roll, decision, pass, everyone)
@@ -1161,10 +1155,19 @@ do
 	end
 
 	local function convert(pattern)
+		-- grammar from hell ( http://wow.gamepedia.com/UI_escape_sequences#Grammar )
+		-- pattern = pattern:gsub("|4[^:]-:[^:]-:[^;]-;", "") -- "|4singular:plural1:plural2;"
+		-- pattern = pattern:gsub("|4[^:]-:[^;]-;", "") -- "number |4singular:plural;"
+		-- pattern = pattern:gsub("|1[^;]-;[^;]-;", "") -- "number |1singular;plural;"
+		-- pattern = pattern:gsub("|3-%d+%([^%)]-%)", "") -- "|3-formid(text)"
+		-- pattern = pattern:gsub("|2%S-?", "") -- "|2text"
+		-- argument ordering
 		for i = 1, 20 do
 			pattern = pattern:gsub("%%" .. i .. "$s", "%%s")
 			pattern = pattern:gsub("%%" .. i .. "$d", "%%d")
+			pattern = pattern:gsub("%%" .. i .. "$f", "%%f")
 		end
+		-- standard tokens
 		pattern = pattern:gsub("%%", "%%%%")
 		pattern = pattern:gsub("%.", "%%%.")
 		pattern = pattern:gsub("%?", "%%%?")
@@ -1269,6 +1272,7 @@ do
 
 		local flags = ns.config:read("CATEGORY_FLAGS", {})
 		local hasSilenced = nil
+		local matched = {}
 
 		for i = 1, #categories do
 			local category = categories[i]
@@ -1290,11 +1294,30 @@ do
 						temp = tokenize(text, category, format, temp)
 
 						if temp then
-							return unpack(temp)
+							table.insert(matched, temp)
 						end
 					end
 				end
 			end
+
+			-- if we have matched in this category, we exit the loop
+			if matched[1] then
+				break
+			end
+		end
+
+		-- pick the result we wish to return (most of the time, more matches means more accurate results)
+		if matched[2] then
+			local highest = matched[1]
+			for i = 1, #matched do
+				if #matched[i] > #highest then
+					highest = matched[i]
+				end
+			end
+			return unpack(highest)
+
+		elseif matched[1] then
+			return unpack(matched[1])
 		end
 
 		return nil, hasSilenced
@@ -1332,7 +1355,7 @@ do
 					end
 				end
 
-				table.insert(temp.log, { input = test, output = results, success = success, expected = expected, skipped = skipCategoryTests })
+				table.insert(temp.log, { event = event, input = test, output = results, success = success, expected = expected, skipped = skipCategoryTests })
 
 				if skipCategoryTests or success then
 					temp.success = temp.success + 1
