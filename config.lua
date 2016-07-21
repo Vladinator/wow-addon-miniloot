@@ -5,6 +5,9 @@ ns.config = {}
 local varName = addonName .. "DB"
 _G[varName] = _G[varName] or {}
 
+-- default chat frame assignment (for output)
+ns.DEFAULT_CHAT_FRAME = DEFAULT_CHAT_FRAME
+
 -- default settings
 ns.config.defaults = {
 	-- Common
@@ -14,6 +17,7 @@ ns.config.defaults = {
 	{ key = "ITEM_SELF_TRIM_SOLO", value = false, bool = true },
 	{ key = "ICON_TRIM", value = 8 },
 	{ key = "ICON_SIZE", value = 0 },
+	{ key = "CHAT_FRAME", value = ns.DEFAULT_CHAT_FRAME:GetName() },
 	-- Items
 	{ key = "ITEM_COUNT_BAGS", value = false, bool = true },
 	{ key = "ITEM_COUNT_BAGS_INCLUDE_BANK", value = true, bool = true },

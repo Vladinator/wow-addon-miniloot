@@ -6,7 +6,26 @@ do
 	local loaded
 
 	local function PrintExampleIcon()
-		DEFAULT_CHAT_FRAME:AddMessage(format(ns.locale.OPTION_EXAMPLE, ns.util:toLootIcon("|cff00ccff|Hitem:122284:::::::::::::::|h[WoW Token]|h|r", true, false)), YELLOW_FONT_COLOR.r, YELLOW_FONT_COLOR.g, YELLOW_FONT_COLOR.b)
+		ns.DEFAULT_CHAT_FRAME:AddMessage(format(ns.locale.OPTION_EXAMPLE, ns.util:toLootIcon("|cff00ccff|Hitem:122284:::::::::::::::|h[WoW Token]|h|r", true, false)), YELLOW_FONT_COLOR.r, YELLOW_FONT_COLOR.g, YELLOW_FONT_COLOR.b)
+	end
+
+	local function IsFrameInstanceOf(frame, name)
+		return type(frame) == "table" and type(frame.GetObjectType) == "function" and frame:GetObjectType() == name
+	end
+
+	local function ValidateChatFrameSelection(option, noExample)
+		local chatFrame = ns.config:read(option.key)
+
+		if not IsFrameInstanceOf(_G[chatFrame], "ScrollingMessageFrame") then
+			chatFrame = DEFAULT_CHAT_FRAME:GetName()
+		end
+
+		ns.config:write(option.key, chatFrame)
+		ns.DEFAULT_CHAT_FRAME = _G[chatFrame]
+
+		if noExample ~= true then
+			PrintExampleIcon()
+		end
 	end
 
 	local optionGroups = {
@@ -45,6 +64,12 @@ do
 					max = 100,
 					key = "ICON_SIZE",
 					onSave = PrintExampleIcon
+				},
+				{
+					dropdown = true,
+					key = "CHAT_FRAME",
+					onSave = ValidateChatFrameSelection,
+					onSaveOnLoad = true
 				},
 			},
 		},
@@ -472,14 +497,22 @@ do
 
 				table.insert(temp, { value = i, label = _G["ITEM_QUALITY" .. i .. "_DESC"], r = r, g = g, b = b, hex = hex })
 			end
+
+		elseif key == "CHAT_FRAME" then
+			for i = 1, NUM_CHAT_WINDOWS do
+				table.insert(temp, { value = "ChatFrame" .. i, label = "ChatFrame" .. i })
+			end
 		end
 
 		return temp
 	end
 
-	local function CreateDropdownSetValue(option)
+	local function CreateDropdownInitializeSetValue(option)
 		ns.config:write(option.arg2, option.value)
 		option.arg1:SetValue(option.value)
+		if option.arg1.option.onSave then
+			option.arg1.option:onSave()
+		end
 		handlers.panel.refresh()
 	end
 
@@ -487,17 +520,35 @@ do
 		local key = dropdown.option.key
 		local selectedValue = UIDropDownMenu_GetSelectedValue(dropdown)
 		local info = UIDropDownMenu_CreateInfo()
-		info.func = CreateDropdownSetValue
+		info.func = CreateDropdownInitializeSetValue
 		info.arg1 = dropdown
 		info.arg2 = key
 
 		for i = 1, #dropdown.option.options do
 			local option = dropdown.option.options[i]
+			info.colorCode = nil
+			info.disabled = nil
 
-			info.colorCode = "|c" .. option.hex
 			info.text = option.label
 			info.value = option.value
 			info.checked = info.value == selectedValue
+
+			if option.hex then
+				info.colorCode = "|c" .. option.hex
+			end
+
+			if key == "CHAT_FRAME" then
+				local chatFrame = _G[option.value]
+				info.disabled = not IsFrameInstanceOf(chatFrame, "ScrollingMessageFrame")
+
+				if not info.disabled then
+					local chatTab = _G[option.value .. "Tab"]
+
+					if IsFrameInstanceOf(chatTab, "Button") then
+						info.text = info.text .. " (" .. chatTab:GetText() .. ")"
+					end
+				end
+			end
 
 			UIDropDownMenu_AddButton(info)
 		end
@@ -543,7 +594,7 @@ do
 		dropdown.GetValue = CreateDropdownGetValue
 		dropdown.RefreshValue = CreateDropdownRefreshValue
 
-		UIDropDownMenu_SetWidth(dropdown, 90)
+		UIDropDownMenu_SetWidth(dropdown, 150)
 		UIDropDownMenu_Initialize(dropdown, CreateDropdownInitialize)
 		UIDropDownMenu_SetSelectedValue(dropdown, dropdown.value)
 
@@ -643,8 +694,8 @@ do
 
 			-- add categories
 			do
-				last = CreateHeader(panel.content, last, "Ignore")
-				last = CreateParagraph(last, "Select the type of messages you do not wish the addon to intercept and modify. Ignored messages appear as default.")
+				last = CreateHeader(panel.content, last, ns.locale.OPTION_IGNORE_GROUP_TITLE)
+				last = CreateParagraph(last, ns.locale.OPTION_IGNORE_GROUP_DESC)
 
 				for i = 1, #categories do
 					local group = categories[i]
@@ -672,6 +723,18 @@ do
 
 		loaded = CreatePanel(ns.util:categories())
 		InterfaceOptions_AddCategory(loaded)
+
+		for i = 1, #optionGroups do
+			local optionGroup = optionGroups[i]
+
+			for j = 1, #optionGroup.options do
+				local option = optionGroup.options[j]
+
+				if option.onSaveOnLoad and option.onSave then
+					option:onSave(true)
+				end
+			end
+		end
 
 		return true
 	end

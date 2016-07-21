@@ -83,7 +83,7 @@ do
 		local temp = type(report) == "table" and table.concat(report, " ") or report
 
 		if type(temp) == "string" and temp ~= "" then
-			DEFAULT_CHAT_FRAME:AddMessage(temp, YELLOW_FONT_COLOR.r, YELLOW_FONT_COLOR.g, YELLOW_FONT_COLOR.b)
+			ns.DEFAULT_CHAT_FRAME:AddMessage(temp, YELLOW_FONT_COLOR.r, YELLOW_FONT_COLOR.g, YELLOW_FONT_COLOR.b)
 		end
 	end
 
@@ -201,6 +201,10 @@ do
 
 	-- parse the various events
 	function ns.core:PARSE_CHAT(event, text)
+		if self ~= ns.DEFAULT_CHAT_FRAME then
+			return false
+		end
+
 		local data, silenced = ns.util:parse(text, event)
 		local temp
 
@@ -316,9 +320,14 @@ do
 
 	-- need this to read how much money we received from a quest (not experience, otherwise we get duplicate values parsed from the PARSE_CHAT handler)
 	function ns.core:QUEST_COMPLETE(event, questID, experience, money)
-		--if experience and experience > 0 then
-		--	ns.core.PARSE_CHAT(self, "CHAT_MSG_COMBAT_XP_GAIN", format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED, experience))
-		--end
+		if self ~= ns.DEFAULT_CHAT_FRAME then
+			return false
+		end
+
+		if experience and experience > 0 then
+			-- ns.core.PARSE_CHAT(self, "CHAT_MSG_COMBAT_XP_GAIN", format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED, experience))
+		end
+
 		if money and money > 0 then
 			ns.core.PARSE_CHAT(self, "CHAT_MSG_MONEY", format(YOU_LOOT_MONEY, GetCoinText(money)))
 		end

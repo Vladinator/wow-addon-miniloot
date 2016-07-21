@@ -385,6 +385,18 @@ do
 			end
 		},
 		{
+			pattern = {"^unit:"},
+			-- key = "",
+			show = function(handler, chatFrame, linkData, link)
+				-- local _, guid, name = strsplit(":", linkData)
+				-- local unitType, _, serverID, instanceID, zoneID, npcID, spawnID = strsplit("-", guid)
+
+				AnchorTooltip(GameTooltip, chatFrame)
+				GameTooltip:SetHyperlink(link)
+				GameTooltip:Show()
+			end
+		},
+		{
 			-- TODO:
 			---- battlepet
 			---- battlePetAbil
@@ -410,6 +422,7 @@ do
 			-- trade
 			-- transmogappearance
 			-- transmogillusion
+			---- unit
 			-- urlIndex
 			show = function(handler, chatFrame, linkData, link)
 				-- print("HYPERLINK_ENTER", linkData, link:gsub("|", "||"), link, "") -- DEBUG
@@ -456,9 +469,11 @@ do
 		end
 	end
 
-	-- hook the frame
-	DEFAULT_CHAT_FRAME:HookScript("OnHyperlinkEnter", ns.tooltip.HYPERLINK_ENTER)
-	DEFAULT_CHAT_FRAME:HookScript("OnHyperlinkLeave", ns.tooltip.HYPERLINK_LEAVE)
+	-- hook the frames
+	for i = 1, NUM_CHAT_WINDOWS do
+		_G["ChatFrame" .. i]:HookScript("OnHyperlinkEnter", ns.tooltip.HYPERLINK_ENTER)
+		_G["ChatFrame" .. i]:HookScript("OnHyperlinkLeave", ns.tooltip.HYPERLINK_LEAVE)
+	end
 end
 
 -- chat hyperlink fix links
