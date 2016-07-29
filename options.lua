@@ -207,6 +207,10 @@ do
 					checkbox = true,
 					key = "CHAT_TOOLTIP_GLYPH"
 				},
+				{
+					checkbox = true,
+					key = "CHAT_TOOLTIP_UNIT"
+				},
 			},
 		},
 	}

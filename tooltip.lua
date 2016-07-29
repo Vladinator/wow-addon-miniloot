@@ -373,7 +373,7 @@ do
 					for i = #text, 1, -1 do
 						local evtData = text[i]
 
-						temp = temp .. (evtData.tombstone and "|TInterface\\Minimap\\Minimap_skull_normal:0:0|t " or "") .. (evtData.critical and "*" or "") .. evtData.DamageInfo.amountStr .. (evtData.critical and "*" or "") .. " |cffFFFFFF" .. evtData.DamageInfo.spellName .. "|r" .. (evtData.hideCaster and "" or (" |cffFF0000" .. evtData.DamageInfo.caster .. "|r")) .. "\n"
+						temp = temp .. (evtData.tombstone and "|TInterface\\Minimap\\Minimap_skull_normal:0:0|t " or "") .. (evtData.critical and "*" or "") .. (evtData.DamageInfo.amountStr or "") .. (evtData.critical and "*" or "") .. " |cffFFFFFF" .. (evtData.DamageInfo.spellName or "") .. "|r" .. (evtData.hideCaster and "" or (" |cffFF0000" .. (evtData.DamageInfo.caster or "") .. "|r")) .. "\n"
 					end
 
 					text = strsub(temp, 0, -2)
@@ -386,11 +386,10 @@ do
 		},
 		{
 			pattern = {"^unit:"},
-			-- key = "",
+			key = "CHAT_TOOLTIP_UNIT",
 			show = function(handler, chatFrame, linkData, link)
 				-- local _, guid, name = strsplit(":", linkData)
 				-- local unitType, _, serverID, instanceID, zoneID, npcID, spawnID = strsplit("-", guid)
-
 				AnchorTooltip(GameTooltip, chatFrame)
 				GameTooltip:SetHyperlink(link)
 				GameTooltip:Show()

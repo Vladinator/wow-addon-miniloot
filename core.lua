@@ -776,8 +776,8 @@ local function ADDON_LOADED(self, event, name)
 
 		-- DEBUG:
 		-- /dump MLTR
-		-- /run print(MLTR.log[1]and"Locale: "..GetLocale().." - Failed tests:"or"")for _,t in ipairs(MLTR.log)do if not t.success then print((t.input:gsub("\124","\124\124")))end end
-		-- /run local M=MLTR for _,t in ipairs(M.log)do if not t.success and t.expected then M.T={event=t.event,input=t.input,output=t.output[1],expected=t.expected}SlashCmdList.DUMP("MLTR.T")if false then break end M.T=nil end end
+		-- /run print(MLTR.log[1]and"Locale: "..GetLocale().." - Failed tests:"or"")for _,t in ipairs(MLTR.log)do if not t.skipped and not t.success then print((t.input:gsub("\124","\124\124")))end end
+		-- /run local M=MLTR for _,t in ipairs(M.log)do if not t.skipped and not t.success and t.expected then M.T={event=t.event,input=t.input,output=t.output[1],expected=t.expected}SlashCmdList.DUMP("MLTR.T")if false then break end M.T=nil end end
 		-- _G.MLTR = tests
 	end
 end

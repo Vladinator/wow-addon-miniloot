@@ -1,10 +1,6 @@
 local addonName, ns = ...
 ns.util = {}
 
--- legion check
-local IS_LEGION = select(4, GetBuildInfo()) >= 70000
-local NOOP_ENTRY = { skipTests = true, ignore = true, label = "", description = "", events = {}, formats = {}, parse = function()end, tests = {} }
-
 -- parse system messages
 do
 	local token = {
@@ -248,7 +244,7 @@ do
 		},
 		-- experience (followers)
 		-- { experience, follower[, target[, value]] }
-		not IS_LEGION and NOOP_ENTRY or {
+		{
 			group = "FOLLOWER_EXPERIENCE",
 			events = {
 				"CHAT_MSG_SYSTEM",
@@ -1036,7 +1032,7 @@ do
 		},
 		-- artifact
 		-- { artifact, item, power }
-		not IS_LEGION and NOOP_ENTRY or {
+		{
 			skipTests = true, -- because it depends on the config if the pattern matches something or not
 			group = "ARTIFACT",
 			events = {
@@ -1072,7 +1068,7 @@ do
 		},
 		-- transmogrification
 		-- { ignore }
-		not IS_LEGION and NOOP_ENTRY or {
+		{
 			skipTests = true, -- because it depends on the config if the pattern matches something or not
 			group = "TRANSMOGRIFICATION",
 			events = {
@@ -1095,6 +1091,7 @@ do
 		-- ignore
 		-- { ignore }
 		{
+			skipTests = false, -- because it depends on the config if the pattern matches something or not
 			group = "IGNORE",
 			events = {
 				"CHAT_MSG_SYSTEM",
@@ -1104,13 +1101,19 @@ do
 				{ ERR_QUEST_REWARD_MONEY_S,                    token.MONEY                                                                     }, -- "Received %s."
 			},
 			parse = function(self, tokens, matches)
-				if matches[2] then -- TODO: REDUNDANT?
-					return { ignore = true }
+				local data = { ignore = true } -- TODO: REDUNDANT?
+
+				if tokens[2] == token.NUMBER then
+					data.value = matches[2]
+				elseif tokens[2] == token.MONEY then
+					data.value = matches[2]
 				end
+
+				return data
 			end,
 			tests = {
-				format(ERR_QUEST_REWARD_EXP_I, 10000),
-				format(ERR_QUEST_REWARD_MONEY_S, GetCoinText(1234567)),
+				{ format(ERR_QUEST_REWARD_EXP_I, 10000), { ignore = true, value = 10000 } },
+				{ format(ERR_QUEST_REWARD_MONEY_S, GetCoinText(1234567)), { ignore = true, value = 1234567 } },
 			}
 		},
 	}
@@ -1224,9 +1227,9 @@ do
 		elseif id == token.MONEY then
 
 			-- convert the string into copper value
-			local g = tonumber(value:match(moneyPatterns.GOLD), 10) or 0
-			local s = tonumber(value:match(moneyPatterns.SILVER), 10) or 0
-			local c = tonumber(value:match(moneyPatterns.COPPER), 10) or 0
+			local g = tonumber(value:match(moneyPatterns.GOLD)) or 0
+			local s = tonumber(value:match(moneyPatterns.SILVER)) or 0
+			local c = tonumber(value:match(moneyPatterns.COPPER)) or 0
 			value = (g * COPPER_PER_GOLD) + (s * COPPER_PER_SILVER) + c
 
 		end
@@ -1274,6 +1277,7 @@ do
 		local hasSilenced = nil
 		local matched = {}
 
+		-- iterate each category and try to match the text
 		for i = 1, #categories do
 			local category = categories[i]
 			local events = category.events
@@ -1315,12 +1319,14 @@ do
 				end
 			end
 			return unpack(highest)
-
 		elseif matched[1] then
 			return unpack(matched[1])
 		end
 
-		return nil, hasSilenced
+		-- if we have been silenced (either by category.ignore, or by ignoring certain category in the options)
+		if hasSilenced then
+			return nil, true
+		end
 	end
 
 	function ns.util:parseTests()
@@ -1344,6 +1350,7 @@ do
 
 				local results = { ns.util:parse(test, event) }
 				local success = not not (results and results[1])
+				-- local hasSilenced = not not (results and not results[1] and results[2])
 
 				if success and expected then
 					for x, y in pairs(expected) do
@@ -1406,8 +1413,6 @@ do
 		return GetCoinTextureString(copper, fontSize) or ""
 	end
 
-	local legacyTempTexture = CreateFrame("Frame"):CreateTexture() -- PRE-LEGION HOTFIX
-
 	function ns.util:toLootIcon(link, hyperlink, simple, customColor)
 		local color, data, text = link:match("|c([0-9a-f]+)|H(.-)|h%[(.-)%]|h|r")
 		local icon
@@ -1422,7 +1427,6 @@ do
 			elseif prefix == "garrfollower" then
 				icon = C_Garrison.GetFollowerPortraitIconIDByID(id)
 				if not icon or icon == 0 then icon = "Interface\\Garrison\\Portraits\\FollowerPortrait_NoPortrait" end
-				if type(icon) == "number" and not IS_LEGION then legacyTempTexture:SetToFileData(icon) icon = legacyTempTexture:GetTexture() end -- PRE-LEGION HOTFIX
 			end
 		end
 
