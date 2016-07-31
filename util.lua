@@ -1427,6 +1427,8 @@ do
 			elseif prefix == "garrfollower" then
 				icon = C_Garrison.GetFollowerPortraitIconIDByID(id)
 				if not icon or icon == 0 then icon = "Interface\\Garrison\\Portraits\\FollowerPortrait_NoPortrait" end
+			elseif prefix == "battlepet" then
+				icon = select(2, C_PetJournal.GetPetInfoBySpeciesID(id))
 			end
 		end
 

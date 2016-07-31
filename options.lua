@@ -549,7 +549,11 @@ do
 					local chatTab = _G[option.value .. "Tab"]
 
 					if IsFrameInstanceOf(chatTab, "Button") then
-						info.text = info.text .. " (" .. chatTab:GetText() .. ")"
+						local chatTabText = chatTab:GetText()
+
+						if chatTabText then
+							info.text = info.text .. " (" .. chatTabText .. ")"
+						end
 					end
 				end
 			end

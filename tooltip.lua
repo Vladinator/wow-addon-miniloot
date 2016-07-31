@@ -479,6 +479,20 @@ end
 do
 	local oSetItemRef = SetItemRef
 
+	local function GetItemTextByLink(link)
+		local itemLink
+
+		for bag = BACKPACK_CONTAINER, NUM_BAG_SLOTS do
+			for slot = 1, GetContainerNumSlots(bag), 1 do
+				itemLink = GetContainerItemLink(bag, slot)
+
+				if itemLink and itemLink:find(link, nil, true) then
+					return itemLink
+				end
+			end
+		end
+	end
+
 	local function FixHyperlink(link, oldText, newText, quality)
 		-- the "link" is always the proper
 		-- the "oldText" contains corrupted hyperlink from our addon
@@ -503,6 +517,11 @@ do
 				text = FixHyperlink(link, text, C_Garrison.GetFollowerLinkByID(arg1), select(4, GetItemQualityColor(arg2)))
 			elseif linkType == "currency" then
 				text = FixHyperlink(link, text, GetCurrencyLink(arg1))
+			elseif linkType == "battlepet" then
+				local newText = GetItemTextByLink(link)
+				if newText then
+					text = FixHyperlink(link, text, newText)
+				end
 			end
 		end
 
