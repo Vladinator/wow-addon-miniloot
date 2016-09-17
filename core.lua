@@ -335,7 +335,6 @@ do
 
 	-- report intervals
 	do
-		local UPDATE_INTERVAL = 5 -- TODO: let users specify UPDATE_INTERVAL?
 		local elapsed = 0
 		interval = CreateFrame("Frame")
 
@@ -704,7 +703,7 @@ do
 		function interval:OnUpdate(e)
 			elapsed = elapsed + e
 
-			if elapsed > UPDATE_INTERVAL and not InCombatLockdown() then
+			if elapsed > ns.config:read("REPORT_INTERVAL", 2) and (ns.config.bool:read("REPORT_IN_COMBAT") or not InCombatLockdown()) then
 				elapsed = 0
 
 				interval:SafeTick()

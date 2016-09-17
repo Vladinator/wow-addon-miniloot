@@ -1472,7 +1472,7 @@ do
 			local size = ns.config:read("ICON_SIZE", 0)
 
 			if trim > 0 then
-				local base = size > 0 and size or (select(2, DEFAULT_CHAT_FRAME:GetFont()) or 14) -- fallback to 14
+				local base = size > 0 and size or (select(2, ns.DEFAULT_CHAT_FRAME:GetFont()) or 14) -- fallback to 14
 				local ratio = base / 100 -- convert to percent ratio
 				local minPX, maxPX = math.floor(ratio * trim), math.floor(ratio * (100 - trim))
 

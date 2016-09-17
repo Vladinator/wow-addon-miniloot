@@ -18,6 +18,9 @@ ns.config.defaults = {
 	{ key = "ICON_TRIM", value = 8 },
 	{ key = "ICON_SIZE", value = 0 },
 	{ key = "CHAT_FRAME", value = ns.DEFAULT_CHAT_FRAME:GetName() },
+	-- Timing
+	{ key = "REPORT_IN_COMBAT", value = true, bool = true },
+	{ key = "REPORT_INTERVAL", value = 2 },
 	-- Items
 	{ key = "ITEM_COUNT_BAGS", value = false, bool = true },
 	{ key = "ITEM_COUNT_BAGS_INCLUDE_BANK", value = true, bool = true },

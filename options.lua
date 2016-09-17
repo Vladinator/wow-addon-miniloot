@@ -74,6 +74,22 @@ do
 			},
 		},
 		{
+			label = ns.locale.OPTION_REPORT_TITLE,
+			description = ns.locale.OPTION_REPORT_DESC,
+			options = {
+				{
+					checkbox = true,
+					key = "REPORT_IN_COMBAT",
+				},
+				{
+					number = true,
+					min = 0,
+					max = 100,
+					key = "REPORT_INTERVAL",
+				},
+			},
+		},
+		{
 			label = ns.locale.OPTION_ITEMS_TITLE,
 			description = ns.locale.OPTION_ITEMS_DESC,
 			options = {
@@ -628,7 +644,7 @@ do
 
 		-- create scroll, bar, and content frame
 		do
-			local PANEL_SCROLL_HEIGHT = 1300 -- TODO: dynamic max?
+			local PANEL_SCROLL_HEIGHT = 1500 -- TODO: dynamic max?
 
 			panel.scroll = CreateFrame("ScrollFrame", nil, panel)
 			panel.scroll:SetPoint("TOPLEFT", 10, -10)
