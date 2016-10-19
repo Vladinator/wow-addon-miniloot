@@ -292,7 +292,13 @@ do
 					-- table.insert(rolldebug, { event = event, text = text, data = data })
 
 				else
-					temp.value = { data.item, data.count or 1, data.target }
+
+					if IsInRaid() and ns.config.bool:read("ITEM_PRINT_DEFAULT_RAID") then
+						temp.value = nil
+					else
+						temp.value = { data.item, data.count or 1, data.target }
+					end
+
 				end
 
 			elseif data.artifact then
@@ -315,6 +321,7 @@ do
 		--	print("PARSE_CHAT", event, text, data, "") -- DEBUG
 		end
 
+		-- filter is ignored and default behavior ensues
 		return false
 	end
 
@@ -445,8 +452,10 @@ do
 						local sorted = summarySort.firstValue(tempData)
 						for j = 1, #sorted do
 							local faction, value = sorted[j][1], sorted[j][2]
-							tempLine = ns.util:toFaction(faction) .. ns.util:toNumber(value, true)
-							table.insert(report.sorted, tempLine)
+							if value ~= 0 then
+								tempLine = ns.util:toFaction(faction) .. ns.util:toNumber(value, true)
+								table.insert(report.sorted, tempLine)
+							end
 						end
 
 					elseif key == "honor" then
@@ -454,29 +463,37 @@ do
 						local sorted = summarySort.firstValue(tempData)
 						for j = 1, #sorted do
 							local target, value = sorted[j][1], sorted[j][2]
-							-- local isPlayer = target == playerKey
-							-- target = isPlayer and "" or ns.util:toTarget(target)
-							tempLine = HONOR .. ns.util:toNumber(value, true) -- TODO: target names?
-							table.insert(report.sorted, tempLine)
+							if value ~= 0 then
+								-- local isPlayer = target == playerKey
+								-- target = isPlayer and "" or ns.util:toTarget(target)
+								tempLine = HONOR .. ns.util:toNumber(value, true) -- TODO: target names?
+								table.insert(report.sorted, tempLine)
+							end
 						end
 
 					elseif key == "experience" then
-						hasPlayerName = true -- this can only be the player
-						tempLine = XP .. ns.util:toNumber(tempData, true)
-						table.insert(report.sorted, tempLine)
+						if tempData ~= 0 then
+							hasPlayerName = true -- this can only be the player
+							tempLine = XP .. ns.util:toNumber(tempData, true)
+							table.insert(report.sorted, tempLine)
+						end
 
 					elseif key == "guildexperience" then
-						hasPlayerName = true -- this can only be the player
-						tempLine = GUILD .. XP .. ns.util:toNumber(tempData, true)
-						table.insert(report.sorted, tempLine)
+						if tempData ~= 0 then
+							hasPlayerName = true -- this can only be the player
+							tempLine = GUILD .. XP .. ns.util:toNumber(tempData, true)
+							table.insert(report.sorted, tempLine)
+						end
 
 					elseif key == "followerexperience" then
 						hasPlayerName = true -- this can only be the player
 						local sorted = summarySort.firstValue(tempData)
 						for j = 1, #sorted do
 							local target, value = sorted[j][1], sorted[j][2]
-							tempLine = ns.util:toLootIcon(target, true) .. ns.util:toNumber(value, true)
-							table.insert(report.sorted, tempLine)
+							if value ~= 0 then
+								tempLine = ns.util:toLootIcon(target, true) .. ns.util:toNumber(value, true)
+								table.insert(report.sorted, tempLine)
+							end
 						end
 
 					elseif key == "currency" then
@@ -485,6 +502,13 @@ do
 						for j = 1, #sorted do
 							local item, count = sorted[j][1], sorted[j][2]
 							tempLine = ns.util:toLootIcon(item, true) .. ns.util:toItemCount(count)
+							-- add the item count if the user wishes to see that
+							if ns.config.bool:read("ITEM_COUNT_BAGS") then
+								local tempCount, atMax = ns.util:getNumCurrency(item)
+								if tempCount > 1 then
+									tempLine = tempLine .. "|cff" .. (atMax and "FF6666" or "999999") .. "(" .. tempCount .. ")|r"
+								end
+							end
 							table.insert(report.sorted, tempLine)
 						end
 
@@ -605,12 +629,14 @@ do
 						local sorted = summarySort.firstValueLink(tempData)
 						for j = 1, #sorted do
 							local item, power = sorted[j][1], sorted[j][2]
-							local currentXP, maxXP, numPoints = ns.util:getArtifactInfo()
-							tempLine = ns.util:toLootIcon(item, true) .. ns.util:toNumber(power, true)
-							if numPoints and numPoints > 0 then
-								tempLine = tempLine .. "|cff999999(" .. numPoints .. ")|r"
+							if power ~= 0 then
+								local currentXP, maxXP, numPoints = ns.util:getArtifactInfo()
+								tempLine = ns.util:toLootIcon(item, true) .. ns.util:toNumber(power, true)
+								if numPoints and numPoints > 0 then
+									tempLine = tempLine .. "|cff999999(" .. numPoints .. ")|r"
+								end
+								table.insert(report.sorted, tempLine)
 							end
-							table.insert(report.sorted, tempLine)
 						end
 					end
 				end
@@ -618,63 +644,71 @@ do
 
 			local lines = {}
 
-			-- hides our own name if we are soloing content and there is no one else that can receive things
-			if hasPlayerName and not hasOtherPlayerNames and GetNumGroupMembers() <= (IsInRaid() and 1 or 0) and ns.config.bool:read("ITEM_SELF_TRIM_SOLO") then
-				hasPlayerName = nil
-			end
+			-- sanity check: make sure there is something to report before populating the lines table
+			if report.sorted[1] or report.grouped[1] then
 
-			-- prepend our name in front of our own messages
-			if hasPlayerName and prefixWithPlayerNames then
-				local addPlayerName = ns.config.bool:read("ITEM_SELF_PREFIX_NAME") and playerName
-
-				if not addPlayerName or addPlayerName == "" then
-					addPlayerName = YOU
+				-- hides our own name if we are soloing content and there is no one else that can receive things
+				if hasPlayerName and not hasOtherPlayerNames and GetNumGroupMembers() <= (IsInRaid() and 1 or 0) and ns.config.bool:read("ITEM_SELF_TRIM_SOLO") then
+					hasPlayerName = nil
 				end
 
-				table.insert(lines, addPlayerName .. playerNameSeparator)
-			end
+				-- prepend our name in front of our own messages
+				if hasPlayerName and prefixWithPlayerNames then
+					local addPlayerName = ns.config.bool:read("ITEM_SELF_PREFIX_NAME") and playerName
 
-			for i = 1, #report.sorted do
-				table.insert(lines, report.sorted[i])
-			end
-
-			do
-				local temp = {}
-
-				for i = 1, #report.grouped do
-					local entry = report.grouped[i]
-					local name, key, line = entry[1], entry[2], entry[3]
-
-					temp[name] = temp[name] or {}
-					temp[name][key] = temp[name][key] or {}
-					table.insert(temp[name][key], line)
-				end
-
-				local sorted = summarySort.firstValue(temp)
-
-				for i = 1, #sorted do
-					local name, entries = sorted[i][1], sorted[i][2]
-					tempLine = { name }
-
-					-- prepend the other players loot with their own name
-					if prefixWithPlayerNames then
-						tempLine[1] = tempLine[1] .. playerNameSeparator
+					if not addPlayerName or addPlayerName == "" then
+						addPlayerName = YOU
 					end
 
-					entries = summarySort.keyOrder(entries)
-					for j = 1, #entries do
-						local subEntries = entries[j][2]
+					table.insert(lines, addPlayerName .. playerNameSeparator)
+				end
 
-						for k = 1, #subEntries do
-							table.insert(tempLine, subEntries[k])
+				-- append the sorted lines
+				for i = 1, #report.sorted do
+					table.insert(lines, report.sorted[i])
+				end
+
+				-- append the grouped lines
+				do
+					local temp = {}
+
+					for i = 1, #report.grouped do
+						local entry = report.grouped[i]
+						local name, key, line = entry[1], entry[2], entry[3]
+
+						temp[name] = temp[name] or {}
+						temp[name][key] = temp[name][key] or {}
+						table.insert(temp[name][key], line)
+					end
+
+					local sorted = summarySort.firstValue(temp)
+
+					for i = 1, #sorted do
+						local name, entries = sorted[i][1], sorted[i][2]
+						tempLine = { name }
+
+						-- prepend the other players loot with their own name
+						if prefixWithPlayerNames then
+							tempLine[1] = tempLine[1] .. playerNameSeparator
+						end
+
+						entries = summarySort.keyOrder(entries)
+						for j = 1, #entries do
+							local subEntries = entries[j][2]
+
+							for k = 1, #subEntries do
+								table.insert(tempLine, subEntries[k])
+							end
+						end
+
+						if tempLine[2] then
+							table.insert(lines, table.concat(tempLine, " "))
 						end
 					end
-
-					if tempLine[2] then
-						table.insert(lines, table.concat(tempLine, " "))
-					end
 				end
 			end
+
+			-- if not DevTools_Dump then LoadAddOn("Blizzard_DebugTools") end if DevTools_Dump then DevTools_Dump({report}) end -- DEBUG
 			-- if not DevTools_Dump then LoadAddOn("Blizzard_DebugTools") end if DevTools_Dump then DevTools_Dump({lines}) end -- DEBUG
 
 			summary.count = 0

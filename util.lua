@@ -1594,6 +1594,14 @@ do
 		return GetItemCount(item, includeBank == nil and true or includeBank, includeCharges == nil and true or includeCharges)
 	end
 
+	function ns.util:getNumCurrency(currency)
+		local _, currentAmount, _, earnedThisWeek, weeklyMax, totalMax = GetCurrencyInfo(currency)
+		if currentAmount then
+			return currentAmount, (totalMax > 0 and currentAmount >= totalMax) or (weeklyMax > 0 and earnedThisWeek >= weeklyMax)
+		end
+		return 0
+	end
+
 	function ns.util:isItemQuality(link, quality, comparison, fallback)
 		if not link or not quality then return fallback end
 

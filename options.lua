@@ -107,6 +107,10 @@ do
 					key = "ITEM_COUNT_BAGS_INCLUDE_CHARGES",
 					depends = "ITEM_COUNT_BAGS"
 				},
+				{
+					checkbox = true,
+					key = "ITEM_PRINT_DEFAULT_RAID"
+				},
 			},
 		},
 		{

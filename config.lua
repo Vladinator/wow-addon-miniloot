@@ -25,6 +25,7 @@ ns.config.defaults = {
 	{ key = "ITEM_COUNT_BAGS", value = false, bool = true },
 	{ key = "ITEM_COUNT_BAGS_INCLUDE_BANK", value = true, bool = true },
 	{ key = "ITEM_COUNT_BAGS_INCLUDE_CHARGES", value = true, bool = true },
+	{ key = "ITEM_PRINT_DEFAULT_RAID", value = false, bool = true },
 	-- Transmogrification
 	{ key = "ITEM_ALERT_TRANSMOG", value = false, bool = true },
 	{ key = "ITEM_ALERT_TRANSMOG_EVERYTHING", value = false, bool = true },
