@@ -16,7 +16,7 @@ do
 	local function ValidateChatFrameSelection(option, noExample)
 		local chatFrame = ns.config:read(option.key)
 
-		if not IsFrameInstanceOf(_G[chatFrame], "ScrollingMessageFrame") then
+		if not IsFrameInstanceOf(_G[chatFrame], "Frame") then
 			chatFrame = DEFAULT_CHAT_FRAME:GetName()
 		end
 
@@ -563,7 +563,7 @@ do
 
 			if key == "CHAT_FRAME" then
 				local chatFrame = _G[option.value]
-				info.disabled = not IsFrameInstanceOf(chatFrame, "ScrollingMessageFrame")
+				info.disabled = not IsFrameInstanceOf(chatFrame, "Frame")
 
 				if not info.disabled then
 					local chatTab = _G[option.value .. "Tab"]
@@ -599,14 +599,12 @@ do
 	local function CreateDropdown(anchor, option, text, tooltip)
 		local container = CreateFrame("ScrollFrame", "$parentContainer" .. unique, anchor:GetParent() or anchor)
 		unique = unique + 1
+		container:SetSize(587, 50)
 
 		local dropdown = CreateFrame("Frame", "$parentDropdown" .. unique, container, "UIDropDownMenuTemplate")
 		container.dropdown = dropdown
 		unique = unique + 1
 		dropdown:SetPoint("TOPLEFT", -12, -20)
-
-		local w, h = dropdown:GetSize()
-		container:SetSize(w, h + 18)
 
 		dropdown.label = dropdown:CreateFontString(nil, "BACKGROUND", "GameFontHighlight")
 		dropdown.label:SetPoint("BOTTOMLEFT", "$parent", "TOPLEFT", 16, 3)
@@ -627,9 +625,9 @@ do
 		UIDropDownMenu_SetSelectedValue(dropdown, dropdown.value)
 
 		if anchor:GetObjectType() == "Frame" then
-			container:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 10, -10)
+			container:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -10)
 		else
-			container:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, 0)
+			container:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -10, 0)
 		end
 
 		return container
