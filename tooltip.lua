@@ -1,9 +1,6 @@
 local addonName, ns = ...
 ns.tooltip = {}
 
--- legion check
-local IS_LEGION = select(4, GetBuildInfo()) >= 70000
-
 -- tooltip scanning
 do
 	-- tooltip frame
@@ -39,11 +36,11 @@ do
 		return false
 	end
 
-	-- ns.tooltip:ScanItem(id) = bool[, textLines]
+	-- ns.tooltip:ScanItem(id[, isHyperlink]) = bool[, textLines]
 	do
 		local cache = {}
 
-		function ns.tooltip:ScanItem(id)
+		function ns.tooltip:ScanItem(id, isHyperlink)
 			local success, temp = nil, cache[id]
 
 			if temp then
@@ -51,7 +48,7 @@ do
 			end
 
 			frame:SetOwner(WorldFrame, "ANCHOR_NONE")
-			frame:SetHyperlink(("item:%d"):format(id))
+			frame:SetHyperlink(isHyperlink and id or ("item:%d"):format(id))
 
 			if frame:IsShown() then
 				success, temp = ScanTooltip()
@@ -190,11 +187,7 @@ do
 			key = "CHAT_TOOLTIP_GARRISON",
 			show = function(handler, chatFrame, linkData, link)
 				local _, garrisonFollowerID, quality, level, itemLevel, ability1, ability2, ability3, ability4, trait1, trait2, trait3, trait4, spec1 = strsplit(":", linkData)
-				if IS_LEGION then
-					FloatingGarrisonFollower_Toggle(tonumber(garrisonFollowerID), tonumber(quality), tonumber(level), tonumber(itemLevel), tonumber(spec1), tonumber(ability1), tonumber(ability2), tonumber(ability3), tonumber(ability4), tonumber(trait1), tonumber(trait2), tonumber(trait3), tonumber(trait4))
-				else
-					FloatingGarrisonFollower_Toggle(tonumber(garrisonFollowerID), tonumber(quality), tonumber(level), tonumber(itemLevel), tonumber(ability1), tonumber(ability2), tonumber(ability3), tonumber(ability4), tonumber(trait1), tonumber(trait2), tonumber(trait3), tonumber(trait4))
-				end
+				FloatingGarrisonFollower_Toggle(tonumber(garrisonFollowerID), tonumber(quality), tonumber(level), tonumber(itemLevel), tonumber(spec1), tonumber(ability1), tonumber(ability2), tonumber(ability3), tonumber(ability4), tonumber(trait1), tonumber(trait2), tonumber(trait3), tonumber(trait4))
 				if C_Garrison.GetFollowerTypeByID(garrisonFollowerID) == LE_FOLLOWER_TYPE_SHIPYARD_6_2 then
 					AnchorTooltip(FloatingGarrisonShipyardFollowerTooltip, chatFrame)
 				else
@@ -390,6 +383,15 @@ do
 			show = function(handler, chatFrame, linkData, link)
 				-- local _, guid, name = strsplit(":", linkData)
 				-- local unitType, _, serverID, instanceID, zoneID, npcID, spawnID = strsplit("-", guid)
+				AnchorTooltip(GameTooltip, chatFrame)
+				GameTooltip:SetHyperlink(link)
+				GameTooltip:Show()
+			end
+		},
+		{
+			pattern = {"^apower:"},
+			key = "CHAT_TOOLTIP_ARTIFACT",
+			show = function(handler, chatFrame, linkData, link)
 				AnchorTooltip(GameTooltip, chatFrame)
 				GameTooltip:SetHyperlink(link)
 				GameTooltip:Show()

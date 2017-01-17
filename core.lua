@@ -585,18 +585,18 @@ do
 
 										if uncollectedItem then
 											-- pink brackets and curly brackets to highlight the importance
-											tempItem = "|cffFF80FF{|r" .. ns.util:toLootIcon(item, true, false, "ffFF80FF") .. "|cffFF80FF}|r" .. ns.util:toItemCount(count)
+											tempItem = "|cffFF80FF{|r" .. ns.util:toLootIcon(item, true, false, "ffFF80FF", true) .. "|cffFF80FF}|r" .. ns.util:toItemCount(count)
 
 										elseif questItem then
 											-- red brackets
-											tempItem = ns.util:toLootIcon(item, true, false, "ffFF0000") .. ns.util:toItemCount(count)
+											tempItem = ns.util:toLootIcon(item, true, false, "ffFF0000", true) .. ns.util:toItemCount(count)
 
 										else
 											-- default coloring
-											tempItem = ns.util:toLootIcon(item, true) .. ns.util:toItemCount(count)
+											tempItem = ns.util:toLootIcon(item, true, nil, nil, true) .. ns.util:toItemCount(count)
 										end
 
-										-- add the item count if the user wishes to see that
+										-- add item count to player items
 										if isPlayer and ns.config.bool:read("ITEM_COUNT_BAGS") then
 											local tempCount = ns.util:getNumItems(item, ns.config.bool:read("ITEM_COUNT_BAGS_INCLUDE_BANK"), ns.config.bool:read("ITEM_COUNT_BAGS_INCLUDE_CHARGES"))
 											if tempCount > 1 then

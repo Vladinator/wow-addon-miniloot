@@ -1413,7 +1413,7 @@ do
 		return GetCoinTextureString(copper, fontSize) or ""
 	end
 
-	function ns.util:toLootIcon(link, hyperlink, simple, customColor)
+	function ns.util:toLootIcon(link, hyperlink, simple, customColor, appendItemLevel)
 		local color, data, text = link:match("|c([0-9a-f]+)|H(.-)|h%[(.-)%]|h|r")
 		local icon
 
@@ -1433,7 +1433,17 @@ do
 		end
 
 		if icon then
-			return ns.util:getChatIconOutput(color, data, icon, hyperlink, simple, customColor)
+			local appendText
+
+			if appendItemLevel == true and ns.config.bool:read("ITEM_SHOW_ITEM_LEVEL") then
+				local itemLevel, equipSlot = ns.util:getItemLevel(link)
+
+				if itemLevel and itemLevel > 1 and (equipSlot or not ns.config.bool:read("ITEM_SHOW_ITEM_LEVEL_ONLY_EQUIPMENT")) then
+					appendText = ":" .. itemLevel
+				end
+			end
+
+			return ns.util:getChatIconOutput(color, data, icon, hyperlink, simple, customColor, appendText)
 		end
 
 		return link
@@ -1446,8 +1456,9 @@ do
 		return ""
 	end
 
-	function ns.util:getChatIconOutput(color, data, icon, hyperlink, simple, customColor)
-		local temp = ns.util:getChatIconTextureString(icon)
+	function ns.util:getChatIconOutput(color, data, icon, hyperlink, simple, customColor, appendText)
+		appendText = appendText ~= nil and tostring(appendText) or ""
+		local temp = ns.util:getChatIconTextureString(icon) .. appendText
 
 		if hyperlink then
 			temp = "|H" .. data .. "|h" .. temp .. "|h"
@@ -1670,5 +1681,44 @@ do
 		end
 
 		return currentXP, maxXP, numPoints
+	end
+
+	function ns.util:getItemLevel(link)
+		local _, _, _, itemLevel, _, _, itemSubClass, _, equipSlot = GetItemInfo(link)
+		itemLevel = itemLevel and itemLevel > 0 and itemLevel or nil
+		equipSlot = equipSlot and equipSlot ~= "" and equipSlot or nil
+
+		if not equipSlot and itemSubClass == EJ_LOOT_SLOT_FILTER_ARTIFACT_RELIC then
+			equipSlot = itemSubClass
+		end
+
+		--[=[
+		if not itemLevel or not equipSlot then
+			local success, rows = ns.tooltip:ScanItem(link, true)
+
+			if success then
+				for i = 2, 5 do
+					if not itemLevel then
+						itemLevel = rows[i] and rows[i][1] and rows[i][1]:match("(%d+)")
+						if itemLevel then
+							itemLevel = tonumber(itemLevel)
+						end
+					end
+					if not equipSlot then
+						equipSlot = rows[i] and rows[i][2] and rows[i][2]:match("(.+)")
+					end
+					if itemLevel and equipSlot then
+						break
+					end
+				end
+			end
+		end
+
+		if type(itemLevel) == "string" then
+			itemLevel = tonumber(itemLevel)
+		end
+		--]=]
+
+		return itemLevel, equipSlot
 	end
 end

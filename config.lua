@@ -26,6 +26,8 @@ ns.config.defaults = {
 	{ key = "ITEM_COUNT_BAGS_INCLUDE_BANK", value = true, bool = true },
 	{ key = "ITEM_COUNT_BAGS_INCLUDE_CHARGES", value = true, bool = true },
 	{ key = "ITEM_PRINT_DEFAULT_RAID", value = false, bool = true },
+	{ key = "ITEM_SHOW_ITEM_LEVEL", value = false, bool = true },
+	{ key = "ITEM_SHOW_ITEM_LEVEL_ONLY_EQUIPMENT", value = false, bool = true },
 	-- Transmogrification
 	{ key = "ITEM_ALERT_TRANSMOG", value = false, bool = true },
 	{ key = "ITEM_ALERT_TRANSMOG_EVERYTHING", value = false, bool = true },
@@ -52,6 +54,7 @@ ns.config.defaults = {
 	{ key = "CHAT_TOOLTIP_INSTANCELOCK", value = false, bool = true },
 	{ key = "CHAT_TOOLTIP_GLYPH", value = false, bool = true },
 	{ key = "CHAT_TOOLTIP_UNIT", value = false, bool = true },
+	{ key = "CHAT_TOOLTIP_ARTIFACT", value = false, bool = true },
 	-- Categories
 	{ key = "CATEGORY_FLAGS", value = {} },
 }

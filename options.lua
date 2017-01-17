@@ -111,6 +111,15 @@ do
 					checkbox = true,
 					key = "ITEM_PRINT_DEFAULT_RAID"
 				},
+				{
+					checkbox = true,
+					key = "ITEM_SHOW_ITEM_LEVEL"
+				},
+				{
+					checkbox = true,
+					key = "ITEM_SHOW_ITEM_LEVEL_ONLY_EQUIPMENT",
+					depends = "ITEM_SHOW_ITEM_LEVEL"
+				},
 			},
 		},
 		{
@@ -230,6 +239,10 @@ do
 				{
 					checkbox = true,
 					key = "CHAT_TOOLTIP_UNIT"
+				},
+				{
+					checkbox = true,
+					key = "CHAT_TOOLTIP_ARTIFACT"
 				},
 			},
 		},
@@ -531,6 +544,7 @@ do
 		return temp
 	end
 
+	--[=[
 	local function CreateDropdownInitializeSetValue(option)
 		ns.config:write(option.arg2, option.value)
 		option.arg1:SetValue(option.value)
@@ -632,6 +646,128 @@ do
 
 		return container
 	end
+	--]=]
+
+	local function CreateDropdownRadio(anchor, option, text, tooltip)
+		local container = CreateFrame("ScrollFrame", "$parentContainer" .. unique, anchor:GetParent() or anchor)
+		unique = unique + 1
+		container:SetSize(587, 32 * #option.options + 8)
+
+		local radios = CreateFrame("Frame", "$parentRadios" .. unique, container)
+		container.radios = radios
+		unique = unique + 1
+		radios:SetPoint("TOPLEFT", -12, -20)
+		radios:SetSize(container:GetSize())
+
+		radios.label = radios:CreateFontString(nil, "BACKGROUND", "GameFontHighlight")
+		radios.label:SetPoint("BOTTOMLEFT", "$parent", "TOPLEFT", 16, 3)
+		radios.label:SetText(text)
+
+		radios.option = option
+		radios.defaultValue = 0
+		radios.value = ns.config:read(option.key, 0)
+		radios.oldValue = radios.value
+		radios.tooltip = tooltip
+		radios.buttons = {}
+
+		local function RadioRefresh(radio)
+			if radio.options.hex then
+				radio.text:SetText("|c" .. radio.options.hex .. radio.options.label .. "|r")
+			else
+				radio.text:SetText(radio.options.label)
+			end
+
+			if radio.option.key == "CHAT_FRAME" then
+				local chatFrame = _G[radio.options.value]
+
+				if IsFrameInstanceOf(chatFrame, "Frame") then
+					local chatTab = _G[radio.options.value .. "Tab"]
+
+					if IsFrameInstanceOf(chatTab, "Button") then
+						local chatTabText = chatTab:GetText()
+
+						if chatTabText then
+							radio.text:SetText(radio.text:GetText() .. " (" .. chatTabText .. ")")
+						end
+					end
+				end
+			end
+
+			radio:SetChecked(ns.config:read(radio.option.key, 0) == radio.parent.value and radio.parent.value == radio.options.value)
+		end
+
+		local function RadioClick(radio)
+			radio.parent:SetValue(radio.options.value)
+			if radio.option.onSave then
+				radio.option:onSave()
+			end
+			handlers.panel.refresh()
+		end
+
+		for i = 1, #option.options do
+			local radio = CreateFrame("CheckButton", "$parentRadio" .. unique, radios, "UICheckButtonTemplate")
+			unique = unique + 1
+
+			radio.parent = radios
+			radio.index = i
+			radio.option = option
+			radio.options = option.options[i]
+			radio.text:SetTextColor(1, 1, 1)
+			radio.text:SetText(radio.options.label)
+			radio:SetSize(32, 32)
+
+			radio.RefreshValue = RadioRefresh
+			radio:SetScript("OnClick", RadioClick)
+
+			if radios.buttons[i - 1] then
+				radio:SetPoint("BOTTOMLEFT", radios.buttons[i - 1] or radios, "BOTTOMLEFT", 0, -30)
+			else
+				radio:SetPoint("TOPLEFT", radios, "TOPLEFT", 20, -4)
+			end
+
+			table.insert(radios.buttons, radio)
+		end
+
+		-- border around the radio options
+		do
+			local first = radios.buttons[1]
+			local last = radios.buttons[#radios.buttons]
+
+			if first and last then
+				local border = radios:CreateTexture(nil, "OVERLAY")
+				border:SetColorTexture(1, 1, 1, .1)
+				border:SetPoint("TOPLEFT", first, "TOPLEFT", 0, 0)
+				border:SetPoint("BOTTOMRIGHT", last.text, "BOTTOMRIGHT", 32, -10)
+			end
+		end
+
+		local function RadiosSet(radios, value)
+			radios.value = value
+			ns.config:write(radios.option.key, value)
+		end
+
+		local function RadiosGet(radios)
+			return ns.config:read(radios.option.key, 0)
+		end
+
+		local function RadiosRefresh(radios)
+			for i = 1, #radios.buttons do
+				radios.buttons[i]:RefreshValue()
+			end
+		end
+
+		radios.SetValue = RadiosSet
+		radios.GetValue = RadiosGet
+		radios.RefreshValue = RadiosRefresh
+
+		if anchor:GetObjectType() == "Frame" then
+			container:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -10)
+		else
+			container:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -10, 0)
+		end
+
+		return container
+	end
 
 	local function CreatePanel(categories)
 		local panel = CreateFrame("Frame", addonName .. "Panel" .. unique, InterfaceOptionsFramePanelContainer)
@@ -646,7 +782,7 @@ do
 
 		-- create scroll, bar, and content frame
 		do
-			local PANEL_SCROLL_HEIGHT = 1500 -- TODO: dynamic max?
+			local PANEL_SCROLL_HEIGHT = 2500 -- TODO: dynamic max?
 
 			panel.scroll = CreateFrame("ScrollFrame", nil, panel)
 			panel.scroll:SetPoint("TOPLEFT", 10, -10)
@@ -709,9 +845,9 @@ do
 
 						elseif option.dropdown then
 							option.options = CreateDropdownOptions(option.key)
-							last = CreateDropdown(last, option, option.label, option.description)
+							last = CreateDropdownRadio(last, option, option.label, option.description)
 							last.option = option
-							last.refresh = function(last) last.dropdown:RefreshValue() end
+							last.refresh = function(last) last.radios:RefreshValue() end
 							table.insert(panel.widgets, last)
 						end
 					end
