@@ -398,6 +398,10 @@ do
 			end
 		},
 		{
+			pattern = {"^keystone:"},
+			key = "CHAT_TOOLTIP_KEYSTONE"
+		},
+		{
 			-- TODO:
 			---- battlepet
 			---- battlePetAbil

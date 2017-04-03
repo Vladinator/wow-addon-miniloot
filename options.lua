@@ -244,6 +244,10 @@ do
 					checkbox = true,
 					key = "CHAT_TOOLTIP_ARTIFACT"
 				},
+				{
+					checkbox = true,
+					key = "CHAT_TOOLTIP_KEYSTONE"
+				},
 			},
 		},
 	}

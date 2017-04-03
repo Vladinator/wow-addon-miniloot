@@ -1380,9 +1380,13 @@ end
 
 -- convert parsed category data into formatted strings
 do
-	function ns.util:toNumber(i, prefix)
+	function ns.util:toNumber(i, prefix, separator, noColor)
 		i = floor(i * 10) / 10 -- round to one decimal at the most
-		return "|cff" .. (i < 0 and "FF0000" or "00FF00") .. (prefix and (i < 0 and "-" or "+") or "") .. abs(i) .. "|r"
+		local n = abs(i)
+		if separator == true and (i <= -10000 or i >= 10000) then
+			n = FormatLargeNumber(i) -- Util.lua:215
+		end
+		return "|cff" .. (i < 0 and "FF0000" or "00FF00") .. (prefix and (i < 0 and "-" or "+") or "") .. n .. "|r"
 	end
 
 	function ns.util:toTarget(name, fallback)
@@ -1569,20 +1573,20 @@ do
 	end
 
 	-- MainMenuBar_GetNumArtifactTraitsPurchasableFromXP
-	local function ArtifactCalculatePoints(pointsSpent, totalXP)
-		local nextPointXP = C_ArtifactUI.GetCostForPointAtRank(pointsSpent)
+	local function ArtifactCalculatePoints(pointsSpent, artifactXP, artifactTier)
+		local xpForNextPoint = C_ArtifactUI.GetCostForPointAtRank(pointsSpent, artifactTier)
 		local numPoints = 0
 
-		while totalXP >= nextPointXP do
-			totalXP = totalXP - nextPointXP
+		while xpForNextPoint > 0 and artifactXP >= xpForNextPoint do
+			artifactXP = artifactXP - xpForNextPoint
 
 			pointsSpent = pointsSpent + 1
 			numPoints = numPoints + 1
 
-			nextPointXP = C_ArtifactUI.GetCostForPointAtRank(pointsSpent)
+			xpForNextPoint = C_ArtifactUI.GetCostForPointAtRank(pointsSpent, artifactTier)
 		end
 
-		return numPoints, totalXP, nextPointXP
+		return numPoints, artifactXP, xpForNextPoint
 	end
 
 	function ns.util:isItemUnique(link)
@@ -1674,8 +1678,8 @@ do
 		local currentXP, maxXP, numPoints
 
 		if HasArtifactEquipped() then
-			local _, _, _, _, totalXP, pointsSpent = C_ArtifactUI.GetEquippedArtifactInfo()
-			local numPointsAvailableToSpend, xp, xpForNextPoint = ArtifactCalculatePoints(pointsSpent, totalXP)
+			local _, _, _, _, totalXP, pointsSpent, _, _, _, _, _, _, artifactTier = C_ArtifactUI.GetEquippedArtifactInfo()
+			local numPointsAvailableToSpend, xp, xpForNextPoint = ArtifactCalculatePoints(pointsSpent, totalXP, artifactTier)
 
 			currentXP, maxXP, numPoints = xp, xpForNextPoint, numPointsAvailableToSpend
 		end

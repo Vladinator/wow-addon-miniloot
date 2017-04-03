@@ -453,7 +453,7 @@ do
 						for j = 1, #sorted do
 							local faction, value = sorted[j][1], sorted[j][2]
 							if value ~= 0 then
-								tempLine = ns.util:toFaction(faction) .. ns.util:toNumber(value, true)
+								tempLine = ns.util:toFaction(faction) .. ns.util:toNumber(value, true, true)
 								table.insert(report.sorted, tempLine)
 							end
 						end
@@ -466,7 +466,7 @@ do
 							if value ~= 0 then
 								-- local isPlayer = target == playerKey
 								-- target = isPlayer and "" or ns.util:toTarget(target)
-								tempLine = HONOR .. ns.util:toNumber(value, true) -- TODO: target names?
+								tempLine = HONOR .. ns.util:toNumber(value, true, true) -- TODO: target names?
 								table.insert(report.sorted, tempLine)
 							end
 						end
@@ -474,14 +474,14 @@ do
 					elseif key == "experience" then
 						if tempData ~= 0 then
 							hasPlayerName = true -- this can only be the player
-							tempLine = XP .. ns.util:toNumber(tempData, true)
+							tempLine = XP .. ns.util:toNumber(tempData, true, true)
 							table.insert(report.sorted, tempLine)
 						end
 
 					elseif key == "guildexperience" then
 						if tempData ~= 0 then
 							hasPlayerName = true -- this can only be the player
-							tempLine = GUILD .. XP .. ns.util:toNumber(tempData, true)
+							tempLine = GUILD .. XP .. ns.util:toNumber(tempData, true, true)
 							table.insert(report.sorted, tempLine)
 						end
 
@@ -491,7 +491,7 @@ do
 						for j = 1, #sorted do
 							local target, value = sorted[j][1], sorted[j][2]
 							if value ~= 0 then
-								tempLine = ns.util:toLootIcon(target, true) .. ns.util:toNumber(value, true)
+								tempLine = ns.util:toLootIcon(target, true) .. ns.util:toNumber(value, true, true)
 								table.insert(report.sorted, tempLine)
 							end
 						end
@@ -506,6 +506,7 @@ do
 							if ns.config.bool:read("ITEM_COUNT_BAGS") then
 								local tempCount, atMax = ns.util:getNumCurrency(item)
 								if tempCount > 1 then
+									tempCount = FormatLargeNumber(tempCount) -- Util.lua:215
 									tempLine = tempLine .. "|cff" .. (atMax and "FF6666" or "999999") .. "(" .. tempCount .. ")|r"
 								end
 							end
@@ -600,6 +601,7 @@ do
 										if isPlayer and ns.config.bool:read("ITEM_COUNT_BAGS") then
 											local tempCount = ns.util:getNumItems(item, ns.config.bool:read("ITEM_COUNT_BAGS_INCLUDE_BANK"), ns.config.bool:read("ITEM_COUNT_BAGS_INCLUDE_CHARGES"))
 											if tempCount > 1 then
+												tempCount = FormatLargeNumber(tempCount) -- Util.lua:215
 												tempItem = tempItem .. "|cff999999(" .. tempCount .. ")|r"
 											end
 										end
@@ -631,7 +633,7 @@ do
 							local item, power = sorted[j][1], sorted[j][2]
 							if power ~= 0 then
 								local currentXP, maxXP, numPoints = ns.util:getArtifactInfo()
-								tempLine = ns.util:toLootIcon(item, true) .. ns.util:toNumber(power, true)
+								tempLine = ns.util:toLootIcon(item, true) .. ns.util:toNumber(power, true, true)
 								if numPoints and numPoints > 0 then
 									tempLine = tempLine .. "|cff999999(" .. numPoints .. ")|r"
 								end
