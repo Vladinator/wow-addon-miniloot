@@ -1,8 +1,8 @@
-## Interface: 70200
+## Interface: 80000
 ## Title: MiniLoot
 ## Notes: Reduces chat related spam by a whole deal!
 ## Author: Vladinator
-## Version: 7.2.0.170329
+## Version: 8.0.0.180617
 ## SavedVariables: MiniLootDB
 locale.lua
 config.lua

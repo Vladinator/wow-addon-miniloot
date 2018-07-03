@@ -1,3 +1,5 @@
+local IS_BFA = select(4, GetBuildInfo()) >= 80000
+
 local addonName, ns = ...
 ns.util = {}
 
@@ -1032,6 +1034,7 @@ do
 		},
 		-- artifact
 		-- { artifact, item, power }
+		-- { currency[, item, count, currencyID] }
 		{
 			skipTests = true, -- because it depends on the config if the pattern matches something or not
 			group = "ARTIFACT",
@@ -1040,12 +1043,9 @@ do
 			},
 			formats = {
 				{ ARTIFACT_XP_GAIN,                            token.STRING,    token.NUMBER                                                    }, -- "%s gains %s Artifact Power."
+				{ LOOT_ITEM_PUSHED_SELF,                       token.STRING                                                                     }, -- "You receive item: %s."
 			},
 			parse = function(self, tokens, matches)
-				if not ns.config.bool:read("ARTIFACT_POWER") then
-					return { ignore = true }
-				end
-
 				local data = { artifact = true }
 
 				if tokens[2] == token.STRING then
@@ -1053,6 +1053,19 @@ do
 
 					if tokens[3] == token.NUMBER then
 						data.power = matches[3]
+
+						if not ns.config.bool:read("ARTIFACT_POWER") then
+							return { ignore = true }
+						end
+
+					else
+						if ns.config.bool:read("ARTIFACT_POWER_EXCLUDE_CURRENCY") then
+							return { ignore = true }
+						end
+
+						data.artifact = nil
+						data.currency = true
+						data.currencyID, data.count = data.item:match("currency:(%d+):(%d+)")
 					end
 				end
 
@@ -1064,6 +1077,7 @@ do
 				{ format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456" .. DECIMAL_SEPERATOR .. "99"), { artifact = true, item = "Itemlink", power = 123456.99 } },
 				{ format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456" .. LARGE_NUMBER_SEPERATOR .. "789"), { artifact = true, item = "Itemlink", power = 123456789 } },
 				{ format(ARTIFACT_XP_GAIN, "Itemlink", "123" .. LARGE_NUMBER_SEPERATOR .. "456" .. LARGE_NUMBER_SEPERATOR .. "789" .. DECIMAL_SEPERATOR .. "99"), { artifact = true, item = "Itemlink", power = 123456789.99 } },
+				{ format(LOOT_ITEM_PUSHED_SELF, "Itemlink"), { currency = true, item = "Itemlink" } },
 			}
 		},
 		-- transmogrification
@@ -1384,7 +1398,7 @@ do
 		i = floor(i * 10) / 10 -- round to one decimal at the most
 		local n = abs(i)
 		if separator == true and (i <= -10000 or i >= 10000) then
-			n = FormatLargeNumber(i) -- Util.lua:215
+			n = FormatLargeNumber(n) -- Util.lua:215
 		end
 		return "|cff" .. (i < 0 and "FF0000" or "00FF00") .. (prefix and (i < 0 and "-" or "+") or "") .. n .. "|r"
 	end
@@ -1687,6 +1701,20 @@ do
 		return currentXP, maxXP, numPoints
 	end
 
+	function ns.util:getItemBagAndSlot(link)
+		if not link then return end
+		for bagID = BACKPACK_CONTAINER, NUM_BAG_SLOTS, 1 do
+			for slotIndex = 1, GetContainerNumSlots(bagID), 1 do
+				local itemLink = GetContainerItemLink(bagID, slotIndex)
+				if itemLink and itemLink == link then
+					return bagID, slotIndex
+				end
+			end
+		end
+	end
+
+	local reUsableItemLocation = ItemLocation:CreateEmpty()
+
 	function ns.util:getItemLevel(link)
 		local _, _, _, itemLevel, _, _, itemSubClass, _, equipSlot = GetItemInfo(link)
 		itemLevel = itemLevel and itemLevel > 0 and itemLevel or nil
@@ -1694,6 +1722,17 @@ do
 
 		if not equipSlot and itemSubClass == EJ_LOOT_SLOT_FILTER_ARTIFACT_RELIC then
 			equipSlot = itemSubClass
+		end
+
+		if IS_BFA then
+			local bagID, slotIndex = ns.util:getItemBagAndSlot(link)
+			if bagID then
+				reUsableItemLocation:SetBagAndSlot(bagID, slotIndex)
+				local currentItemLevel = C_Item.GetCurrentItemLevel(reUsableItemLocation)
+				if currentItemLevel then
+					itemLevel = currentItemLevel
+				end
+			end
 		end
 
 		--[=[

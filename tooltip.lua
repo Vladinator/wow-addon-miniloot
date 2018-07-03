@@ -522,7 +522,7 @@ do
 			if linkType == "garrfollower" then
 				text = FixHyperlink(link, text, C_Garrison.GetFollowerLinkByID(arg1), select(4, GetItemQualityColor(arg2)))
 			elseif linkType == "currency" then
-				text = FixHyperlink(link, text, GetCurrencyLink(arg1))
+				text = FixHyperlink(link, text, GetCurrencyLink(arg1, arg2 or 0))
 			elseif linkType == "battlepet" then
 				local newText = GetItemTextByLink(link)
 				if newText then

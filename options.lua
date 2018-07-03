@@ -167,6 +167,11 @@ do
 					checkbox = true,
 					key = "ARTIFACT_POWER"
 				},
+				{
+					checkbox = true,
+					key = "ARTIFACT_POWER_EXCLUDE_CURRENCY",
+					-- depends = "ARTIFACT_POWER"
+				},
 			},
 		},
 		{
@@ -386,7 +391,7 @@ do
 			header:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT")
 			header:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT")
 		else
-			header:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -10, 0)
+			header:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", anchor.radios and 0 or -10, 0)
 			header:SetPoint("TOPRIGHT", panel, "BOTTOMRIGHT")
 		end
 
@@ -660,7 +665,7 @@ do
 		local radios = CreateFrame("Frame", "$parentRadios" .. unique, container)
 		container.radios = radios
 		unique = unique + 1
-		radios:SetPoint("TOPLEFT", -12, -20)
+		radios:SetPoint("TOPLEFT", 0, -20)
 		radios:SetSize(container:GetSize())
 
 		radios.label = radios:CreateFontString(nil, "BACKGROUND", "GameFontHighlight")
@@ -726,7 +731,7 @@ do
 			if radios.buttons[i - 1] then
 				radio:SetPoint("BOTTOMLEFT", radios.buttons[i - 1] or radios, "BOTTOMLEFT", 0, -30)
 			else
-				radio:SetPoint("TOPLEFT", radios, "TOPLEFT", 20, -4)
+				radio:SetPoint("TOPLEFT", radios, "TOPLEFT", 16, -4)
 			end
 
 			table.insert(radios.buttons, radio)
@@ -767,7 +772,7 @@ do
 		if anchor:GetObjectType() == "Frame" then
 			container:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -10)
 		else
-			container:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", -10, 0)
+			container:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", anchor.radios and 0 or -10, 0)
 		end
 
 		return container

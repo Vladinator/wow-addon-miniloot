@@ -38,6 +38,7 @@ ns.config.defaults = {
 	{ key = "ITEM_QUALITY_RAID", value = 0 },
 	-- Artifact
 	{ key = "ARTIFACT_POWER", value = false, bool = true },
+	{ key = "ARTIFACT_POWER_EXCLUDE_CURRENCY", value = false, bool = true },
 	-- Reputation
 	{ key = "FACTION_NAME_MINIFY", value = false, bool = true },
 	{ key = "FACTION_NAME_MINIFY_LENGTH", value = 10 },
