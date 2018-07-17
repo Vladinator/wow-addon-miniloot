@@ -1713,7 +1713,7 @@ do
 		end
 	end
 
-	local reUsableItemLocation = ItemLocation:CreateEmpty()
+	local reUsableItemLocation
 
 	function ns.util:getItemLevel(link)
 		local _, _, _, itemLevel, _, _, itemSubClass, _, equipSlot = GetItemInfo(link)
@@ -1727,6 +1727,9 @@ do
 		if IS_BFA then
 			local bagID, slotIndex = ns.util:getItemBagAndSlot(link)
 			if bagID then
+				if not reUsableItemLocation then
+					reUsableItemLocation = ItemLocation:CreateEmpty()
+				end
 				reUsableItemLocation:SetBagAndSlot(bagID, slotIndex)
 				local currentItemLevel = C_Item.GetCurrentItemLevel(reUsableItemLocation)
 				if currentItemLevel then
