@@ -125,6 +125,10 @@ do
 			key = "CHAT_TOOLTIP_ITEM"
 		},
 		{
+			pattern = {"^azessence:"},
+			key = "CHAT_TOOLTIP_ITEM"
+		},
+		{
 			pattern = {"^currency:"},
 			key = "CHAT_TOOLTIP_CURRENCY"
 		},
@@ -528,6 +532,8 @@ do
 				if newText then
 					text = FixHyperlink(link, text, newText)
 				end
+			elseif linkType == "azessence" then
+				link = text
 			end
 		end
 
