@@ -1,4 +1,4 @@
-local IS_BFA = select(4, GetBuildInfo()) >= 80000
+local IS_CLASSIC = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 
 local addonName, ns = ...
 ns.util = {}
@@ -524,19 +524,35 @@ do
 			parse = function(self, tokens, matches)
 				local data = { loot = true, roll = true, decision = true, pass = true }
 
-				if tokens[2] == token.NUMBER then
+				if IS_CLASSIC then
+
 					data.history = matches[2]
-
 					if tokens[3] == token.STRING then
 						data.item = matches[3]
+					elseif tokens[3] == token.TARGET then
+						data.target = matches[3]
+						if tokens[4] == token.STRING then
+							data.item = matches[4]
+						end
 					end
 
-				elseif tokens[2] == token.TARGET then
-					data.target = matches[2]
+				else
 
-					if tokens[3] == token.STRING then
-						data.item = matches[3]
+					if tokens[2] == token.NUMBER then
+						data.history = matches[2]
+
+						if tokens[3] == token.STRING then
+							data.item = matches[3]
+						end
+
+					elseif tokens[2] == token.TARGET then
+						data.target = matches[2]
+
+						if tokens[3] == token.STRING then
+							data.item = matches[3]
+						end
 					end
+
 				end
 
 				return data
@@ -544,9 +560,9 @@ do
 			tests = {
 				format(LOOT_ROLL_PASSED_SELF_AUTO, 1, "Itemlink"),
 				format(LOOT_ROLL_PASSED_SELF, 1, "Itemlink"),
-				format(LOOT_ROLL_PASSED_AUTO, "Targetname", "Itemlink"),
-				format(LOOT_ROLL_PASSED_AUTO_FEMALE, "Targetname", "Itemlink"),
-				format(LOOT_ROLL_PASSED, "Targetname", "Itemlink"),
+				IS_CLASSIC and format(LOOT_ROLL_PASSED_AUTO, 1, "Targetname", "Itemlink") or format(LOOT_ROLL_PASSED_AUTO, "Targetname", "Itemlink"),
+				IS_CLASSIC and format(LOOT_ROLL_PASSED_AUTO_FEMALE, 1, "Targetname", "Itemlink") or format(LOOT_ROLL_PASSED_AUTO_FEMALE, "Targetname", "Itemlink"),
+				IS_CLASSIC and format(LOOT_ROLL_PASSED, 1, "Targetname", "Itemlink") or format(LOOT_ROLL_PASSED, "Targetname", "Itemlink"),
 			}
 		},
 		-- loot (roll, decision, disenchant)
@@ -599,26 +615,42 @@ do
 			parse = function(self, tokens, matches)
 				local data = { loot = true, roll = true, decision = true, greed = true }
 
-				if tokens[2] == token.NUMBER then
+				if IS_CLASSIC then
+
 					data.history = matches[2]
-
 					if tokens[3] == token.STRING then
 						data.item = matches[3]
+					elseif tokens[3] == token.TARGET then
+						data.target = matches[3]
+						if tokens[4] == token.STRING then
+							data.item = matches[4]
+						end
 					end
 
-				elseif tokens[2] == token.TARGET then
-					data.target = matches[2]
+				else
 
-					if tokens[3] == token.STRING then
-						data.item = matches[3]
+					if tokens[2] == token.NUMBER then
+						data.history = matches[2]
+
+						if tokens[3] == token.STRING then
+							data.item = matches[3]
+						end
+
+					elseif tokens[2] == token.TARGET then
+						data.target = matches[2]
+
+						if tokens[3] == token.STRING then
+							data.item = matches[3]
+						end
 					end
+
 				end
 
 				return data
 			end,
 			tests = {
 				format(LOOT_ROLL_GREED_SELF, 1, "Itemlink"),
-				format(LOOT_ROLL_GREED, "Targetname", "Itemlink"),
+				IS_CLASSIC and format(LOOT_ROLL_GREED, 1, "Targetname", "Itemlink") or format(LOOT_ROLL_GREED, "Targetname", "Itemlink"),
 			}
 		},
 		-- loot (roll, decision, need)
@@ -635,26 +667,42 @@ do
 			parse = function(self, tokens, matches)
 				local data = { loot = true, roll = true, decision = true, need = true }
 
-				if tokens[2] == token.NUMBER then
+				if IS_CLASSIC then
+
 					data.history = matches[2]
-
 					if tokens[3] == token.STRING then
 						data.item = matches[3]
+					elseif tokens[3] == token.TARGET then
+						data.target = matches[3]
+						if tokens[4] == token.STRING then
+							data.item = matches[4]
+						end
 					end
 
-				elseif tokens[2] == token.TARGET then
-					data.target = matches[2]
+				else
 
-					if tokens[3] == token.STRING then
-						data.item = matches[3]
+					if tokens[2] == token.NUMBER then
+						data.history = matches[2]
+
+						if tokens[3] == token.STRING then
+							data.item = matches[3]
+						end
+
+					elseif tokens[2] == token.TARGET then
+						data.target = matches[2]
+
+						if tokens[3] == token.STRING then
+							data.item = matches[3]
+						end
 					end
+
 				end
 
 				return data
 			end,
 			tests = {
 				format(LOOT_ROLL_NEED_SELF, 1, "Itemlink"),
-				format(LOOT_ROLL_NEED, "Targetname", "Itemlink"),
+				IS_CLASSIC and format(LOOT_ROLL_NEED, 1, "Targetname", "Itemlink") or format(LOOT_ROLL_NEED, "Targetname", "Itemlink"),
 			}
 		},
 		-- loot (roll, rolled, disenchant)
@@ -701,22 +749,39 @@ do
 			parse = function(self, tokens, matches)
 				local data = { loot = true, roll = true, rolled = true, greed = true }
 
-				if tokens[2] == token.NUMBER then
-					data.number = matches[2]
+				if IS_CLASSIC then
 
-					if tokens[3] == token.STRING then
-						data.item = matches[3]
-
-						if tokens[4] == token.TARGET then
-							data.target = matches[4]
+					data.history = matches[2]
+					if tokens[3] == token.NUMBER then
+						data.number = matches[3]
+						if tokens[4] == token.STRING then
+							data.item = matches[4]
+							if tokens[5] == token.TARGET then
+								data.target = matches[5]
+							end
 						end
 					end
+
+				else
+
+					if tokens[2] == token.NUMBER then
+						data.number = matches[2]
+
+						if tokens[3] == token.STRING then
+							data.item = matches[3]
+
+							if tokens[4] == token.TARGET then
+								data.target = matches[4]
+							end
+						end
+					end
+
 				end
 
 				return data
 			end,
 			tests = {
-				format(LOOT_ROLL_ROLLED_GREED, 100, "Itemlink", "Targetname"),
+				IS_CLASSIC and format(LOOT_ROLL_ROLLED_GREED, 1, 100, "Itemlink", "Targetname") or format(LOOT_ROLL_ROLLED_GREED, 100, "Itemlink", "Targetname"),
 			}
 		},
 		-- loot (roll, rolled, need)
@@ -733,23 +798,40 @@ do
 			parse = function(self, tokens, matches)
 				local data = { loot = true, roll = true, rolled = true, need = true }
 
-				if tokens[2] == token.NUMBER then
-					data.number = matches[2]
+				if IS_CLASSIC then
 
-					if tokens[3] == token.STRING then
-						data.item = matches[3]
-
-						if tokens[4] == token.TARGET then
-							data.target = matches[4]
+					data.history = matches[2]
+					if tokens[3] == token.NUMBER then
+						data.number = matches[3]
+						if tokens[4] == token.STRING then
+							data.item = matches[4]
+							if tokens[5] == token.TARGET then
+								data.target = matches[5]
+							end
 						end
 					end
+
+				else
+
+					if tokens[2] == token.NUMBER then
+						data.number = matches[2]
+
+						if tokens[3] == token.STRING then
+							data.item = matches[3]
+
+							if tokens[4] == token.TARGET then
+								data.target = matches[4]
+							end
+						end
+					end
+
 				end
 
 				return data
 			end,
 			tests = {
 				format(LOOT_ROLL_ROLLED_NEED_ROLE_BONUS, 200, "Itemlink", "Targetname"),
-				format(LOOT_ROLL_ROLLED_NEED, 100, "Itemlink", "Targetname"),
+				IS_CLASSIC and format(LOOT_ROLL_ROLLED_NEED, 1, 100, "Itemlink", "Targetname") or format(LOOT_ROLL_ROLLED_NEED, 100, "Itemlink", "Targetname"),
 			}
 		},
 		-- loot (roll, result, disenchanted)
@@ -987,22 +1069,38 @@ do
 			parse = function(self, tokens, matches)
 				local data = { loot = true, roll = true, result = true, winner = true }
 
-				if tokens[2] == token.STRING then
-					data.item = matches[2]
+				if IS_CLASSIC then
 
-				elseif tokens[2] == token.TARGET then
-					data.target = matches[2]
-
+					data.history = matches[2]
 					if tokens[3] == token.STRING then
 						data.item = matches[3]
+					elseif tokens[3] == token.TARGET then
+						data.target = matches[3]
+						if tokens[4] == token.STRING then
+							data.item = matches[4]
+						end
 					end
+
+				else
+
+					if tokens[2] == token.STRING then
+						data.item = matches[2]
+
+					elseif tokens[2] == token.TARGET then
+						data.target = matches[2]
+
+						if tokens[3] == token.STRING then
+							data.item = matches[3]
+						end
+					end
+
 				end
 
 				return data
 			end,
 			tests = {
-				format(LOOT_ROLL_YOU_WON, "Itemlink"),
-				format(LOOT_ROLL_WON, "Targetname", "Itemlink"),
+				IS_CLASSIC and format(LOOT_ROLL_YOU_WON, 1, "Itemlink") or format(LOOT_ROLL_YOU_WON, "Itemlink"),
+				IS_CLASSIC and format(LOOT_ROLL_WON, 1, "Targetname", "Itemlink") or format(LOOT_ROLL_WON, "Targetname", "Itemlink"),
 			}
 		},
 		-- loot (roll, result, started)
@@ -1131,6 +1229,18 @@ do
 			}
 		},
 	}
+
+	if IS_CLASSIC then
+		for i = 1, #categories do
+			local category = categories[i]
+			for j = 1, #category.formats do
+				local f = category.formats[j]
+				if f[1]:find("lootHistory:%%d") and f[2] ~= token.NUMBER then
+					table.insert(f, 2, token.NUMBER)
+				end
+			end
+		end
+	end
 
 	local categoriesOptions = { groups = {}, sorted = {} }
 
@@ -1724,17 +1834,15 @@ do
 			equipSlot = itemSubClass
 		end
 
-		if IS_BFA then
-			local bagID, slotIndex = ns.util:getItemBagAndSlot(link)
-			if bagID then
-				if not reUsableItemLocation then
-					reUsableItemLocation = ItemLocation:CreateEmpty()
-				end
-				reUsableItemLocation:SetBagAndSlot(bagID, slotIndex)
-				local currentItemLevel = C_Item.GetCurrentItemLevel(reUsableItemLocation)
-				if currentItemLevel then
-					itemLevel = currentItemLevel
-				end
+		local bagID, slotIndex = ns.util:getItemBagAndSlot(link)
+		if bagID then
+			if not reUsableItemLocation then
+				reUsableItemLocation = ItemLocation:CreateEmpty()
+			end
+			reUsableItemLocation:SetBagAndSlot(bagID, slotIndex)
+			local currentItemLevel = C_Item.GetCurrentItemLevel(reUsableItemLocation)
+			if currentItemLevel then
+				itemLevel = currentItemLevel
 			end
 		end
 
