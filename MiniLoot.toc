@@ -1,8 +1,8 @@
-## Interface: 80200
+## Interface: 80205
 ## Title: MiniLoot
 ## Notes: Reduces chat related spam by a whole deal!
 ## Author: Vladinator
-## Version: 8.2.0.190809
+## Version: 8.2.5.190809
 ## SavedVariables: MiniLootDB
 locale.lua
 config.lua
