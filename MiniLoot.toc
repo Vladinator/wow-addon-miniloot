@@ -4,6 +4,8 @@
 ## Author: Vladinator
 ## Version: 8.2.5.190809
 ## SavedVariables: MiniLootDB
+## X-Curse-Project-ID: 43440
+## X-WoWI-ID: 19598
 locale.lua
 config.lua
 events.lua
