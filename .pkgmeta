@@ -1,2 +1,4 @@
 package-as: MiniLoot
 enable-nolib-creation: no
+ignore:
+  - .travis.yml
