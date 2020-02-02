@@ -220,8 +220,11 @@ do
 			key = "CHAT_TOOLTIP_GARRISON",
 			show = function(handler, chatFrame, linkData, link)
 				local _, garrMissionID = strsplit(":", linkData)
-				FloatingGarrisonMission_Toggle(tonumber(garrMissionID))
-				AnchorTooltip(FloatingGarrisonMissionTooltip, chatFrame)
+				garrMissionID = tonumber(garrMissionID)
+				if garrMissionID then
+					FloatingGarrisonMission_Toggle(garrMissionID)
+					AnchorTooltip(FloatingGarrisonMissionTooltip, chatFrame)
+				end
 			end,
 			hide = function()
 				FloatingGarrisonMissionTooltip:Hide()

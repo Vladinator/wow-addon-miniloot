@@ -1,8 +1,8 @@
-## Interface: 80205
+## Interface: 80300
 ## Title: MiniLoot
 ## Notes: Reduces chat related spam by a whole deal!
 ## Author: Vladinator
-## Version: 8.2.5.190809
+## Version: 8.3.0.200202
 ## SavedVariables: MiniLootDB
 ## X-Curse-Project-ID: 43440
 ## X-WoWI-ID: 19598
