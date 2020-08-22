@@ -551,66 +551,83 @@ do
 							for k = 1, #subSorted do
 								local item, count = subSorted[k][1], subSorted[k][2]
 
-								-- stage one: if we don't wish to show junk items, drop parsing any further
-								if not ns.config.bool:read("ITEM_HIDE_JUNK") or not ns.util:isItemJunk(item) then
+								-- we need to do this so we don't go insane with errors
+								if ns.util:isItemAnimaPower(item) then
 
-									-- is this a quest related item?
-									local questItem = ns.util:isItemQuest(item) or ns.util:isItemQuestStarting(item)
+									-- prepare the item link
+									local tempItem
 
-									-- does it have an uncollected appearance?
-									local uncollectedItem = ns.config.bool:read("ITEM_ALERT_TRANSMOG") and (isPlayer or ns.config.bool:read("ITEM_ALERT_TRANSMOG_EVERYTHING")) and ns.util:isItemAppearanceUncollected(item)
+									-- default coloring
+									tempItem = ns.util:toLootIcon(item, true, nil, nil, nil, isPlayer and "player" or sorted[j][1])
 
-									-- pick what quality threshold we should use for this item
-									local withinQualityThreshold = true
+									-- insert into the item table for this player
+									table.insert(playerTemp, tempItem)
 
-									-- only if the previous checks fail
-									if not questItem and not uncollectedItem then
-										local quality = 0 -- Poor
+								else
 
-										if IsInRaid() then
-											quality = ns.config:read("ITEM_QUALITY_RAID", quality)
-										elseif IsInGroup() then
-											quality = ns.config:read("ITEM_QUALITY_GROUP", quality)
-										else
-											quality = ns.config:read("ITEM_QUALITY_PLAYER", quality)
-										end
+									-- stage one: if we don't wish to show junk items, drop parsing any further
+									if not ns.config.bool:read("ITEM_HIDE_JUNK") or not ns.util:isItemJunk(item) then
 
-										withinQualityThreshold = ns.util:isItemQuality(item, quality, "ge", true)
-									end
+										-- is this a quest related item?
+										local questItem = ns.util:isItemQuest(item) or ns.util:isItemQuestStarting(item)
 
-									-- stage two: is this item quality meeting our minimum criteria?
-									if questItem or uncollectedItem or withinQualityThreshold then
+										-- does it have an uncollected appearance?
+										local uncollectedItem = ns.config.bool:read("ITEM_ALERT_TRANSMOG") and (isPlayer or ns.config.bool:read("ITEM_ALERT_TRANSMOG_EVERYTHING")) and ns.util:isItemAppearanceUncollected(item)
 
-										-- prepare the item link
-										local tempItem
+										-- pick what quality threshold we should use for this item
+										local withinQualityThreshold = true
 
-										if uncollectedItem then
-											-- pink brackets and curly brackets to highlight the importance
-											tempItem = "|cffFF80FF{|r" .. ns.util:toLootIcon(item, true, false, "ffFF80FF", true) .. "|cffFF80FF}|r" .. ns.util:toItemCount(count)
+										-- only if the previous checks fail
+										if not questItem and not uncollectedItem then
+											local quality = 0 -- Poor
 
-										elseif questItem then
-											-- red brackets
-											tempItem = ns.util:toLootIcon(item, true, false, "ffFF0000", true) .. ns.util:toItemCount(count)
-
-										else
-											-- default coloring
-											tempItem = ns.util:toLootIcon(item, true, nil, nil, true) .. ns.util:toItemCount(count)
-										end
-
-										-- add item count to player items
-										if isPlayer and ns.config.bool:read("ITEM_COUNT_BAGS") then
-											local tempCount = ns.util:getNumItems(item, ns.config.bool:read("ITEM_COUNT_BAGS_INCLUDE_BANK"), ns.config.bool:read("ITEM_COUNT_BAGS_INCLUDE_CHARGES"))
-											if tempCount > 1 then
-												tempCount = FormatLargeNumber(tempCount) -- Util.lua:215
-												tempItem = tempItem .. "|cff999999(" .. tempCount .. ")|r"
+											if IsInRaid() then
+												quality = ns.config:read("ITEM_QUALITY_RAID", quality)
+											elseif IsInGroup() then
+												quality = ns.config:read("ITEM_QUALITY_GROUP", quality)
+											else
+												quality = ns.config:read("ITEM_QUALITY_PLAYER", quality)
 											end
+
+											withinQualityThreshold = ns.util:isItemQuality(item, quality, "ge", true)
 										end
 
-										-- insert into the item table for this player
-										table.insert(playerTemp, tempItem)
+										-- stage two: is this item quality meeting our minimum criteria?
+										if questItem or uncollectedItem or withinQualityThreshold then
+
+											-- prepare the item link
+											local tempItem
+
+											if uncollectedItem then
+												-- pink brackets and curly brackets to highlight the importance
+												tempItem = "|cffFF80FF{|r" .. ns.util:toLootIcon(item, true, false, "ffFF80FF", true) .. "|cffFF80FF}|r" .. ns.util:toItemCount(count)
+
+											elseif questItem then
+												-- red brackets
+												tempItem = ns.util:toLootIcon(item, true, false, "ffFF0000", true) .. ns.util:toItemCount(count)
+
+											else
+												-- default coloring
+												tempItem = ns.util:toLootIcon(item, true, nil, nil, true) .. ns.util:toItemCount(count)
+											end
+
+											-- add item count to player items
+											if isPlayer and ns.config.bool:read("ITEM_COUNT_BAGS") then
+												local tempCount = ns.util:getNumItems(item, ns.config.bool:read("ITEM_COUNT_BAGS_INCLUDE_BANK"), ns.config.bool:read("ITEM_COUNT_BAGS_INCLUDE_CHARGES"))
+												if tempCount > 1 then
+													tempCount = FormatLargeNumber(tempCount) -- Util.lua:215
+													tempItem = tempItem .. "|cff999999(" .. tempCount .. ")|r"
+												end
+											end
+
+											-- insert into the item table for this player
+											table.insert(playerTemp, tempItem)
+										end
+
 									end
 
 								end
+
 							end
 
 							-- if we have data, concat and push into the report

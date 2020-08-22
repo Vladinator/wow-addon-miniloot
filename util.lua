@@ -1,5 +1,26 @@
 local IS_CLASSIC = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
 
+local GetCurrencyInfo = _G.GetCurrencyInfo -- TODO: 9.0
+if not GetCurrencyInfo then
+	GetCurrencyInfo = function(id)
+		if type(id) == "string" then
+			if id:match("%d+") then
+				id = tonumber(id)
+			else
+				id = C_CurrencyInfo.GetCurrencyIDFromLink(id)
+			end
+		end
+		if not id then
+			return
+		end
+		local info = C_CurrencyInfo.GetCurrencyInfo(id)
+		if info then
+			return info.name, info.quantity, info.iconFileID, info.quantityEarnedThisWeek, info.maxWeeklyQuantity, info.maxQuantity, info.discovered, info.quality
+		end
+	end
+	-- _G.GetCurrencyInfo = GetCurrencyInfo -- DEBUG -- /dump GetCurrencyInfo(1828)
+end
+
 local addonName, ns = ...
 ns.util = {}
 
@@ -1130,6 +1151,60 @@ do
 				format(LOOT_ROLL_STARTED, 1, "Itemlink"),
 			}
 		},
+		-- animapower
+		-- { loot, animapower[, item] }
+		GAIN_MAW_POWER_SELF and {
+			skipTests = true, -- because it depends on the config if the pattern matches something or not
+			useOptionKeyForIgnore = true, -- instead of using the group to check for silence we check with the option key directly
+			group = "ANIMA_POWER",
+			events = {
+				"CHAT_MSG_LOOT",
+			},
+			formats = {
+				{ GAIN_MAW_POWER_SELF,                         token.STRING                                                                      }, -- "You have gained Anima Power: %s"
+			},
+			parse = function(self, tokens, matches)
+				local data = { loot = true, animapower = true }
+
+				if tokens[2] == token.STRING then
+					data.item = matches[2]
+				end
+
+				return data
+			end,
+			tests = {
+				{ format(GAIN_MAW_POWER_SELF, "Spellname"), { animapower = true, spell = "Spellname" } },
+			}
+		},
+		-- animapower (target)
+		-- { loot, animapower[, target[, item]] }
+		GAIN_MAW_POWER and {
+			skipTests = true, -- because it depends on the config if the pattern matches something or not
+			useOptionKeyForIgnore = true, -- instead of using the group to check for silence we check with the option key directly
+			group = "ANIMA_POWER",
+			events = {
+				"CHAT_MSG_LOOT",
+			},
+			formats = {
+				{ GAIN_MAW_POWER,                              token.TARGET,    token.STRING                                                    }, -- ""%s has gained Anima Power: %s""
+			},
+			parse = function(self, tokens, matches)
+				local data = { loot = true, animapower = true }
+
+				if tokens[2] == token.TARGET then
+					data.target = matches[2]
+
+					if tokens[3] == token.STRING then
+						data.item = matches[3]
+					end
+				end
+
+				return data
+			end,
+			tests = {
+				{ format(GAIN_MAW_POWER, "Targetname", "Spellname"), { animapower = true, spell = "Spellname", target = "Targetname" } },
+			}
+		},
 		-- artifact
 		-- { artifact, item, power }
 		-- { currency[, item, count, currencyID] }
@@ -1230,6 +1305,12 @@ do
 		},
 	}
 
+	for i = #categories, 1, -1 do
+		if type(categories[i]) ~= "table" then
+			table.remove(categories, i)
+		end
+	end
+
 	if IS_CLASSIC then
 		for i = 1, #categories do
 			local category = categories[i]
@@ -1249,7 +1330,7 @@ do
 			local category = categories[i]
 			category.id = i
 
-			if category.group then
+			if category.group and not category.useOptionKeyForIgnore then
 				if not categoriesOptions.groups[category.group] then
 					categoriesOptions.groups[category.group] = {
 						id = i,
@@ -1407,7 +1488,7 @@ do
 			local events = category.events
 
 			-- track if we purposefully silence something
-			local silenced = category.ignore or (category.group and flags[category.group])
+			local silenced = category.ignore or (category.useOptionKeyForIgnore and not ns.config.bool:read(category.useOptionKeyForIgnore == true and category.group or category.useOptionKeyForIgnore)) or (category.group and (flags[category.group]))
 
 			-- update the overall flag that we encountered a silenced category
 			hasSilenced = hasSilenced or silenced
@@ -1541,7 +1622,31 @@ do
 		return GetCoinTextureString(copper, fontSize) or ""
 	end
 
-	function ns.util:toLootIcon(link, hyperlink, simple, customColor, appendItemLevel)
+	function ns.util:getMawPowerInfo(unit, query, fallback)
+		if unit and query then
+			for i = 1, 44 do
+				local _, icon, _, _, _, _, _, _, _, spellID = UnitAura(unit, i, "MAW")
+				if not icon then
+					break
+				end
+				local link = spellID and GetMawPowerLinkBySpellID(spellID)
+				if link then
+					if query == spellID or query == link then
+						return link, spellID, icon
+					end
+					local _, data, _ = link:match("|c([0-9a-f]+)|H(.-)|h%[(.-)%]|h|r")
+					if data == query then
+						return link, spellID, icon
+					end
+				end
+			end
+		end
+		if fallback then
+			return nil, nil, 538040
+		end
+	end
+
+	function ns.util:toLootIcon(link, hyperlink, simple, customColor, appendItemLevel, mawPowerUnit)
 		local color, data, text = link:match("|c([0-9a-f]+)|H(.-)|h%[(.-)%]|h|r")
 		local icon
 
@@ -1557,6 +1662,8 @@ do
 				if not icon or icon == 0 then icon = "Interface\\Garrison\\Portraits\\FollowerPortrait_NoPortrait" end
 			elseif prefix == "battlepet" then
 				icon = select(2, C_PetJournal.GetPetInfoBySpeciesID(id))
+			elseif prefix == "mawpower" then
+				icon = select(3, ns.util:getMawPowerInfo(mawPowerUnit, data, true))
 			end
 		end
 
@@ -1768,6 +1875,10 @@ do
 
 	function ns.util:isItemJunk(link)
 		return ns.util:isItemQuality(link, 0)
+	end
+
+	function ns.util:isItemAnimaPower(link)
+		return type(link) == "string" and link:find("mawpower:")
 	end
 
 	function ns.util:getUnitName(unit, isName)

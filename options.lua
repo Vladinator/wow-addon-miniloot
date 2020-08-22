@@ -160,6 +160,16 @@ do
 			},
 		},
 		{
+			label = ns.locale.OPTION_ANIMA_POWER_COLLECTION_TITLE,
+			description = ns.locale.OPTION_ANIMA_POWER_COLLECTION_DESC,
+			options = {
+				{
+					checkbox = true,
+					key = "ANIMA_POWER"
+				},
+			},
+		},
+		{
 			label = ns.locale.OPTION_ARTIFACT_TITLE,
 			description = ns.locale.OPTION_ARTIFACT_DESC,
 			options = {
@@ -252,6 +262,10 @@ do
 				{
 					checkbox = true,
 					key = "CHAT_TOOLTIP_KEYSTONE"
+				},
+				{
+					checkbox = true,
+					key = "CHAT_TOOLTIP_ANIMA_POWER"
 				},
 			},
 		},

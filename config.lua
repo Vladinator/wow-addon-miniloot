@@ -36,6 +36,8 @@ ns.config.defaults = {
 	{ key = "ITEM_QUALITY_PLAYER", value = 0 },
 	{ key = "ITEM_QUALITY_GROUP", value = 0 },
 	{ key = "ITEM_QUALITY_RAID", value = 0 },
+	-- Anima Power
+	{ key = "ANIMA_POWER", value = false, bool = true },
 	-- Artifact
 	{ key = "ARTIFACT_POWER", value = false, bool = true },
 	{ key = "ARTIFACT_POWER_EXCLUDE_CURRENCY", value = false, bool = true },
@@ -57,6 +59,7 @@ ns.config.defaults = {
 	{ key = "CHAT_TOOLTIP_UNIT", value = false, bool = true },
 	{ key = "CHAT_TOOLTIP_ARTIFACT", value = false, bool = true },
 	{ key = "CHAT_TOOLTIP_KEYSTONE", value = false, bool = true },
+	{ key = "CHAT_TOOLTIP_ANIMA_POWER", value = false, bool = true },
 	-- Categories
 	{ key = "CATEGORY_FLAGS", value = {} },
 }

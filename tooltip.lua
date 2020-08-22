@@ -1,6 +1,27 @@
 local addonName, ns = ...
 ns.tooltip = {}
 
+local GetCurrencyLink = _G.GetCurrencyLink
+if not GetCurrencyLink then
+	GetCurrencyLink = function(id, amount)
+		if type(id) == "string" then
+			if id:match("%d+") then
+				id = tonumber(id)
+			else
+				id = C_CurrencyInfo.GetCurrencyIDFromLink(id)
+			end
+		end
+		if not id then
+			return
+		end
+		if not amount or type(amount) ~= "number" then
+			amount = 0
+		end
+		return C_CurrencyInfo.GetCurrencyLink(id, amount)
+	end
+	-- _G.GetCurrencyLink = GetCurrencyLink -- DEBUG -- /dump GetCurrencyLink(1828)
+end
+
 -- tooltip scanning
 do
 	-- tooltip frame
@@ -15,6 +36,14 @@ do
 		frame:AddFontStrings(a, b)
 	end
 
+	local function GetTextColor(textWidget)
+		if not textWidget then return end
+		local r, g, b = textWidget:GetTextColor()
+		if r then
+			return format("%02x%02x%02x", floor(r*255), floor(g*255), floor(b*255))
+		end
+	end
+
 	-- scan tooltip lines
 	local function ScanTooltip()
 		local temp = {}
@@ -25,7 +54,7 @@ do
 			if text then
 				local textLeft, textRight = text[1], text[2]
 
-				table.insert(temp, {textLeft:GetText(), textRight:GetText()})
+				table.insert(temp, {textLeft:GetText(), textRight:GetText(), GetTextColor(textLeft), GetTextColor(textRight)})
 			end
 		end
 
@@ -409,6 +438,10 @@ do
 			key = "CHAT_TOOLTIP_KEYSTONE"
 		},
 		{
+			pattern = {"^mawpower:"},
+			key = "CHAT_TOOLTIP_ANIMA_POWER"
+		},
+		{
 			-- TODO:
 			---- battlepet
 			---- battlePetAbil
@@ -512,6 +545,9 @@ do
 		-- the "newText" is a freshly generated link, but it ignores the "link" attributes
 		-- the "quality" is an override in case the quality is different than the API generating "newText"
 
+		if not oldText then oldText = newText or "" end -- TODO: 9.0
+		if not newText then newText = oldText or "" end -- TODO: 9.0
+
 		-- use provided quality color, or from old/new text
 		local color = quality or oldText:match("|c([a-fA-F0-9]+)|H") or newText:match("|c([a-fA-F0-9]+)|H")
 
@@ -537,6 +573,19 @@ do
 				end
 			elseif linkType == "azessence" then
 				link = text
+			elseif linkType == "mawpower" then
+				local newText = ns.util:getMawPowerInfo("player", link, true)
+				if not newText then
+					local success, rows = ns.tooltip:ScanItem(link, true)
+					if success and rows[1][1] then
+						newText = "|cff71d5ff|H" .. link .. "|h[" .. rows[1][1] .. "]|h|r" -- rows[1][3]
+					end
+				end
+				if newText then
+					text = FixHyperlink(link, text, newText)
+				else
+					return -- can't do it
+				end
 			end
 		end
 
