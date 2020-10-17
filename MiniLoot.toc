@@ -1,8 +1,8 @@
-## Interface: 90000
+## Interface: 90001
 ## Title: MiniLoot
 ## Notes: Reduces chat related spam by a whole deal!
 ## Author: Vladinator
-## Version: 9.0.0.200731
+## Version: 9.0.1.201016
 ## SavedVariables: MiniLootDB
 ## X-Curse-Project-ID: 43440
 ## X-WoWI-ID: 19598
