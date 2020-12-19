@@ -60,6 +60,7 @@ ns.config.defaults = {
 	{ key = "CHAT_TOOLTIP_ARTIFACT", value = false, bool = true },
 	{ key = "CHAT_TOOLTIP_KEYSTONE", value = false, bool = true },
 	{ key = "CHAT_TOOLTIP_ANIMA_POWER", value = false, bool = true },
+	{ key = "CHAT_TOOLTIP_COVENANT_CONDUIT", value = false, bool = true },
 	-- Categories
 	{ key = "CATEGORY_FLAGS", value = {} },
 }

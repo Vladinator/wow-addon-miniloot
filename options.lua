@@ -267,6 +267,10 @@ do
 					checkbox = true,
 					key = "CHAT_TOOLTIP_ANIMA_POWER"
 				},
+				{
+					checkbox = true,
+					key = "CHAT_TOOLTIP_COVENANT_CONDUIT"
+				},
 			},
 		},
 	}

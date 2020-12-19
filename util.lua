@@ -1153,7 +1153,7 @@ do
 		},
 		-- animapower
 		-- { loot, animapower[, item] }
-		GAIN_MAW_POWER_SELF and {
+		{
 			skipTests = true, -- because it depends on the config if the pattern matches something or not
 			useOptionKeyForIgnore = true, -- instead of using the group to check for silence we check with the option key directly
 			group = "ANIMA_POWER",
@@ -1178,7 +1178,7 @@ do
 		},
 		-- animapower (target)
 		-- { loot, animapower[, target[, item]] }
-		GAIN_MAW_POWER and {
+		{
 			skipTests = true, -- because it depends on the config if the pattern matches something or not
 			useOptionKeyForIgnore = true, -- instead of using the group to check for silence we check with the option key directly
 			group = "ANIMA_POWER",

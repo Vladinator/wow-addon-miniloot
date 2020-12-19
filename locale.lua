@@ -132,6 +132,7 @@ L.OPTION_CHAT_TOOLTIP_GLYPH_DESC = "Hover glyph links in chat and display their 
 L.OPTION_CHAT_TOOLTIP_UNIT_TITLE = "Show creature tooltips"
 L.OPTION_CHAT_TOOLTIP_UNIT_DESC = "Hover creature links in the combat log and display their tooltip."
 L.OPTION_CHAT_TOOLTIP_ANIMA_POWER_TITLE = "Show anima power tooltips"
+L.OPTION_CHAT_TOOLTIP_COVENANT_CONDUIT_TITLE = "Show potency conduit tooltips"
 L.OPTION_CHAT_TOOLTIP_ARTIFACT_TITLE = "Show artifact trait tooltips"
 L.OPTION_CHAT_TOOLTIP_ARTIFACT_DESC = "Hover artifact trait links in chat and display their tooltip."
 L.OPTION_CHAT_TOOLTIP_KEYSTONE_TITLE = "Show keystone tooltips"

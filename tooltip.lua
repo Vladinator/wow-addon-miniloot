@@ -442,6 +442,10 @@ do
 			key = "CHAT_TOOLTIP_ANIMA_POWER"
 		},
 		{
+			pattern = {"^conduit:"},
+			key = "CHAT_TOOLTIP_COVENANT_CONDUIT"
+		},
+		{
 			-- TODO:
 			---- battlepet
 			---- battlePetAbil
