@@ -1,4 +1,4 @@
-local IS_CLASSIC = WOW_PROJECT_ID == WOW_PROJECT_CLASSIC
+local IS_CLASSIC = WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE
 
 local GetCurrencyInfo = _G.GetCurrencyInfo -- TODO: 9.0
 if not GetCurrencyInfo then
@@ -1173,7 +1173,7 @@ do
 				return data
 			end,
 			tests = {
-				{ format(GAIN_MAW_POWER_SELF, "Spellname"), { animapower = true, spell = "Spellname" } },
+				not IS_CLASSIC and { format(GAIN_MAW_POWER_SELF, "Spellname"), { animapower = true, spell = "Spellname" } },
 			}
 		},
 		-- animapower (target)
@@ -1202,7 +1202,7 @@ do
 				return data
 			end,
 			tests = {
-				{ format(GAIN_MAW_POWER, "Targetname", "Spellname"), { animapower = true, spell = "Spellname", target = "Targetname" } },
+				not IS_CLASSIC and { format(GAIN_MAW_POWER, "Targetname", "Spellname"), { animapower = true, spell = "Spellname", target = "Targetname" } },
 			}
 		},
 		-- artifact
@@ -1316,7 +1316,7 @@ do
 			local category = categories[i]
 			for j = 1, #category.formats do
 				local f = category.formats[j]
-				if f[1]:find("lootHistory:%%d") and f[2] ~= token.NUMBER then
+				if f[1] and f[1]:find("lootHistory:%%d") and f[2] ~= token.NUMBER then
 					table.insert(f, 2, token.NUMBER)
 				end
 			end
@@ -1363,6 +1363,7 @@ do
 	end
 
 	local function convert(pattern)
+	    if not pattern then return end
 		-- grammar from hell ( http://wow.gamepedia.com/UI_escape_sequences#Grammar )
 		-- pattern = pattern:gsub("|4[^:]-:[^:]-:[^;]-;", "") -- "|4singular:plural1:plural2;"
 		-- pattern = pattern:gsub("|4[^:]-:[^;]-;", "") -- "number |4singular:plural;"
@@ -1460,7 +1461,9 @@ do
 		for j = 1, #category.formats do
 			local format = category.formats[j]
 
-			format[1] = "^" .. convert(format[1]) .. "$"
+			if format[1] then
+				format[1] = "^" .. convert(format[1]) .. "$"
+			end
 		end
 	end
 
