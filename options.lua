@@ -513,7 +513,8 @@ do
 		if kind == "number" then
 			editbox:SetMaxLetters(4)
 			editbox:SetNumeric(true)
-			editbox:SetNumber(text)
+			local n = type(text) == "number" and text or tonumber(text)
+			if n then editbox:SetNumber(n) end
 		else
 			editbox:SetText(text)
 		end
