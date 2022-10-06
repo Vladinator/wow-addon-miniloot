@@ -22,17 +22,21 @@ if not GetCurrencyLink then
 	-- _G.GetCurrencyLink = GetCurrencyLink -- DEBUG -- /dump GetCurrencyLink(1828)
 end
 
+local GetContainerNumSlots = _G.GetContainerNumSlots or C_Container.GetContainerNumSlots
+local GetContainerItemLink = _G.GetContainerItemLink or C_Container.GetContainerItemLink
+
 -- tooltip scanning
 do
 	-- tooltip frame
-	local frame = CreateFrame("GameTooltip")
+	local frame = CreateFrame("GameTooltip", "MiniLootTooltip", WorldFrame)
+	if GameTooltipDataMixin then Mixin(frame, GameTooltipDataMixin) end -- TODO: DF
 	local texts = {}
 
 	-- tooltip lines
 	for i = 1, 20 do
 		local a = frame:CreateFontString("$parentTextLeft" .. i, nil, "GameTooltipText")
 		local b = frame:CreateFontString("$parentTextRight" .. i, nil, "GameTooltipText")
-		table.insert(texts, {a, b})
+		texts[i] = {a, b}
 		frame:AddFontStrings(a, b)
 	end
 

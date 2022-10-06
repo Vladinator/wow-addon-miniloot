@@ -21,6 +21,9 @@ if not GetCurrencyInfo then
 	-- _G.GetCurrencyInfo = GetCurrencyInfo -- DEBUG -- /dump GetCurrencyInfo(1828)
 end
 
+local GetContainerNumSlots = _G.GetContainerNumSlots or C_Container.GetContainerNumSlots
+local GetContainerItemLink = _G.GetContainerItemLink or C_Container.GetContainerItemLink
+
 local addonName, ns = ...
 ns.util = {}
 
@@ -1424,7 +1427,7 @@ do
 			if type(value) == "string" then
 				value = value:gsub("[\\" .. LARGE_NUMBER_SEPERATOR .. "]+", "")
 				value = value:gsub("[\\" .. DECIMAL_SEPERATOR .. "]", ".")
-				value = value:gsub("[^%d\.]+", "")
+				value = value:gsub("[^%d%.]+", "")
 			end
 
 			-- convert what ever it is into a number
@@ -1650,8 +1653,13 @@ do
 	end
 
 	function ns.util:toLootIcon(link, hyperlink, simple, customColor, appendItemLevel, mawPowerUnit)
-		local color, data, text = link:match("|c([0-9a-f]+)|H(.-)|h%[(.-)%]|h|r")
+		local color, data, text = link:match("|c([0-9a-fA-F]+)|H(.-)|h%[(.-)%]|h|r")
 		local icon
+		local tierAtlas, tierAtlasName, tier, tierAtlasSuffix
+
+		if text then
+			tierAtlas, tierAtlasName, tier, tierAtlasSuffix = text:match("(|A:(.-[Tt][Ii][Ee][Rr](%d+)):(.-)|a)")
+		end
 
 		if data then
 			local prefix, id = data:match("^(.-):(%d+)")
@@ -1673,11 +1681,15 @@ do
 		if icon then
 			local appendText
 
+			if tier then
+				appendText = format("%s:Q%s", appendText or "", tier)
+			end
+
 			if appendItemLevel == true and ns.config.bool:read("ITEM_SHOW_ITEM_LEVEL") then
 				local itemLevel, equipSlot = ns.util:getItemLevel(link)
 
 				if itemLevel and itemLevel > 1 and (equipSlot or not ns.config.bool:read("ITEM_SHOW_ITEM_LEVEL_ONLY_EQUIPMENT")) then
-					appendText = ":" .. itemLevel
+					appendText = format("%s:%s", appendText or "", itemLevel)
 				end
 			end
 
