@@ -12,7 +12,7 @@ ns.DEFAULT_CHAT_FRAME = DEFAULT_CHAT_FRAME
 ns.config.defaults = {
 	-- Common
 	{ key = "NAME_SHORT", value = false, bool = true },
-	{ key = "ITEM_SELF_PREFIX", value = false, bool = true },
+	{ key = "ITEM_SELF_PREFIX", value = true, bool = true },
 	{ key = "ITEM_SELF_PREFIX_NAME", value = false, bool = true },
 	{ key = "ITEM_SELF_TRIM_SOLO", value = false, bool = true },
 	{ key = "ICON_TRIM", value = 8 },
