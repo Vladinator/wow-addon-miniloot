@@ -740,6 +740,14 @@ do
 			radio.index = i
 			radio.option = option
 			radio.options = option.options[i]
+
+			if not radio.text then
+				radio.text = radio:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+				radio.text:SetSize(150, 32)
+				radio.text:SetPoint("LEFT", radio, "RIGHT", 5, 0)
+				radio.text:SetJustifyH("LEFT")
+			end
+
 			radio.text:SetTextColor(1, 1, 1)
 			radio.text:SetText(radio.options.label)
 			radio:SetSize(32, 32)
