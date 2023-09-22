@@ -10,7 +10,7 @@ frame:SetScript("OnEvent", function(self, event, ...) ns.events.fire(self, event
 
 -- register event with widget
 function ns.events:on(event, func, env)
-	local temp, count = true
+	local temp = true
 
 	if func then
 		temp = ns.events:register(event, func, env)

@@ -152,6 +152,14 @@ do
 		GameTooltip:Show()
 	end
 
+	---@class MiniLootHyperlinkHandler
+	---@field public pattern? string[]
+	---@field public key? string
+	---@field public enabled? fun(): any?
+	---@field public show? fun(handler: MiniLootHyperlinkHandler, chatFrame: Frame, linkData: string, link: string, anchor: AnchorPoint, xOffset: number, yOffset: number)
+	---@field public hide? fun()
+
+	---@type MiniLootHyperlinkHandler[]
 	local handlers = {
 		{
 			pattern = {"^item:"},
@@ -194,6 +202,9 @@ do
 			key = "CHAT_TOOLTIP_GLYPH"
 		},
 		{
+			enabled = function()
+				return BattlePetTooltip
+			end,
 			pattern = {"^battlepet:"},
 			key = "CHAT_TOOLTIP_BATTLEPET",
 			show = function(handler, chatFrame, linkData, link)
@@ -208,6 +219,9 @@ do
 			end
 		},
 		{
+			enabled = function()
+				return FloatingPetBattleAbilityTooltip
+			end,
 			pattern = {"^battlePetAbil:"},
 			key = "CHAT_TOOLTIP_BATTLEPET",
 			show = function(handler, chatFrame, linkData, link)
@@ -220,6 +234,9 @@ do
 			end
 		},
 		{
+			enabled = function()
+				return FloatingGarrisonShipyardFollowerTooltip and FloatingGarrisonFollowerTooltip
+			end,
 			pattern = {"^garrfollower:"},
 			key = "CHAT_TOOLTIP_GARRISON",
 			show = function(handler, chatFrame, linkData, link)
@@ -237,6 +254,9 @@ do
 			end
 		},
 		{
+			enabled = function()
+				return FloatingGarrisonFollowerAbilityTooltip
+			end,
 			pattern = {"^garrfollowerability:"},
 			key = "CHAT_TOOLTIP_GARRISON",
 			show = function(handler, chatFrame, linkData, link)
@@ -249,6 +269,9 @@ do
 			end
 		},
 		{
+			enabled = function()
+				return FloatingGarrisonMissionTooltip
+			end,
 			pattern = {"^garrmission:"},
 			key = "CHAT_TOOLTIP_GARRISON",
 			show = function(handler, chatFrame, linkData, link)
@@ -264,6 +287,9 @@ do
 			end
 		},
 		{
+			enabled = function()
+				return DeathRecap_GetEvents
+			end,
 			pattern = {"^death:"},
 			key = "CHAT_TOOLTIP_DEATH",
 			show = function(handler, chatFrame, linkData, link)
@@ -487,26 +513,28 @@ do
 		for i = 1, #handlers do
 			local handler, matched = handlers[i], true
 
-			if handler.pattern then
-				matched = false
+			if not handler.enabled or handler.enabled() then
+				if handler.pattern then
+					matched = false
 
-				for j = 1, #handler.pattern do
-					if linkData:match(handler.pattern[j]) then
-						matched = true
-						break
+					for j = 1, #handler.pattern do
+						if linkData:match(handler.pattern[j]) then
+							matched = true
+							break
+						end
 					end
 				end
-			end
 
-			if matched then
-				if not handler.key or ns.config.bool:read(handler.key) then
-					showingHandler = handler
+				if matched then
+					if not handler.key or ns.config.bool:read(handler.key) then
+						showingHandler = handler
 
-					local show = handler.show or ShowTooltip
-					show(handler, chatFrame, linkData, link)
+						local show = handler.show or ShowTooltip
+						show(handler, chatFrame, linkData, link)
+					end
+
+					break
 				end
-
-				break
 			end
 		end
 	end

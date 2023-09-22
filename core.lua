@@ -3,8 +3,10 @@ ns.core = {}
 
 -- log handling
 do
+	---@type MiniLootLoggerFrame
 	local interval
 
+	---@class MiniLootLoggerSummary
 	local summary = {
 		count = 0,
 		reputation = {},
@@ -199,6 +201,9 @@ do
 		return temp
 	end
 
+	---@class MiniLootLoggerTemp
+	---@field public value? any[]
+
 	-- parse the various events
 	function ns.core:PARSE_CHAT(event, text)
 		if self ~= ns.DEFAULT_CHAT_FRAME then
@@ -206,7 +211,7 @@ do
 		end
 
 		local data, silenced = ns.util:parse(text, event)
-		local temp
+		local temp ---@type MiniLootLoggerTemp?
 
 		-- should we buypass the filter and do nothing?
 		if not data and silenced then
@@ -220,7 +225,7 @@ do
 
 		-- prepare the data
 		if data then
-			temp = {}
+			temp = {} ---@class MiniLootLoggerTemp
 
 			if data.reputation then
 				temp.key = "reputation"
@@ -313,7 +318,8 @@ do
 		-- store in the report table
 		if temp and temp.key and temp.value then
 			summary.count = summary.count + 1
-			table.insert(summary[temp.key], temp.value)
+			local collection = summary[temp.key] ---@type any
+			table.insert(collection, temp.value)
 			interval:Check()
 			return true
 
@@ -343,12 +349,12 @@ do
 	-- report intervals
 	do
 		local elapsed = 0
-		interval = CreateFrame("Frame")
+		interval = CreateFrame("Frame") ---@class MiniLootLoggerFrame : Frame
 
 		function interval:Tick()
 			local playerName = UnitName("player") or YOU or "You"
 			local guildName = GetGuildInfo("player") or GUILD or "Guild"
-			local playerKey, hasPlayerName, hasOtherPlayerNames = "_"
+			local playerKey, hasPlayerName, hasOtherPlayerNames = "_", nil, nil
 			local playerNameSeparator = ":"
 			local prefixWithPlayerNames = ns.config.bool:read("ITEM_SELF_PREFIX")
 
@@ -359,7 +365,7 @@ do
 
 			for i = 1, #summaryOrder do
 				local key = summaryOrder[i]
-				local entries = summary[key]
+				local entries = summary[key] ---@type any
 
 				for j = 1, #entries do
 					local entry = entries[j]
@@ -745,8 +751,8 @@ do
 
 				for i = 1, #summaryOrder do
 					local key = summaryOrder[i]
-
-					table.wipe(summary[key])
+					local collection = summary[key] ---@type any
+					table.wipe(collection)
 				end
 
 				summary.count = 0
