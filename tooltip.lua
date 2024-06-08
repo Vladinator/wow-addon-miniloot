@@ -1,3 +1,5 @@
+local GetItemQualityColor = GetItemQualityColor or C_Item.GetItemQualityColor ---@diagnostic disable-line: deprecated
+
 local addonName, ns = ...
 ns.tooltip = {}
 

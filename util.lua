@@ -1,3 +1,11 @@
+local GetCoinText = GetCoinText or C_CurrencyInfo.GetCoinText ---@diagnostic disable-line: deprecated
+local GetCoinTextureString = GetCoinTextureString or C_CurrencyInfo.GetCoinTextureString ---@diagnostic disable-line: deprecated
+local GetItemCount = GetItemCount or C_Item.GetItemCount ---@diagnostic disable-line: deprecated
+local GetItemIcon = GetItemIcon or C_Item.GetItemIconByID ---@diagnostic disable-line: deprecated
+local GetItemInfo = GetItemInfo or C_Item.GetItemInfo ---@diagnostic disable-line: deprecated
+local GetMawPowerLinkBySpellID = GetMawPowerLinkBySpellID or C_Spell.GetMawPowerLinkBySpellID ---@diagnostic disable-line: deprecated
+local UnitAura = UnitAura or C_UnitAuras.GetAuraDataByIndex ---@diagnostic disable-line: deprecated
+
 local IS_CLASSIC = WOW_PROJECT_ID ~= WOW_PROJECT_MAINLINE
 
 local GetCurrencyInfo = _G.GetCurrencyInfo -- TODO: 9.0

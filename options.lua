@@ -1,3 +1,6 @@
+local GetAddOnMetadata = GetAddOnMetadata or C_AddOns.GetAddOnMetadata ---@diagnostic disable-line: deprecated
+local GetItemQualityColor = GetItemQualityColor or C_Item.GetItemQualityColor ---@diagnostic disable-line: deprecated
+
 local addonName, ns = ...
 ns.options = {}
 

@@ -1,3 +1,5 @@
+local GetCoinText = GetCoinText or C_CurrencyInfo.GetCoinText ---@diagnostic disable-line: deprecated
+
 local addonName, ns = ...
 ns.core = {}
 
