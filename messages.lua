@@ -1,11 +1,13 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
+-- if enabled will generate and run tests and output the outcome in chat
+local DebugTests = false
+
 ---@enum MiniLootMessageGroup
 local MiniLootMessageGroup = {
     Reputation = "Reputation",
     Honor = "Honor",
     Experience = "Experience",
-    ExperienceLoss = "ExperienceLoss",
     -- GuildExperience = "GuildExperience",
     FollowerExperience = "FollowerExperience",
     Currency = "Currency",
@@ -73,7 +75,7 @@ local MiniLootMessageFormatTokenType = {
 ---@field public events WowEvent[]
 ---@field public formats MiniLootMessageFormat[]
 ---@field public result? MiniLootMessageFormatSimpleParserResult
----@field public tests? table<number, any[]>
+---@field public tests? any[]
 ---@field public skipAutoTests? boolean
 
 ---@class MiniLootMessagePartial : MiniLootMessage
@@ -83,7 +85,7 @@ local MiniLootMessageFormatTokenType = {
 ---@field public parser? MiniLootMessageFormatSimpleParser
 
 ---@type MiniLootMessage[]
-local messages = {}
+local MessagesCollection = {}
 
 ---@generic T
 ---@param tbl T[]
@@ -152,11 +154,41 @@ local function MergeTable(dst, src)
     return dst
 end
 
+---@generic T
+---@param tbl T[]
+---@return T[]
+local function ReverseTable(tbl)
+    local temp = {}
+    local index = 0
+    for i = #tbl, 1, -1 do
+        index = index + 1
+        temp[index] = tbl[i]
+    end
+    return temp
+end
+
+---@param message MiniLootMessage
+local function FillMessageStruct(message)
+    if not message.events then
+        message.events = {}
+    end
+    if not message.formats then
+        message.formats = {}
+    end
+    if not message.group then
+        message.group = MiniLootMessageGroup.Ignore
+    end
+    return message
+end
+
 ---@param ... MiniLootMessagePartial
 local function AppendMessages(...)
     local data = {...}
-    local first = data[1]
-    local index = #messages
+    local first = FillMessageStruct(data[1])
+    local index = #MessagesCollection
+    if not DebugTests then
+        first.skipAutoTests = true
+    end
     for _, message in ipairs(data) do
         local temp = message
         if temp ~= first then
@@ -164,7 +196,10 @@ local function AppendMessages(...)
             MergeTable(temp, message)
         end
         index = index + 1
-        messages[index] = temp
+        MessagesCollection[index] = temp
+        if not DebugTests then
+            temp.skipAutoTests = true
+        end
     end
 end
 
@@ -201,12 +236,65 @@ local function PatternToFormat(pattern)
     return pattern
 end
 
+---@param messageFormat MiniLootMessageFormat
+---@return any[]
+local function CreateMessageTests(messageFormat)
+    local tests = {} ---@type any[]
+    local testIndex = 0
+    for i = 1, #messageFormat.formats do
+        local msgFormat = messageFormat.formats[i]
+        local args = {} ---@type any[]
+        local argIndex = 0
+        for j = 1, #messageFormat.tokens do
+            local token = messageFormat.tokens[j]
+            if token.type == MiniLootMessageFormatTokenType.Float then
+                argIndex = argIndex + 1
+                args[argIndex] = random(10000, 99999)/100
+            elseif token.type == MiniLootMessageFormatTokenType.Link then
+                argIndex = argIndex + 1
+                args[argIndex] = "|cffffffff|Hitem:6948::::::::70:::::|h[Hearthstone]|h|r"
+            elseif token.type == MiniLootMessageFormatTokenType.Money then
+                argIndex = argIndex + 1
+                args[argIndex] = C_CurrencyInfo.GetCoinText(random(12345, 67890))
+            elseif token.type == MiniLootMessageFormatTokenType.Number then
+                argIndex = argIndex + 1
+                args[argIndex] = random(1, 99)
+            elseif token.type == MiniLootMessageFormatTokenType.String then
+                argIndex = argIndex + 1
+                args[argIndex] = "MiniLootIsAwesome"
+            elseif token.type == MiniLootMessageFormatTokenType.Target then
+                argIndex = argIndex + 1
+                args[argIndex] = "Vladinator-TarrenMill"
+            end
+        end
+        if args[1] ~= nil then
+            local tries = 10
+            local success ---@type boolean?
+            local text ---@type string?
+            while tries > 0 and not success do
+                success, text = pcall(format, msgFormat, unpack(args))
+                if success then
+                    break
+                end
+                tries = tries - 1
+                argIndex = argIndex + 1
+                args[argIndex] = "5"
+            end
+            if text then
+                testIndex = testIndex + 1
+                tests[testIndex] = {text, unpack(args)}
+            end
+        end
+    end
+    return tests
+end
+
 local function FinalizeMessages()
-    local numMessages = #messages
+    local numMessages = #MessagesCollection
 
     for messageIndex = numMessages, 1, -1 do
 
-        local message = messages[messageIndex]
+        local message = MessagesCollection[messageIndex]
         local messageFormats = message.formats
         local numMessageFormats = #messageFormats
 
@@ -239,27 +327,37 @@ local function FinalizeMessages()
 
         if numMessageFormats == 0 then
             numMessages = numMessages - 1
-            table.remove(messages, messageIndex)
+            table.remove(MessagesCollection, messageIndex)
         end
 
     end
 
     for messageIndex = numMessages, 1, -1 do
 
-        local message = messages[messageIndex]
+        local message = MessagesCollection[messageIndex]
+        local messageResult = message.result
         local messageFormats = message.formats
         local numMessageFormats = #messageFormats
 
         for messageFormatIndex = numMessageFormats, 1, -1 do
 
             local messageFormat = messageFormats[messageFormatIndex]
+            local messageFormatResult = messageFormat.result
+
+            if not messageFormatResult then
+                messageFormatResult = messageResult
+                messageFormat.result = messageFormatResult
+            end
+
             local messageSubFormats = messageFormat.formats
             local numMessageSubFormats = #messageSubFormats
 
             local messageSubPatterns = messageFormat.patterns
             local numMessageSubPatterns = messageSubPatterns and #messageSubPatterns
+            local createdMessageSubPatterns ---@type boolean?
 
             if not messageSubPatterns then
+                createdMessageSubPatterns = true
                 messageSubPatterns = {}
                 numMessageSubPatterns = #messageSubPatterns
                 messageFormat.patterns = messageSubPatterns
@@ -270,10 +368,39 @@ local function FinalizeMessages()
                 local messageSubFormat = messageSubFormats[messageSubFormatIndex]
 
                 messageSubFormat = PatternToFormat(messageSubFormat)
+                messageSubFormat = format("^%s$", messageSubFormat)
 
                 if not TableContains(messageSubPatterns, messageSubFormat) then
                     numMessageSubPatterns = numMessageSubPatterns + 1
                     messageSubPatterns[numMessageSubPatterns] = messageSubFormat
+                end
+
+            end
+
+            if createdMessageSubPatterns then
+                messageSubPatterns = ReverseTable(messageSubPatterns)
+                messageFormat.patterns = messageSubPatterns
+            end
+
+        end
+
+        local runTests = not message.skipAutoTests
+        local tests = message.tests
+
+        if runTests and not tests then
+
+            local index = 0
+            tests = {}
+            message.tests = tests
+
+            for messageFormatIndex = 1, numMessageFormats do
+
+                local messageFormat = messageFormats[messageFormatIndex]
+                local messageFormatTests = CreateMessageTests(messageFormat)
+
+                for messageFormatTestIndex = 1, #messageFormatTests do
+                    index = index + 1
+                    tests[index] = messageFormatTests[messageFormatTestIndex]
                 end
 
             end
@@ -320,14 +447,21 @@ end
 local ConvertStringToNumberPattern1 = "[\\" .. LARGE_NUMBER_SEPERATOR .. "]+"
 local ConvertStringToNumberPattern2 = "[\\" .. DECIMAL_SEPERATOR .. "]"
 
----@param text string
+---@param value? string|number
 ---@return number?
-local function ConvertStringToNumber(text)
-    text = text
+local function ConvertToNumber(value)
+    local type = type(value)
+    if type == "number" then
+        return value
+    end
+    if type ~= "string" then
+        return
+    end
+    value = value
         :gsub(ConvertStringToNumberPattern1, "")
         :gsub(ConvertStringToNumberPattern2, ".")
         :gsub("[^%d%.]+", "")
-    return tonumber(text)
+    return tonumber(value)
 end
 
 local ConvertStringToMoneyPatterns = {
@@ -336,12 +470,19 @@ local ConvertStringToMoneyPatterns = {
     Copper = PatternToFormat(COPPER_AMOUNT),
 }
 
----@param text string
+---@param value? string|number
 ---@return number?
-local function ConvertStringToMoney(text)
-    local goldText = text:match(ConvertStringToMoneyPatterns.Gold)
-    local silverText = text:match(ConvertStringToMoneyPatterns.Silver)
-    local copperText = text:match(ConvertStringToMoneyPatterns.Copper)
+local function ConvertToMoney(value)
+    local type = type(value)
+    if type == "number" then
+        return value
+    end
+    if type ~= "string" then
+        return
+    end
+    local goldText = value:match(ConvertStringToMoneyPatterns.Gold)
+    local silverText = value:match(ConvertStringToMoneyPatterns.Silver)
+    local copperText = value:match(ConvertStringToMoneyPatterns.Copper)
     local money ---@type number?
     if goldText then
         money = (money or 0) + (tonumber(goldText) or 0)*COPPER_PER_GOLD
@@ -355,119 +496,6 @@ local function ConvertStringToMoney(text)
     return money
 end
 
-local ProcessTokensLinkPattern = "^%s*|h"
-
----@param token MiniLootMessageFormatToken
----@param match string
----@return string? key, any value
-local function ProcessTokens(token, match)
-    local tokenType = token.type
-
-    if tokenType == MiniLootMessageFormatTokenType.Float
-        or tokenType == MiniLootMessageFormatTokenType.Number then
-
-        local value = ConvertStringToNumber(match)
-        return token.field, value or token.fallbackValue
-
-    elseif tokenType == MiniLootMessageFormatTokenType.Link
-        or tokenType == MiniLootMessageFormatTokenType.String
-        or tokenType == MiniLootMessageFormatTokenType.Target then
-
-        local value ---@type string?
-
-        if type(match) == "string" and match:len() > 0 then
-            value = match
-        end
-
-        -- if value then
-        --     if tokenType == MiniLootMessageFormatTokenType.Link then
-        --         if not value:find(ProcessTokensLinkPattern) then
-        --             value = nil
-        --         end
-        --     elseif tokenType == MiniLootMessageFormatTokenType.Target then
-        --         if not UnitExists(value) then
-        --             value = nil
-        --         end
-        --     end
-        -- end
-
-        return token.field, value or token.fallbackValue
-
-    elseif tokenType == MiniLootMessageFormatTokenType.Money then
-
-        local value = ConvertStringToMoney(match)
-        return token.field, value or token.fallbackValue
-
-    end
-end
-
----@param messageFormat MiniLootMessageFormat
----@param matches string[]
----@return MiniLootMessageFormatSimpleParserResult?
-local function ProcessMatchedToResult(messageFormat, matches)
-    local tokens = messageFormat.tokens
-    local numTokens = #tokens
-    local result ---@type MiniLootMessageFormatSimpleParserResult?
-    for i = 1, numTokens do
-        local token = tokens[i]
-        local match = matches[i]
-        local key, value = ProcessTokens(token, match)
-        if key then
-            if not result then
-                result = {}
-            end
-            result[key] = value
-        end
-    end
-    return result
-end
-
----@param results MiniLootMessageFormatSimpleParserResult[]
----@param event WowEvent
----@param text string
----@param playerName string
----@param languageName string
----@param channelName string
----@param playerName2 string
----@param specialFlags string
----@param zoneChannelID number
----@param channelIndex number
----@param channelBaseName string
----@param languageID number
----@param lineID number
----@param guid string
----@param bnSenderID number
----@param isMobile boolean
----@param isSubtitle boolean
----@param hideSenderInLetterbox boolean
----@param supressRaidIcons boolean
----@return number? numProcessed
-local function ProcessChatMessage(results, event, text, playerName, languageName, channelName, playerName2, specialFlags, zoneChannelID, channelIndex, channelBaseName, languageID, lineID, guid, bnSenderID, isMobile, isSubtitle, hideSenderInLetterbox, supressRaidIcons)
-    local numResults = #results
-    local numProcessed
-    for _, message in ipairs(messages) do
-        if TableContains(message.events, event) then
-            for _, messageFormat in ipairs(message.formats) do
-                local messageFormatPatterns = messageFormat.patterns
-                if messageFormatPatterns then
-                    for _, messageFormatPattern in ipairs(messageFormatPatterns) do
-                        local temp = {text:match(messageFormatPattern)} ---@type string[]
-                        if temp[1] then
-                            local result = ProcessMatchedToResult(messageFormat, temp)
-                            if result then
-                                numProcessed = (numProcessed or 0) + 1
-                                numResults = numResults + 1
-                                results[numResults] = result
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-    return numProcessed
-end
-
 do
 
     -- Reputation
@@ -475,7 +503,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultReputationKeys "Name"|"Value"|"Bonus"|"BonusExtra"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultReputationTypes "FallbackReputation"
+        ---@alias MiniLootMessageFormatSimpleParserResultReputationTypes "Reputation"|"ReputationLoss"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultReputation
@@ -487,6 +515,9 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultReputationArgs : MiniLootMessageFormatSimpleParserResultReputation
         ---@field public Name? string
         ---@field public Type MiniLootMessageFormatSimpleParserResultReputationTypes
+
+        ---@class MiniLootMessageFormatReputation : MiniLootMessageFormat
+        ---@field public result? MiniLootMessageFormatSimpleParserResultReputationArgs
 
         ---@type table<MiniLootMessageFormatSimpleParserResultReputationKeys, MiniLootMessageFormatToken>
         local Tokens = {
@@ -516,15 +547,15 @@ do
                 },
                 ---@type MiniLootMessageFormatSimpleParserResultReputationArgs
                 result = {
-                    Type = "FallbackReputation",
+                    Type = "Reputation",
                 },
             },
             {
+                ---@type MiniLootMessageFormatReputation[]
                 formats = {
                     {
                         formats = {
                             "FACTION_STANDING_INCREASED_DOUBLE_BONUS",
-                            "FACTION_STANDING_INCREASED_BONUS",
                         },
                         tokens = {
                             Tokens.Name,
@@ -535,9 +566,7 @@ do
                     },
                     {
                         formats = {
-                            "FACTION_STANDING_INCREASED_ACH_BONUS",
-                            "FACTION_STANDING_INCREASED",
-                            "FACTION_STANDING_INCREASED_GENERIC",
+                            "FACTION_STANDING_INCREASED_BONUS",
                         },
                         tokens = {
                             Tokens.Name,
@@ -547,12 +576,52 @@ do
                     },
                     {
                         formats = {
-                            "FACTION_STANDING_DECREASED",
-                            "FACTION_STANDING_DECREASED_GENERIC",
+                            "FACTION_STANDING_INCREASED_ACH_BONUS",
                         },
                         tokens = {
                             Tokens.Name,
                             Tokens.Value,
+                            Tokens.Bonus,
+                        },
+                    },
+                    {
+                        formats = {
+                            "FACTION_STANDING_INCREASED",
+                        },
+                        tokens = {
+                            Tokens.Name,
+                            Tokens.Value,
+                        },
+                    },
+                    {
+                        formats = {
+                            "FACTION_STANDING_INCREASED_GENERIC",
+                        },
+                        tokens = {
+                            Tokens.Name,
+                        },
+                    },
+                    {
+                        formats = {
+                            "FACTION_STANDING_DECREASED",
+                        },
+                        tokens = {
+                            Tokens.Name,
+                            Tokens.Value,
+                        },
+                        result = {
+                            Type = "ReputationLoss"
+                        },
+                    },
+                    {
+                        formats = {
+                            "FACTION_STANDING_DECREASED_GENERIC",
+                        },
+                        tokens = {
+                            Tokens.Name,
+                        },
+                        result = {
+                            Type = "ReputationLoss"
                         },
                     },
                 },
@@ -566,7 +635,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultHonorKeys "Name"|"NameExtra"|"Value"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultHonorTypes "FallbackHonor"
+        ---@alias MiniLootMessageFormatSimpleParserResultHonorTypes "Honor"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultHonor
@@ -577,6 +646,9 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultHonorArgs : MiniLootMessageFormatSimpleParserResultHonor
         ---@field public Value? number
         ---@field public Type MiniLootMessageFormatSimpleParserResultHonorTypes
+
+        ---@class MiniLootMessageFormatHonor : MiniLootMessageFormat
+        ---@field public result? MiniLootMessageFormatSimpleParserResultHonorArgs
 
         ---@type table<MiniLootMessageFormatSimpleParserResultHonorKeys, MiniLootMessageFormatToken>
         local Tokens = {
@@ -602,10 +674,11 @@ do
                 },
                 ---@type MiniLootMessageFormatSimpleParserResultHonorArgs
                 result = {
-                    Type = "FallbackHonor",
+                    Type = "Honor",
                 },
             },
             {
+                ---@type MiniLootMessageFormatHonor[]
                 formats = {
                     {
                         formats = {
@@ -645,7 +718,15 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultExperienceKeys "Name"|"Value"|"ValueExtra"|"Bonus"|"BonusExtra"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultExperienceTypes "FallbackExperience"
+        ---@alias MiniLootMessageFormatSimpleParserResultExperienceTypes
+        ---|"Experience"
+        ---|"ExperienceLoss"
+        ---|"ExperienceBonusBonus"
+        ---|"ExperienceBonusPenalty"
+        ---|"ExperiencePenaltyBonus"
+        ---|"ExperiencePenaltyPenalty"
+        ---|"ExperienceBonus"
+        ---|"ExperiencePenalty"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultExperience
@@ -658,6 +739,9 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultExperienceArgs : MiniLootMessageFormatSimpleParserResultExperience
         ---@field public Value? number
         ---@field public Type MiniLootMessageFormatSimpleParserResultExperienceTypes
+
+        ---@class MiniLootMessageFormatExperience : MiniLootMessageFormat
+        ---@field public result? MiniLootMessageFormatSimpleParserResultExperienceArgs
 
         ---@type table<MiniLootMessageFormatSimpleParserResultExperienceKeys, MiniLootMessageFormatToken>
         local Tokens = {
@@ -688,13 +772,14 @@ do
                 group = MiniLootMessageGroup.Experience,
                 ---@type MiniLootMessageFormatSimpleParserResultExperienceArgs
                 result = {
-                    Type = "FallbackExperience",
+                    Type = "Experience",
                 },
             },
             {
                 events = {
                     "CHAT_MSG_SYSTEM",
                 },
+                ---@type MiniLootMessageFormatExperience[]
                 formats = {
                     {
                         formats = {
@@ -711,20 +796,90 @@ do
                 events = {
                     "CHAT_MSG_COMBAT_XP_GAIN",
                 },
+                ---@type MiniLootMessageFormatExperience[]
                 formats = {
                     {
                         formats = {
                             "COMBATLOG_XPGAIN_EXHAUSTION1_RAID",
-                            "COMBATLOG_XPGAIN_EXHAUSTION1_GROUP",
-                            "COMBATLOG_XPGAIN_EXHAUSTION1",
                             "COMBATLOG_XPGAIN_EXHAUSTION2_RAID",
-                            "COMBATLOG_XPGAIN_EXHAUSTION2_GROUP",
-                            "COMBATLOG_XPGAIN_EXHAUSTION2",
+                        },
+                        tokens = {
+                            Tokens.Name,
+                            Tokens.Value,
+                            Tokens.Bonus,
+                            Tokens.ValueExtra,
+                            Tokens.BonusExtra,
+                        },
+                        result = {
+                            Type = "ExperienceBonusPenalty",
+                        },
+                    },
+                    {
+                        formats = {
                             "COMBATLOG_XPGAIN_EXHAUSTION4_RAID",
-                            "COMBATLOG_XPGAIN_EXHAUSTION4_GROUP",
-                            "COMBATLOG_XPGAIN_EXHAUSTION4",
                             "COMBATLOG_XPGAIN_EXHAUSTION5_RAID",
+                        },
+                        tokens = {
+                            Tokens.Name,
+                            Tokens.Value,
+                            Tokens.Bonus,
+                            Tokens.ValueExtra,
+                            Tokens.BonusExtra,
+                        },
+                        result = {
+                            Type = "ExperiencePenaltyPenalty",
+                        },
+                    },
+                    {
+                        formats = {
+                            "COMBATLOG_XPGAIN_EXHAUSTION1_GROUP",
+                            "COMBATLOG_XPGAIN_EXHAUSTION2_GROUP",
+                        },
+                        tokens = {
+                            Tokens.Name,
+                            Tokens.Value,
+                            Tokens.Bonus,
+                            Tokens.ValueExtra,
+                            Tokens.BonusExtra,
+                        },
+                        result = {
+                            Type = "ExperienceBonusBonus",
+                        },
+                    },
+                    {
+                        formats = {
+                            "COMBATLOG_XPGAIN_EXHAUSTION4_GROUP",
                             "COMBATLOG_XPGAIN_EXHAUSTION5_GROUP",
+                        },
+                        tokens = {
+                            Tokens.Name,
+                            Tokens.Value,
+                            Tokens.Bonus,
+                            Tokens.ValueExtra,
+                            Tokens.BonusExtra,
+                        },
+                        result = {
+                            Type = "ExperiencePenaltyBonus",
+                        },
+                    },
+                    {
+                        formats = {
+                            "COMBATLOG_XPGAIN_EXHAUSTION1",
+                            "COMBATLOG_XPGAIN_EXHAUSTION2",
+                        },
+                        tokens = {
+                            Tokens.Name,
+                            Tokens.Value,
+                            Tokens.Bonus,
+                            Tokens.BonusExtra,
+                        },
+                        result =  {
+                            Type = "ExperienceBonus",
+                        },
+                    },
+                    {
+                        formats = {
+                            "COMBATLOG_XPGAIN_EXHAUSTION4",
                             "COMBATLOG_XPGAIN_EXHAUSTION5",
                         },
                         tokens = {
@@ -733,28 +888,75 @@ do
                             Tokens.Bonus,
                             Tokens.BonusExtra,
                         },
+                        result =  {
+                            Type = "ExperiencePenalty",
+                        },
                     },
                     {
                         formats = {
                             "COMBATLOG_XPGAIN_FIRSTPERSON_RAID",
-                            "COMBATLOG_XPGAIN_FIRSTPERSON_GROUP",
-                            "COMBATLOG_XPGAIN_FIRSTPERSON",
                         },
                         tokens = {
                             Tokens.Name,
                             Tokens.Value,
                             Tokens.ValueExtra,
                         },
+                        result = {
+                            Type = "ExperiencePenalty",
+                        },
+                    },
+                    {
+                        formats = {
+                            "COMBATLOG_XPGAIN_FIRSTPERSON_GROUP",
+                        },
+                        tokens = {
+                            Tokens.Name,
+                            Tokens.Value,
+                            Tokens.ValueExtra,
+                        },
+                        result = {
+                            Type = "ExperienceBonus",
+                        },
+                    },
+                    {
+                        formats = {
+                            "COMBATLOG_XPGAIN_FIRSTPERSON",
+                        },
+                        tokens = {
+                            Tokens.Name,
+                            Tokens.Value,
+                        },
                     },
                     {
                         formats = {
                             "COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED_RAID",
-                            "COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED_GROUP",
-                            "COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED",
                         },
                         tokens = {
                             Tokens.Value,
                             Tokens.ValueExtra,
+                        },
+                        result = {
+                            Type = "ExperiencePenalty",
+                        },
+                    },
+                    {
+                        formats = {
+                            "COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED_GROUP",
+                        },
+                        tokens = {
+                            Tokens.Value,
+                            Tokens.ValueExtra,
+                        },
+                        result = {
+                            Type = "ExperienceBonus",
+                        },
+                    },
+                    {
+                        formats = {
+                            "COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED",
+                        },
+                        tokens = {
+                            Tokens.Value,
                         },
                     },
                     {
@@ -766,30 +968,19 @@ do
                             Tokens.Bonus,
                             Tokens.BonusExtra,
                         },
+                        result = {
+                            Type = "ExperienceBonus",
+                        },
                     },
-                },
-            },
-            {
-                group = MiniLootMessageGroup.ExperienceLoss,
-                events = {
-                    "CHAT_MSG_COMBAT_XP_GAIN",
-                },
-                parser = function(results)
-                    return SimpleParserMap(
-                        results,
-                        ---@param result MiniLootMessageFormatSimpleParserResultExperience
-                        function(result)
-                            result.Value = -result.Value
-                        end
-                    )
-                end,
-                formats = {
                     {
                         formats = {
                             "COMBATLOG_XPLOSS_FIRSTPERSON_UNNAMED",
                         },
                         tokens = {
                             Tokens.Value,
+                        },
+                        result = {
+                            Type = "ExperienceLoss",
                         },
                     },
                 },
@@ -804,7 +995,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultGuildExperienceKeys "Value"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultGuildExperienceTypes "FallbackGuildExperience"
+        ---@alias MiniLootMessageFormatSimpleParserResultGuildExperienceTypes "GuildExperience"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultGuildExperience
@@ -813,6 +1004,9 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultGuildExperienceArgs : MiniLootMessageFormatSimpleParserResultGuildExperience
         ---@field public Value? number
         ---@field public Type MiniLootMessageFormatSimpleParserResultGuildExperienceTypes
+
+        ---@class MiniLootMessageFormatGuildExperience : MiniLootMessageFormat
+        ---@field public result? MiniLootMessageFormatSimpleParserResultGuildExperienceArgs
 
         ---@type table<MiniLootMessageFormatSimpleParserResultGuildExperienceKeys, MiniLootMessageFormatToken>
         local Tokens = {
@@ -830,10 +1024,11 @@ do
                 },
                 ---@type MiniLootMessageFormatSimpleParserResultGuildExperienceArgs
                 result = {
-                    Type = "FallbackGuildExperience",
+                    Type = "GuildExperience",
                 },
             },
             {
+                ---@type MiniLootMessageFormatGuildExperience[]
                 formats = {
                     {
                         formats = {
@@ -855,7 +1050,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultFollowerExperienceKeys "Name"|"Value"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultFollowerExperienceTypes "FallbackFollowerExperience"
+        ---@alias MiniLootMessageFormatSimpleParserResultFollowerExperienceTypes "FollowerExperience"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultFollowerExperience
@@ -866,6 +1061,9 @@ do
         ---@field public Name? string
         ---@field public Value? number
         ---@field public Type MiniLootMessageFormatSimpleParserResultFollowerExperienceTypes
+
+        ---@class MiniLootMessageFormatFollowerExperience : MiniLootMessageFormat
+        ---@field public result? MiniLootMessageFormatSimpleParserResultFollowerExperienceArgs
 
         ---@type table<MiniLootMessageFormatSimpleParserResultFollowerExperienceKeys, MiniLootMessageFormatToken>
         local Tokens = {
@@ -888,10 +1086,11 @@ do
                 },
                 ---@type MiniLootMessageFormatSimpleParserResultFollowerExperienceArgs
                 result = {
-                    Type = "FallbackFollowerExperience",
+                    Type = "FollowerExperience",
                 },
             },
             {
+                ---@type MiniLootMessageFormatFollowerExperience[]
                 formats = {
                     {
                         formats = {
@@ -913,7 +1112,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultCurrencyKeys "Link"|"Value"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultCurrencyTypes "FallbackCurrency"
+        ---@alias MiniLootMessageFormatSimpleParserResultCurrencyTypes "Currency"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultCurrency
@@ -923,6 +1122,9 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultCurrencyArgs : MiniLootMessageFormatSimpleParserResultCurrency
         ---@field public Link? string
         ---@field public Type MiniLootMessageFormatSimpleParserResultCurrencyTypes
+
+        ---@class MiniLootMessageFormatCurrency : MiniLootMessageFormat
+        ---@field public result? MiniLootMessageFormatSimpleParserResultCurrencyArgs
 
         ---@type table<MiniLootMessageFormatSimpleParserResultCurrencyKeys, MiniLootMessageFormatToken>
         local Tokens = {
@@ -944,21 +1146,29 @@ do
                 },
                 ---@type MiniLootMessageFormatSimpleParserResultCurrencyArgs
                 result = {
-                    Type = "FallbackCurrency",
+                    Type = "Currency",
                 },
             },
             {
+                ---@type MiniLootMessageFormatCurrency[]
                 formats = {
                     {
                         formats = {
                             "CURRENCY_GAINED_MULTIPLE_BONUS",
                             "CURRENCY_GAINED_MULTIPLE",
-                            "CURRENCY_GAINED",
                             "LOOT_CURRENCY_REFUND",
                         },
                         tokens = {
                             Tokens.Link,
                             Tokens.Value,
+                        },
+                    },
+                    {
+                        formats = {
+                            "CURRENCY_GAINED",
+                        },
+                        tokens = {
+                            Tokens.Link,
                         },
                     },
                 },
@@ -972,7 +1182,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultMoneyKeys "Name"|"Value"|"ValueExtra"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultMoneyTypes "FallbackMoney"
+        ---@alias MiniLootMessageFormatSimpleParserResultMoneyTypes "Money"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultMoney
@@ -983,6 +1193,9 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultMoneyArgs : MiniLootMessageFormatSimpleParserResultMoney
         ---@field public Value? number
         ---@field public Type MiniLootMessageFormatSimpleParserResultMoneyTypes
+
+        ---@class MiniLootMessageFormatMoney : MiniLootMessageFormat
+        ---@field public result? MiniLootMessageFormatSimpleParserResultMoneyArgs
 
         ---@type table<MiniLootMessageFormatSimpleParserResultMoneyKeys, MiniLootMessageFormatToken>
         local Tokens = {
@@ -1008,22 +1221,30 @@ do
                 },
                 ---@type MiniLootMessageFormatSimpleParserResultMoneyArgs
                 result = {
-                    Type = "FallbackMoney",
+                    Type = "Money",
                 },
             },
             {
+                ---@type MiniLootMessageFormatMoney[]
                 formats = {
                     {
                         formats = {
                             "YOU_LOOT_MONEY_GUILD",
-                            "YOU_LOOT_MONEY",
                             "LOOT_MONEY_SPLIT_GUILD",
+                        },
+                        tokens = {
+                            Tokens.Value,
+                            Tokens.ValueExtra,
+                        },
+                    },
+                    {
+                        formats = {
+                            "YOU_LOOT_MONEY",
                             "LOOT_MONEY_SPLIT",
                             "LOOT_MONEY_REFUND",
                         },
                         tokens = {
                             Tokens.Value,
-                            Tokens.ValueExtra,
                         },
                     },
                     {
@@ -1046,7 +1267,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultLootKeys "Name"|"Link"|"Value"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultLootTypes "FallbackLoot"
+        ---@alias MiniLootMessageFormatSimpleParserResultLootTypes "Loot"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultLoot
@@ -1057,6 +1278,9 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultLootArgs : MiniLootMessageFormatSimpleParserResultLoot
         ---@field public Link? string
         ---@field public Type MiniLootMessageFormatSimpleParserResultLootTypes
+
+        ---@class MiniLootMessageFormatLoot : MiniLootMessageFormat
+        ---@field public result? MiniLootMessageFormatSimpleParserResultLootArgs
 
         ---@type table<MiniLootMessageFormatSimpleParserResultLootKeys, MiniLootMessageFormatToken>
         local Tokens = {
@@ -1082,34 +1306,38 @@ do
                 },
                 ---@type MiniLootMessageFormatSimpleParserResultLootArgs
                 result = {
-                    Type = "FallbackLoot",
+                    Type = "Loot",
                 },
             },
             {
+                ---@type MiniLootMessageFormatLoot[]
                 formats = {
                     {
                         formats = {
                             "CREATED_ITEM_MULTIPLE",
+                        },
+                        tokens = {
+                            Tokens.Name,
+                            Tokens.Link,
+                            Tokens.Value,
+                        },
+                    },
+                    {
+                        formats = {
                             "CREATED_ITEM",
                         },
                         tokens = {
                             Tokens.Name,
                             Tokens.Link,
-                            Tokens.Value,
                         },
                     },
                     {
                         formats = {
                             "LOOT_ITEM_BONUS_ROLL_SELF_MULTIPLE",
-                            "LOOT_ITEM_BONUS_ROLL_SELF",
                             "LOOT_ITEM_SELF_MULTIPLE",
-                            "LOOT_ITEM_SELF",
                             "LOOT_ITEM_PUSHED_SELF_MULTIPLE",
-                            "LOOT_ITEM_PUSHED_SELF",
                             "LOOT_ITEM_CREATED_SELF_MULTIPLE",
-                            "LOOT_ITEM_CREATED_SELF",
                             "LOOT_ITEM_REFUND_MULTIPLE",
-                            "LOOT_ITEM_REFUND",
                         },
                         tokens = {
                             Tokens.Link,
@@ -1118,17 +1346,62 @@ do
                     },
                     {
                         formats = {
+                            "LOOT_ITEM_BONUS_ROLL_SELF",
+                            "LOOT_ITEM_SELF",
+                            "LOOT_ITEM_PUSHED_SELF",
+                            "LOOT_ITEM_CREATED_SELF",
+                            "LOOT_ITEM_REFUND",
+                        },
+                        tokens = {
+                            Tokens.Link,
+                        },
+                    },
+                    {
+                        formats = {
+                            "LOOT_ITEM_BONUS_ROLL_SELF_MULTIPLE",
+                            "LOOT_ITEM_SELF_MULTIPLE",
+                            "LOOT_ITEM_PUSHED_SELF_MULTIPLE",
+                            "LOOT_ITEM_CREATED_SELF_MULTIPLE",
+                            "LOOT_ITEM_REFUND_MULTIPLE",
+                        },
+                        tokens = {
+                            Tokens.Link,
+                            Tokens.Value,
+                        },
+                    },
+                    {
+                        formats = {
+                            "LOOT_ITEM_BONUS_ROLL_SELF",
+                            "LOOT_ITEM_SELF",
+                            "LOOT_ITEM_PUSHED_SELF",
+                            "LOOT_ITEM_CREATED_SELF",
+                            "LOOT_ITEM_REFUND",
+                        },
+                        tokens = {
+                            Tokens.Link,
+                        },
+                    },
+                    {
+                        formats = {
                             "LOOT_ITEM_BONUS_ROLL_MULTIPLE",
-                            "LOOT_ITEM_BONUS_ROLL",
                             "LOOT_ITEM_MULTIPLE",
-                            "LOOT_ITEM",
                             "LOOT_ITEM_PUSHED_MULTIPLE",
-                            "LOOT_ITEM_PUSHED",
                         },
                         tokens = {
                             Tokens.Name,
                             Tokens.Link,
                             Tokens.Value,
+                        },
+                    },
+                    {
+                        formats = {
+                            "LOOT_ITEM_BONUS_ROLL",
+                            "LOOT_ITEM",
+                            "LOOT_ITEM_PUSHED",
+                        },
+                        tokens = {
+                            Tokens.Name,
+                            Tokens.Link,
                         },
                     },
                 },
@@ -1511,6 +1784,7 @@ do
                             "LOOT_ROLL_WON",
                         },
                         tokens = {
+                            Tokens.Name,
                             Tokens.Link,
                         },
                         result = {
@@ -1540,7 +1814,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultAnimaPowerKeys "Link"|"Value"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultAnimaPowerTypes "FallbackAnimaPower"
+        ---@alias MiniLootMessageFormatSimpleParserResultAnimaPowerTypes "AnimaPower"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultAnimaPower
@@ -1550,6 +1824,9 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultAnimaPowerArgs : MiniLootMessageFormatSimpleParserResultAnimaPower
         ---@field public Link? string
         ---@field public Type MiniLootMessageFormatSimpleParserResultAnimaPowerTypes
+
+        ---@class MiniLootMessageFormatAnimaPower : MiniLootMessageFormat
+        ---@field public result? MiniLootMessageFormatSimpleParserResultAnimaPowerArgs
 
         ---@type table<MiniLootMessageFormatSimpleParserResultCurrencyKeys, MiniLootMessageFormatToken>
         local Tokens = {
@@ -1571,7 +1848,7 @@ do
                 },
                 ---@type MiniLootMessageFormatSimpleParserResultAnimaPowerArgs
                 result = {
-                    Type = "FallbackAnimaPower",
+                    Type = "AnimaPower",
                 },
             },
             {
@@ -1595,7 +1872,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultArtifactPowerKeys "Link"|"Value"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultArtifactPowerTypes "FallbackArtifactPower"
+        ---@alias MiniLootMessageFormatSimpleParserResultArtifactPowerTypes "ArtifactPower"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultArtifactPower
@@ -1605,6 +1882,9 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultArtifactPowerArgs : MiniLootMessageFormatSimpleParserResultArtifactPower
         ---@field public Link? string
         ---@field public Type MiniLootMessageFormatSimpleParserResultArtifactPowerTypes
+
+        ---@class MiniLootMessageFormatArtifactPower : MiniLootMessageFormat
+        ---@field public result? MiniLootMessageFormatSimpleParserResultArtifactPowerArgs
 
         ---@type table<MiniLootMessageFormatSimpleParserResultCurrencyKeys, MiniLootMessageFormatToken>
         local Tokens = {
@@ -1626,10 +1906,11 @@ do
                 },
                 ---@type MiniLootMessageFormatSimpleParserResultArtifactPowerArgs
                 result = {
-                    Type = "FallbackArtifactPower",
+                    Type = "ArtifactPower",
                 },
             },
             {
+                ---@type MiniLootMessageFormatArtifactPower[]
                 formats = {
                     {
                         formats = {
@@ -1670,7 +1951,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultTransmogrificationKeys "Link"|"Value"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultTransmogrificationTypes "FallbackTransmogrification"|"AddedTransmogrification"|"RemovedTransmogrification"
+        ---@alias MiniLootMessageFormatSimpleParserResultTransmogrificationTypes "Transmogrification"|"TransmogrificationLoss"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultTransmogrification
@@ -1704,7 +1985,7 @@ do
                 },
                 ---@type MiniLootMessageFormatSimpleParserResultTransmogrificationArgs
                 result = {
-                    Type = "FallbackTransmogrification",
+                    Type = "Transmogrification",
                 },
             },
             {
@@ -1717,9 +1998,6 @@ do
                         tokens = {
                             Tokens.Link,
                         },
-                        result = {
-                            Type = "AddedTransmogrification",
-                        },
                     },
                     {
                         formats = {
@@ -1729,7 +2007,7 @@ do
                             Tokens.Link,
                         },
                         result = {
-                            Type = "RemovedTransmogrification",
+                            Type = "TransmogrificationLoss",
                         },
                     },
                 },
@@ -1744,7 +2022,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultIgnoreKeys "Value"|"Money"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultIgnoreTypes "FallbackIgnore"
+        ---@alias MiniLootMessageFormatSimpleParserResultIgnoreTypes "Ignore"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultIgnore
@@ -1754,6 +2032,9 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultIgnoreArgs : MiniLootMessageFormatSimpleParserResultIgnore
         ---@field public Link? string
         ---@field public Type MiniLootMessageFormatSimpleParserResultIgnoreTypes
+
+        ---@class MiniLootMessageFormatIgnore : MiniLootMessageFormat
+        ---@field public result? MiniLootMessageFormatSimpleParserResultIgnoreArgs
 
         ---@type table<MiniLootMessageFormatSimpleParserResultCurrencyKeys, MiniLootMessageFormatToken>
         local Tokens = {
@@ -1775,10 +2056,11 @@ do
                 },
                 ---@type MiniLootMessageFormatSimpleParserResultIgnoreArgs
                 result = {
-                    Type = "FallbackIgnore",
+                    Type = "Ignore",
                 },
             },
             {
+                ---@type MiniLootMessageFormatIgnore[]
                 formats = {
                     {
                         formats = {
@@ -1805,7 +2087,229 @@ do
 
 end
 
-FinalizeMessages()
+local ProcessTokensLinkPattern = "^%s*|h"
 
+---@param token MiniLootMessageFormatToken
+---@param match? string
+---@return string? key, any value
+local function ProcessTokens(token, match)
+    local tokenType = token.type
+
+    if tokenType == MiniLootMessageFormatTokenType.Float
+        or tokenType == MiniLootMessageFormatTokenType.Number then
+
+        local value = ConvertToNumber(match)
+        return token.field, value or token.fallbackValue
+
+    elseif tokenType == MiniLootMessageFormatTokenType.Link
+        or tokenType == MiniLootMessageFormatTokenType.String
+        or tokenType == MiniLootMessageFormatTokenType.Target then
+
+        local value ---@type string?
+
+        if type(match) == "string" and match:len() > 0 then
+            value = match
+        end
+
+        -- if value then
+        --     if tokenType == MiniLootMessageFormatTokenType.Link then
+        --         if not value:find(ProcessTokensLinkPattern) then
+        --             value = nil
+        --         end
+        --     elseif tokenType == MiniLootMessageFormatTokenType.Target then
+        --         if not UnitExists(value) then
+        --             value = nil
+        --         end
+        --     end
+        -- end
+
+        return token.field, value or token.fallbackValue
+
+    elseif tokenType == MiniLootMessageFormatTokenType.Money then
+
+        local value = ConvertToMoney(match)
+        return token.field, value or token.fallbackValue
+
+    end
+end
+
+---@param messageFormat MiniLootMessageFormat
+---@param matches string[]
+---@return MiniLootMessageFormatSimpleParserResult?
+local function ProcessMatchedToResult(messageFormat, matches)
+    local tokens = messageFormat.tokens
+    local numTokens = #tokens
+    local result ---@type MiniLootMessageFormatSimpleParserResult?
+    if messageFormat.result then
+        result = CopyTable(messageFormat.result)
+    end
+    for i = 1, numTokens do
+        local token = tokens[i]
+        local match = matches[i] ---@type string?
+        local key, value = ProcessTokens(token, match)
+        if key then
+            if not result then
+                result = {}
+            end
+            result[key] = value
+        end
+    end
+    return result
+end
+
+---@param event WowEvent
+---@param text string
+---@param playerName? string
+---@param languageName? string
+---@param channelName? string
+---@param playerName2? string
+---@param specialFlags? string
+---@param zoneChannelID? number
+---@param channelIndex? number
+---@param channelBaseName? string
+---@param languageID? number
+---@param lineID? number
+---@param guid? string
+---@param bnSenderID? number
+---@param isMobile? boolean
+---@param isSubtitle? boolean
+---@param hideSenderInLetterbox? boolean
+---@param supressRaidIcons? boolean
+---@return MiniLootMessageFormatSimpleParserResult?
+local function ProcessChatMessage(event, text, playerName, languageName, channelName, playerName2, specialFlags, zoneChannelID, channelIndex, channelBaseName, languageID, lineID, guid, bnSenderID, isMobile, isSubtitle, hideSenderInLetterbox, supressRaidIcons)
+    for _, message in ipairs(MessagesCollection) do
+        if TableContains(message.events, event) then
+            for _, messageFormat in ipairs(message.formats) do
+                local messageFormatPatterns = messageFormat.patterns
+                if messageFormatPatterns then
+                    for _, messageFormatPattern in ipairs(messageFormatPatterns) do
+                        local matches = {text:match(messageFormatPattern)} ---@type string[]
+                        if matches[1] then
+                            local result = ProcessMatchedToResult(messageFormat, matches)
+                            if result then
+                                return result
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+---@param val1 any
+---@param val2 any
+---@return boolean equal
+local function ValuesAreSameish(val1, val2)
+    if val1 == val2 then
+        return true
+    end
+    local type1 = type(val1)
+    local type2 = type(val2)
+    if type1 == "string" and type2 == "number" then
+        return tonumber(val1) == val2
+    end
+    if type1 == "number" and type2 == "string" then
+        return val1 == tonumber(val2)
+    end
+    return true
+end
+
+---@param result MiniLootMessageFormatSimpleParserResult
+---@param args any[]
+---@param isMoney boolean
+---@return boolean success
+local function CompareTestResults(result, args, isMoney)
+    if not result.Type then
+        return false
+    end
+    local numArgs = #args
+    local usedKeys = {}
+    local count = 0
+    for i = 1, numArgs do
+        local arg = args[i]
+        for k, v in pairs(result) do
+            if k ~= "Type" then
+                if not usedKeys[k] then
+                    if ValuesAreSameish(v, arg) or (isMoney and ValuesAreSameish(C_CurrencyInfo.GetCoinText(v), arg)) then
+                        usedKeys[k] = i
+                        count = count + 1
+                        break
+                    end
+                end
+            end
+        end
+    end
+    if numArgs ~= count then
+        return false
+    end
+    return true
+end
+
+---@param message MiniLootMessage
+---@param test any[]
+---@return MiniLootMessageFormatSimpleParserResult? successResult, MiniLootMessageFormatSimpleParserResult[]? closeResults
+local function RunAndEvaluateTest(message, test)
+    local isMoney = message.group == MiniLootMessageGroup.Money
+    local successResult ---@type MiniLootMessageFormatSimpleParserResult?
+    local closeResults ---@type MiniLootMessageFormatSimpleParserResult[]?
+    local closeIndex ---@type number?
+    local args = CopyTable(test) ---@type any[]
+    local text = table.remove(args, 1) ---@type string
+    for _, event in ipairs(message.events) do
+        local result = ProcessChatMessage(event, text)
+        if result then
+            local success = CompareTestResults(result, args, isMoney)
+            if success then
+                successResult = result
+                break
+            end
+            if not closeResults then
+                closeResults = {}
+                closeIndex = 0
+            end
+            closeIndex = closeIndex + 1
+            closeResults[closeIndex] = result
+        end
+    end
+    return successResult, closeResults
+end
+
+---@param message MiniLootMessage
+local function RunAndEvaluateTests(message)
+    for _, test in ipairs(message.tests) do
+        local testResult, closeResults = RunAndEvaluateTest(message, test)
+        if not testResult then
+            print(format("|cffFF5555%s|r failed |cffFF5555%s|r", message.group, test[1]))
+            if closeResults then
+                for _, closeResult in ipairs(closeResults) do
+                    for k, v in pairs(closeResult) do
+                        print(format("|cffFFFF55%s|r %s", tostringall(k, v)))
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function RunMessageTests()
+    for _, message in ipairs(MessagesCollection) do
+        if not message.skipAutoTests then
+            local tests = message.tests
+            if tests then
+                RunAndEvaluateTests(message)
+            end
+        end
+    end
+end
+
+FinalizeMessages()
+RunMessageTests()
+
+ns.MessagesCollection = MessagesCollection
 ns.CreateEmptyResults = CreateEmptyResults
 ns.ProcessChatMessage = ProcessChatMessage
+
+_G.MiniLootNS = ns -- DEBUG
+-- /tinspect MiniLootNS.MessagesCollection
+-- /dump MiniLootNS.ProcessChatMessage("CHAT_MSG_CURRENCY", format("You receive currency: %sx10", C_CurrencyInfo.GetCurrencyLink(2778)))

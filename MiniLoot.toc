@@ -14,3 +14,4 @@ tooltip.lua
 options.lua
 util.lua
 core.lua
+#messages.lua
