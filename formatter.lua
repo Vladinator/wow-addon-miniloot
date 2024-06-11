@@ -1,8 +1,9 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
-local SumByKeyPretty = ns.Utils.SumByKeyPretty
-local SumByKey = ns.Utils.SumByKey
 local TableGroup = ns.Utils.TableGroup
+local SumByKey = ns.Utils.SumByKey
+local SumByKeyPretty = ns.Utils.SumByKeyPretty
+local ConvertToMoneyString = ns.Utils.ConvertToMoneyString
 
 local MiniLootMessageGroup = ns.Messages.MiniLootMessageGroup
 
@@ -67,17 +68,31 @@ end
 
 ---@param results MiniLootMessageFormatSimpleParserResultLoot[]
 Formatters[MiniLootMessageGroup.Loot] = function(results)
+    local groups, keys = TableGroup(results, "Name")
     local lines ---@type string[]?
-    for _, result in ipairs(results) do
-        if result.Type == "Loot" then
+    for i = 1, #groups do
+        local playerLines ---@type string[]?
+        local group = groups[i] ---@type MiniLootMessageFormatSimpleParserResultLoot[]
+        local key = keys[i]
+        local itemGroups, itemKeys = TableGroup(group, "Link")
+        for j = 1, #itemGroups do
+            if not playerLines then
+                playerLines = {}
+            end
+            local itemGroup = itemGroups[j] ---@type MiniLootMessageFormatSimpleParserResultLoot[]
+            local itemKey = itemKeys[j]
+            local total = SumByKey(itemGroup, "Value")
+            if total > 1 then
+                playerLines[#playerLines + 1] = format("%sx%d", itemKey, total)
+            else
+                playerLines[#playerLines + 1] = itemKey
+            end
+        end
+        if playerLines then
             if not lines then
                 lines = {}
             end
-            if result.Value then
-                lines[#lines + 1] = format("%s: %sx%d", result.Name or YOU, result.Link, result.Value)
-            else
-                lines[#lines + 1] = format("%s: %s", result.Name or YOU, result.Link)
-            end
+            lines[#lines + 1] = format("%s: %s", key == "" and YOU or key, table.concat(playerLines))
         end
     end
     return lines
@@ -106,7 +121,7 @@ Formatters[MiniLootMessageGroup.Money] = function(results)
         local group = groups[i] ---@type MiniLootMessageFormatSimpleParserResultMoney[]
         local key = keys[i]
         local total = SumByKey(group, "Value")
-        local money = GetMoneyString(total)
+        local money = ConvertToMoneyString(total)
         lines[#lines + 1] = format("%s: %s", key == "" and YOU or key, money)
     end
     return lines
@@ -139,7 +154,7 @@ Formatters[MiniLootMessageGroup.Transmogrification] = function(results)
         local group = groups[i] ---@type MiniLootMessageFormatSimpleParserResultTransmogrification[]
         local key = keys[i] ---@type MiniLootMessageFormatSimpleParserResultTransmogrificationTypes
         for _, result in ipairs(group) do
-            lines[#lines + 1] = format("%s: %s", key == "Transmogrification" and COLLECTED or REMOVE, result.Link)
+            lines[#lines + 1] = format("%s: %s", key == "Transmogrification" and "Added" or "Removed", result.Link)
         end
     end
     return lines

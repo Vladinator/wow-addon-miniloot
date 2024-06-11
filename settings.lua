@@ -24,7 +24,7 @@ local MiniLootChatFrame = {
 
 ---@class MiniLootNSSettingsOptions
 local DefaultOptions = {
-    Enabled = false,
+    Enabled = true,
     EnabledGroups = {},
     IgnoredGroups = {},
     Debounce = 1,

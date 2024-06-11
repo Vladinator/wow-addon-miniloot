@@ -15,11 +15,11 @@ options.lua
 util.lua
 core.lua
 
-debug.lua
-utils.lua
-messages.lua
-reporting.lua
-formatter.lua
-output.lua
-settings.lua
-init.lua
+#debug.lua
+#utils.lua
+#messages.lua
+#reporting.lua
+#formatter.lua
+#output.lua
+#settings.lua
+#init.lua
