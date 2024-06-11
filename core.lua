@@ -213,12 +213,6 @@ do
 			return false
 		end
 
-		-- if ns.ProcessChatMessage then
-		-- 	_G.MINILOOTTEST = _G.MINILOOTTEST or {} ---@type MiniLootMessageFormatSimpleParserResult[]
-		-- 	local result = ns.ProcessChatMessage(_G.MINILOOTTEST, event, text)
-		-- 	if result then local t={} for k, v in pairs(result) do t[#t+1]=format("|cffFFFF55[%s]|r %s", tostringall(k, v)) end print(table.concat(t, " / ")) end -- DEBUG
-		-- end
-
 		local data, silenced = ns.util:parse(text, event)
 		local temp ---@type MiniLootLoggerTemp?
 

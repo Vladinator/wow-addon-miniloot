@@ -1,7 +1,13 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
--- if enabled will generate and run tests and output the outcome in chat
-local DebugTests = false
+local TableCopy = ns.Utils.TableCopy
+local TableContains = ns.Utils.TableContains
+local TableMerge = ns.Utils.TableMerge
+local TableReverse = ns.Utils.TableReverse
+local PatternToFormat = ns.Utils.PatternToFormat
+local ConvertToNumber = ns.Utils.ConvertToNumber
+local ConvertToMoney = ns.Utils.ConvertToMoney
+local ValuesAreSameish = ns.Utils.ValuesAreSameish
 
 ---@enum MiniLootMessageGroup
 local MiniLootMessageGroup = {
@@ -14,8 +20,8 @@ local MiniLootMessageGroup = {
     Money = "Money",
     Loot = "Loot",
     LootRollDecision = "LootRollDecision",
-    LootRollRolled = "LootRollRolled",
-    LootRollResult = "LootRollResult",
+    -- LootRollRolled = "LootRollRolled",
+    -- LootRollResult = "LootRollResult",
     AnimaPower = "AnimaPower",
     ArtifactPower = "ArtifactPower",
     Transmogrification = "Transmogrification",
@@ -32,6 +38,8 @@ local MiniLootMessageFormatField = {
     BonusExtra = "BonusExtra",
     Link = "Link",
     LinkExtra = "LinkExtra",
+    Zone = "Zone",
+    ZoneExtra = "ZoneExtra",
 }
 
 ---@enum MiniLootMessageFormatTokenType
@@ -42,6 +50,98 @@ local MiniLootMessageFormatTokenType = {
     Number = "Number",
     String = "String",
     Target = "Target",
+}
+
+---@type table<MiniLootMessageFormatSimpleParserResultExperienceKeys, MiniLootMessageFormatToken>
+local Tokens = {
+    NameString = {
+        field = MiniLootMessageFormatField.Name,
+        type = MiniLootMessageFormatTokenType.String,
+    },
+    NameExtraString = {
+        field = MiniLootMessageFormatField.NameExtra,
+        type = MiniLootMessageFormatTokenType.String,
+    },
+    NameTarget = {
+        field = MiniLootMessageFormatField.Name,
+        type = MiniLootMessageFormatTokenType.Target,
+    },
+    NameExtraTarget = {
+        field = MiniLootMessageFormatField.NameExtra,
+        type = MiniLootMessageFormatTokenType.Target,
+    },
+    ValueNumber = {
+        field = MiniLootMessageFormatField.Value,
+        type = MiniLootMessageFormatTokenType.Number,
+    },
+    ValueExtraNumber = {
+        field = MiniLootMessageFormatField.ValueExtra,
+        type = MiniLootMessageFormatTokenType.Number,
+    },
+    ValueFloat = {
+        field = MiniLootMessageFormatField.Value,
+        type = MiniLootMessageFormatTokenType.Float,
+    },
+    ValueExtraFloat = {
+        field = MiniLootMessageFormatField.ValueExtra,
+        type = MiniLootMessageFormatTokenType.Float,
+    },
+    ValueString = {
+        field = MiniLootMessageFormatField.Value,
+        type = MiniLootMessageFormatTokenType.String,
+    },
+    ValueExtraString = {
+        field = MiniLootMessageFormatField.ValueExtra,
+        type = MiniLootMessageFormatTokenType.String,
+    },
+    ValueMoney = {
+        field = MiniLootMessageFormatField.Value,
+        type = MiniLootMessageFormatTokenType.Money,
+    },
+    ValueExtraMoney = {
+        field = MiniLootMessageFormatField.ValueExtra,
+        type = MiniLootMessageFormatTokenType.Money,
+    },
+    BonusNumber = {
+        field = MiniLootMessageFormatField.Bonus,
+        type = MiniLootMessageFormatTokenType.Number,
+    },
+    BonusExtraNumber = {
+        field = MiniLootMessageFormatField.BonusExtra,
+        type = MiniLootMessageFormatTokenType.Number,
+    },
+    BonusFloat = {
+        field = MiniLootMessageFormatField.Bonus,
+        type = MiniLootMessageFormatTokenType.Float,
+    },
+    BonusExtraFloat = {
+        field = MiniLootMessageFormatField.BonusExtra,
+        type = MiniLootMessageFormatTokenType.Float,
+    },
+    BonusString = {
+        field = MiniLootMessageFormatField.Bonus,
+        type = MiniLootMessageFormatTokenType.String,
+    },
+    BonusExtraString = {
+        field = MiniLootMessageFormatField.BonusExtra,
+        type = MiniLootMessageFormatTokenType.String,
+    },
+    Link = {
+        field = MiniLootMessageFormatField.Link,
+        type = MiniLootMessageFormatTokenType.Link,
+    },
+    LinkExtra = {
+        field = MiniLootMessageFormatField.LinkExtra,
+        type = MiniLootMessageFormatTokenType.Link,
+    },
+    ZoneString = {
+        field = MiniLootMessageFormatField.Zone,
+        type = MiniLootMessageFormatTokenType.String,
+    },
+    ZoneExtraString = {
+        field = MiniLootMessageFormatField.ZoneExtra,
+        type = MiniLootMessageFormatTokenType.String,
+    },
 }
 
 ---@class MiniLootMessageFormatSimpleParserResult : table
@@ -75,97 +175,17 @@ local MiniLootMessageFormatTokenType = {
 ---@field public events WowEvent[]
 ---@field public formats MiniLootMessageFormat[]
 ---@field public result? MiniLootMessageFormatSimpleParserResult
+---@field public parser? MiniLootMessageFormatSimpleParser
 ---@field public tests? any[]
----@field public skipAutoTests? boolean
+---@field public skipTests? boolean
 
 ---@class MiniLootMessagePartial : MiniLootMessage
 ---@field public group? MiniLootMessageGroup
 ---@field public events? WowEvent[]
 ---@field public formats? MiniLootMessageFormat[]
----@field public parser? MiniLootMessageFormatSimpleParser
 
 ---@type MiniLootMessage[]
 local MessagesCollection = {}
-
----@generic T
----@param tbl T[]
----@param shallow? boolean
----@return T[]
-local function CopyTable(tbl, shallow)
-	local temp = {}
-	for k, v in pairs(tbl) do
-		if type(v) == "table" and not shallow then
-			temp[k] = CopyTable(v)
-		else
-			temp[k] = v
-		end
-	end
-	return temp
-end
-
----@generic T
----@param tbl T[]
----@param item T
-function TableContains(tbl, item)
-	for _, v in pairs(tbl) do
-		if v == item then
-			return true
-		end
-	end
-	return false
-end
-
----@generic T
----@param ... T[]
-local function CombineTables(...)
-    local tbls = {...}
-    local first = tbls[1]
-    local index = #first
-    for i = 2, #tbls do
-        local tbl = tbls[i]
-        for _, v in ipairs(tbl) do
-            if not TableContains(first, v) then
-                index = index + 1
-                first[index] = v
-            end
-        end
-    end
-    return first
-end
-
----@generic T
----@param dst T[]
----@param src T[]
-local function MergeTable(dst, src)
-    for srck, srcv in pairs(src) do
-        local srcvt = type(srcv)
-        local srcva = srcvt == "table" and #srcv > 0
-        local dstv = dst[srck]
-        local dstvt = type(dstv)
-        local dstva = dstvt == "table" and #dstv > 0
-        if srcva and dstva then
-            dst[srck] = CombineTables({}, dstv, srcv)
-        elseif srcvt == "table" and dstvt == "table" then
-            dst[srck] = MergeTable(MergeTable({}, dstv), srcv)
-        else
-            dst[srck] = srcv
-        end
-    end
-    return dst
-end
-
----@generic T
----@param tbl T[]
----@return T[]
-local function ReverseTable(tbl)
-    local temp = {}
-    local index = 0
-    for i = #tbl, 1, -1 do
-        index = index + 1
-        temp[index] = tbl[i]
-    end
-    return temp
-end
 
 ---@param message MiniLootMessage
 local function FillMessageStruct(message)
@@ -186,54 +206,15 @@ local function AppendMessages(...)
     local data = {...}
     local first = FillMessageStruct(data[1])
     local index = #MessagesCollection
-    if not DebugTests then
-        first.skipAutoTests = true
-    end
     for _, message in ipairs(data) do
         local temp = message
         if temp ~= first then
-            temp = CopyTable(first)
-            MergeTable(temp, message)
+            temp = TableCopy(first)
+            TableMerge(temp, message)
         end
         index = index + 1
         MessagesCollection[index] = temp
-        if not DebugTests then
-            temp.skipAutoTests = true
-        end
     end
-end
-
----@param pattern string
-local function PatternToFormat(pattern)
-    -- grammar from hell ( http://wow.gamepedia.com/UI_escape_sequences#Grammar )
-    -- pattern = pattern
-    --     :gsub("|4[^:]-:[^:]-:[^;]-;", "") -- "|4singular:plural1:plural2;"
-    --     :gsub("|4[^:]-:[^;]-;", "") -- "number |4singular:plural;"
-    --     :gsub("|1[^;]-;[^;]-;", "") -- "number |1singular;plural;"
-    --     :gsub("|3-%d+%([^%)]-%)", "") -- "|3-formid(text)"
-    --     :gsub("|2%S-?", "") -- "|2text"
-    -- argument ordering
-    for i = 1, 20 do
-        pattern = pattern
-            :gsub("%%" .. i .. "$s", "%%s")
-            :gsub("%%" .. i .. "$d", "%%d")
-            :gsub("%%" .. i .. "$f", "%%f")
-    end
-    -- standard tokens
-    pattern = pattern
-        :gsub("%%", "%%%%")
-        :gsub("%.", "%%%.")
-        :gsub("%?", "%%%?")
-        :gsub("%+", "%%%+")
-        :gsub("%-", "%%%-")
-        :gsub("%(", "%%%(")
-        :gsub("%)", "%%%)")
-        :gsub("%[", "%%%[")
-        :gsub("%]", "%%%]")
-        :gsub("%%%%s", "(.-)")
-        :gsub("%%%%d", "(%%d+)")
-        :gsub("%%%%%%[%d%.%,]+f", "([%%d%%.%%,]+)")
-    return pattern
 end
 
 ---@param messageFormat MiniLootMessageFormat
@@ -336,6 +317,7 @@ local function FinalizeMessages()
 
         local message = MessagesCollection[messageIndex]
         local messageResult = message.result
+        local messageParser = message.parser
         local messageFormats = message.formats
         local numMessageFormats = #messageFormats
 
@@ -343,10 +325,16 @@ local function FinalizeMessages()
 
             local messageFormat = messageFormats[messageFormatIndex]
             local messageFormatResult = messageFormat.result
+            local messageFormatParser = messageFormat.parser
 
             if not messageFormatResult then
                 messageFormatResult = messageResult
                 messageFormat.result = messageFormatResult
+            end
+
+            if not messageFormatParser then
+                messageFormatParser = messageParser
+                messageFormat.parser = messageFormatParser
             end
 
             local messageSubFormats = messageFormat.formats
@@ -378,13 +366,13 @@ local function FinalizeMessages()
             end
 
             if createdMessageSubPatterns then
-                messageSubPatterns = ReverseTable(messageSubPatterns)
+                messageSubPatterns = TableReverse(messageSubPatterns)
                 messageFormat.patterns = messageSubPatterns
             end
 
         end
 
-        local runTests = not message.skipAutoTests
+        local runTests = ns.DebugRunTests and not message.skipTests
         local tests = message.tests
 
         if runTests and not tests then
@@ -438,64 +426,6 @@ local function SimpleParserMap(results, map)
     return temp
 end
 
----@return MiniLootMessageFormatSimpleParserResult[]
-local function CreateEmptyResults()
-    local temp = {} ---@type MiniLootMessageFormatSimpleParserResult[]
-    return temp
-end
-
-local ConvertStringToNumberPattern1 = "[\\" .. LARGE_NUMBER_SEPERATOR .. "]+"
-local ConvertStringToNumberPattern2 = "[\\" .. DECIMAL_SEPERATOR .. "]"
-
----@param value? string|number
----@return number?
-local function ConvertToNumber(value)
-    local type = type(value)
-    if type == "number" then
-        return value
-    end
-    if type ~= "string" then
-        return
-    end
-    value = value
-        :gsub(ConvertStringToNumberPattern1, "")
-        :gsub(ConvertStringToNumberPattern2, ".")
-        :gsub("[^%d%.]+", "")
-    return tonumber(value)
-end
-
-local ConvertStringToMoneyPatterns = {
-    Gold = PatternToFormat(GOLD_AMOUNT),
-    Silver = PatternToFormat(SILVER_AMOUNT),
-    Copper = PatternToFormat(COPPER_AMOUNT),
-}
-
----@param value? string|number
----@return number?
-local function ConvertToMoney(value)
-    local type = type(value)
-    if type == "number" then
-        return value
-    end
-    if type ~= "string" then
-        return
-    end
-    local goldText = value:match(ConvertStringToMoneyPatterns.Gold)
-    local silverText = value:match(ConvertStringToMoneyPatterns.Silver)
-    local copperText = value:match(ConvertStringToMoneyPatterns.Copper)
-    local money ---@type number?
-    if goldText then
-        money = (money or 0) + (tonumber(goldText) or 0)*COPPER_PER_GOLD
-    end
-    if silverText then
-        money = (money or 0) + (tonumber(silverText) or 0)*COPPER_PER_SILVER
-    end
-    if copperText then
-        money = (money or 0) + (tonumber(copperText) or 0)
-    end
-    return money
-end
-
 do
 
     -- Reputation
@@ -507,37 +437,17 @@ do
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultReputation
-        ---@field public Name string
-        ---@field public Value number?
-        ---@field public Bonus number?
-        ---@field public BonusExtra number?
+        ---@field public Type MiniLootMessageFormatSimpleParserResultReputationTypes
+        ---@field public Name string The name of the faction.
+        ---@field public Value number? If provided, the amount of reputation earned.
+        ---@field public Bonus number? If provided, the amount of bonus reputation earned.
+        ---@field public BonusExtra number? If provided, the amount of bonus reputation earned.
 
         ---@class MiniLootMessageFormatSimpleParserResultReputationArgs : MiniLootMessageFormatSimpleParserResultReputation
         ---@field public Name? string
-        ---@field public Type MiniLootMessageFormatSimpleParserResultReputationTypes
 
         ---@class MiniLootMessageFormatReputation : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultReputationArgs
-
-        ---@type table<MiniLootMessageFormatSimpleParserResultReputationKeys, MiniLootMessageFormatToken>
-        local Tokens = {
-            Name = {
-                field = MiniLootMessageFormatField.Name,
-                type = MiniLootMessageFormatTokenType.String,
-            },
-            Value = {
-                field = MiniLootMessageFormatField.Value,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-            Bonus = {
-                field = MiniLootMessageFormatField.Bonus,
-                type = MiniLootMessageFormatTokenType.Float,
-            },
-            BonusExtra = {
-                field = MiniLootMessageFormatField.BonusExtra,
-                type = MiniLootMessageFormatTokenType.Float,
-            },
-        }
 
         AppendMessages(
             {
@@ -558,10 +468,10 @@ do
                             "FACTION_STANDING_INCREASED_DOUBLE_BONUS",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
-                            Tokens.Bonus,
-                            Tokens.BonusExtra,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                            Tokens.BonusFloat,
+                            Tokens.BonusExtraFloat,
                         },
                     },
                     {
@@ -569,9 +479,9 @@ do
                             "FACTION_STANDING_INCREASED_BONUS",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
-                            Tokens.Bonus,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                            Tokens.BonusFloat,
                         },
                     },
                     {
@@ -579,9 +489,9 @@ do
                             "FACTION_STANDING_INCREASED_ACH_BONUS",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
-                            Tokens.Bonus,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                            Tokens.BonusFloat,
                         },
                     },
                     {
@@ -589,8 +499,8 @@ do
                             "FACTION_STANDING_INCREASED",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
                         },
                     },
                     {
@@ -598,7 +508,7 @@ do
                             "FACTION_STANDING_INCREASED_GENERIC",
                         },
                         tokens = {
-                            Tokens.Name,
+                            Tokens.NameString,
                         },
                     },
                     {
@@ -606,8 +516,8 @@ do
                             "FACTION_STANDING_DECREASED",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
                         },
                         result = {
                             Type = "ReputationLoss"
@@ -618,7 +528,7 @@ do
                             "FACTION_STANDING_DECREASED_GENERIC",
                         },
                         tokens = {
-                            Tokens.Name,
+                            Tokens.NameString,
                         },
                         result = {
                             Type = "ReputationLoss"
@@ -639,32 +549,16 @@ do
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultHonor
-        ---@field public Name? string
-        ---@field public NameExtra? string
-        ---@field public Value number
+        ---@field public Type MiniLootMessageFormatSimpleParserResultHonorTypes
+        ---@field public Name? string If provided, this is the name of the player that granted us Honor.
+        ---@field public NameExtra? string If provided, this is the rank of the player that granted us Honor.
+        ---@field public Value number The amount of Honor earned.
 
         ---@class MiniLootMessageFormatSimpleParserResultHonorArgs : MiniLootMessageFormatSimpleParserResultHonor
         ---@field public Value? number
-        ---@field public Type MiniLootMessageFormatSimpleParserResultHonorTypes
 
         ---@class MiniLootMessageFormatHonor : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultHonorArgs
-
-        ---@type table<MiniLootMessageFormatSimpleParserResultHonorKeys, MiniLootMessageFormatToken>
-        local Tokens = {
-            Name = {
-                field = MiniLootMessageFormatField.Name,
-                type = MiniLootMessageFormatTokenType.String,
-            },
-            NameExtra = {
-                field = MiniLootMessageFormatField.NameExtra,
-                type = MiniLootMessageFormatTokenType.String,
-            },
-            Value = {
-                field = MiniLootMessageFormatField.Value,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-        }
 
         AppendMessages(
             {
@@ -685,9 +579,9 @@ do
                             "COMBATLOG_HONORGAIN",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.NameExtra,
-                            Tokens.Value,
+                            Tokens.NameString,
+                            Tokens.NameExtraString,
+                            Tokens.ValueNumber,
                         },
                     },
                     {
@@ -695,8 +589,8 @@ do
                             "COMBATLOG_HONORGAIN_NO_RANK",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
                         },
                     },
                     {
@@ -704,7 +598,7 @@ do
                             "COMBATLOG_HONORAWARD",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                         },
                     },
                 },
@@ -730,42 +624,18 @@ do
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultExperience
-        ---@field public Name? string
-        ---@field public Value number
-        ---@field public ValueExtra? number
-        ---@field public Bonus? string
-        ---@field public BonusExtra? string
+        ---@field public Type MiniLootMessageFormatSimpleParserResultExperienceTypes
+        ---@field public Name? string If provided, the name of the NPC that died and granted XP.
+        ---@field public Value number The amount of XP.
+        ---@field public ValueExtra? number If provided, this is bonus XP.
+        ---@field public Bonus? string If provided, this is bonus XP.
+        ---@field public BonusExtra? string If provided, this is bonus XP.
 
         ---@class MiniLootMessageFormatSimpleParserResultExperienceArgs : MiniLootMessageFormatSimpleParserResultExperience
         ---@field public Value? number
-        ---@field public Type MiniLootMessageFormatSimpleParserResultExperienceTypes
 
         ---@class MiniLootMessageFormatExperience : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultExperienceArgs
-
-        ---@type table<MiniLootMessageFormatSimpleParserResultExperienceKeys, MiniLootMessageFormatToken>
-        local Tokens = {
-            Name = {
-                field = MiniLootMessageFormatField.Name,
-                type = MiniLootMessageFormatTokenType.String,
-            },
-            Value = {
-                field = MiniLootMessageFormatField.Value,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-            ValueExtra = {
-                field = MiniLootMessageFormatField.ValueExtra,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-            Bonus = {
-                field = MiniLootMessageFormatField.Bonus,
-                type = MiniLootMessageFormatTokenType.String,
-            },
-            BonusExtra = {
-                field = MiniLootMessageFormatField.BonusExtra,
-                type = MiniLootMessageFormatTokenType.String,
-            },
-        }
 
         AppendMessages(
             {
@@ -786,8 +656,8 @@ do
                             "ERR_ZONE_EXPLORED_XP",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
+                            Tokens.ZoneString,
+                            Tokens.ValueNumber,
                         },
                     },
                 },
@@ -804,11 +674,11 @@ do
                             "COMBATLOG_XPGAIN_EXHAUSTION2_RAID",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
-                            Tokens.Bonus,
-                            Tokens.ValueExtra,
-                            Tokens.BonusExtra,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                            Tokens.BonusString,
+                            Tokens.ValueExtraString,
+                            Tokens.BonusExtraNumber,
                         },
                         result = {
                             Type = "ExperienceBonusPenalty",
@@ -820,11 +690,11 @@ do
                             "COMBATLOG_XPGAIN_EXHAUSTION5_RAID",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
-                            Tokens.Bonus,
-                            Tokens.ValueExtra,
-                            Tokens.BonusExtra,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                            Tokens.BonusString,
+                            Tokens.ValueExtraString,
+                            Tokens.BonusExtraNumber,
                         },
                         result = {
                             Type = "ExperiencePenaltyPenalty",
@@ -836,11 +706,11 @@ do
                             "COMBATLOG_XPGAIN_EXHAUSTION2_GROUP",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
-                            Tokens.Bonus,
-                            Tokens.ValueExtra,
-                            Tokens.BonusExtra,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                            Tokens.BonusString,
+                            Tokens.ValueExtraString,
+                            Tokens.BonusExtraNumber,
                         },
                         result = {
                             Type = "ExperienceBonusBonus",
@@ -852,11 +722,11 @@ do
                             "COMBATLOG_XPGAIN_EXHAUSTION5_GROUP",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
-                            Tokens.Bonus,
-                            Tokens.ValueExtra,
-                            Tokens.BonusExtra,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                            Tokens.BonusString,
+                            Tokens.ValueExtraString,
+                            Tokens.BonusExtraNumber,
                         },
                         result = {
                             Type = "ExperiencePenaltyBonus",
@@ -868,10 +738,10 @@ do
                             "COMBATLOG_XPGAIN_EXHAUSTION2",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
-                            Tokens.Bonus,
-                            Tokens.BonusExtra,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                            Tokens.BonusString,
+                            Tokens.BonusExtraString,
                         },
                         result =  {
                             Type = "ExperienceBonus",
@@ -883,10 +753,10 @@ do
                             "COMBATLOG_XPGAIN_EXHAUSTION5",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
-                            Tokens.Bonus,
-                            Tokens.BonusExtra,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                            Tokens.BonusString,
+                            Tokens.BonusExtraString,
                         },
                         result =  {
                             Type = "ExperiencePenalty",
@@ -897,9 +767,9 @@ do
                             "COMBATLOG_XPGAIN_FIRSTPERSON_RAID",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
-                            Tokens.ValueExtra,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                            Tokens.ValueExtraNumber,
                         },
                         result = {
                             Type = "ExperiencePenalty",
@@ -910,9 +780,9 @@ do
                             "COMBATLOG_XPGAIN_FIRSTPERSON_GROUP",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
-                            Tokens.ValueExtra,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                            Tokens.ValueExtraNumber,
                         },
                         result = {
                             Type = "ExperienceBonus",
@@ -923,8 +793,8 @@ do
                             "COMBATLOG_XPGAIN_FIRSTPERSON",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
                         },
                     },
                     {
@@ -932,8 +802,8 @@ do
                             "COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED_RAID",
                         },
                         tokens = {
-                            Tokens.Value,
-                            Tokens.ValueExtra,
+                            Tokens.ValueNumber,
+                            Tokens.ValueExtraNumber,
                         },
                         result = {
                             Type = "ExperiencePenalty",
@@ -944,8 +814,8 @@ do
                             "COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED_GROUP",
                         },
                         tokens = {
-                            Tokens.Value,
-                            Tokens.ValueExtra,
+                            Tokens.ValueNumber,
+                            Tokens.ValueExtraNumber,
                         },
                         result = {
                             Type = "ExperienceBonus",
@@ -956,7 +826,7 @@ do
                             "COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                         },
                     },
                     {
@@ -964,9 +834,9 @@ do
                             "COMBATLOG_XPGAIN_QUEST",
                         },
                         tokens = {
-                            Tokens.Value,
-                            Tokens.Bonus,
-                            Tokens.BonusExtra,
+                            Tokens.ValueNumber,
+                            Tokens.BonusString,
+                            Tokens.BonusExtraString,
                         },
                         result = {
                             Type = "ExperienceBonus",
@@ -977,7 +847,7 @@ do
                             "COMBATLOG_XPLOSS_FIRSTPERSON_UNNAMED",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                         },
                         result = {
                             Type = "ExperienceLoss",
@@ -999,22 +869,14 @@ do
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultGuildExperience
-        ---@field public Value number
+        ---@field public Type MiniLootMessageFormatSimpleParserResultGuildExperienceTypes
+        ---@field public Value number The amount of guild XP earned.
 
         ---@class MiniLootMessageFormatSimpleParserResultGuildExperienceArgs : MiniLootMessageFormatSimpleParserResultGuildExperience
         ---@field public Value? number
-        ---@field public Type MiniLootMessageFormatSimpleParserResultGuildExperienceTypes
 
         ---@class MiniLootMessageFormatGuildExperience : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultGuildExperienceArgs
-
-        ---@type table<MiniLootMessageFormatSimpleParserResultGuildExperienceKeys, MiniLootMessageFormatToken>
-        local Tokens = {
-            Value = {
-                field = MiniLootMessageFormatField.Value,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-        }
 
         AppendMessages(
             {
@@ -1035,7 +897,7 @@ do
                             "COMBATLOG_GUILD_XPGAIN",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                         },
                     },
                 },
@@ -1054,28 +916,16 @@ do
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultFollowerExperience
-        ---@field public Name string
-        ---@field public Value number
+        ---@field public Type MiniLootMessageFormatSimpleParserResultFollowerExperienceTypes
+        ---@field public Name string The name of the follower earning the XP.
+        ---@field public Value number The amount of XP earned.
 
         ---@class MiniLootMessageFormatSimpleParserResultFollowerExperienceArgs : MiniLootMessageFormatSimpleParserResultFollowerExperience
         ---@field public Name? string
         ---@field public Value? number
-        ---@field public Type MiniLootMessageFormatSimpleParserResultFollowerExperienceTypes
 
         ---@class MiniLootMessageFormatFollowerExperience : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultFollowerExperienceArgs
-
-        ---@type table<MiniLootMessageFormatSimpleParserResultFollowerExperienceKeys, MiniLootMessageFormatToken>
-        local Tokens = {
-            Name = {
-                field = MiniLootMessageFormatField.Name,
-                type = MiniLootMessageFormatTokenType.String,
-            },
-            Value = {
-                field = MiniLootMessageFormatField.Value,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-        }
 
         AppendMessages(
             {
@@ -1097,8 +947,8 @@ do
                             "GARRISON_FOLLOWER_XP_ADDED_ZONE_SUPPORT",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
                         },
                     },
                 },
@@ -1116,27 +966,15 @@ do
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultCurrency
-        ---@field public Link string
-        ---@field public Value? number
+        ---@field public Type MiniLootMessageFormatSimpleParserResultCurrencyTypes
+        ---@field public Link string The currency link.
+        ---@field public Value? number If provided, the number of items received.
 
         ---@class MiniLootMessageFormatSimpleParserResultCurrencyArgs : MiniLootMessageFormatSimpleParserResultCurrency
         ---@field public Link? string
-        ---@field public Type MiniLootMessageFormatSimpleParserResultCurrencyTypes
 
         ---@class MiniLootMessageFormatCurrency : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultCurrencyArgs
-
-        ---@type table<MiniLootMessageFormatSimpleParserResultCurrencyKeys, MiniLootMessageFormatToken>
-        local Tokens = {
-            Link = {
-                field = MiniLootMessageFormatField.Link,
-                type = MiniLootMessageFormatTokenType.Link,
-            },
-            Value = {
-                field = MiniLootMessageFormatField.Value,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-        }
 
         AppendMessages(
             {
@@ -1160,7 +998,7 @@ do
                         },
                         tokens = {
                             Tokens.Link,
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                         },
                     },
                     {
@@ -1186,32 +1024,16 @@ do
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultMoney
-        ---@field public Name? string
-        ---@field public Value number
-        ---@field public ValueExtra? number
+        ---@field public Type MiniLootMessageFormatSimpleParserResultMoneyTypes
+        ---@field public Name? string If provided, this player earned the gold.
+        ---@field public Value number The amount of money in copper.
+        ---@field public ValueExtra? number If provided, the gold sent to the guild bank.
 
         ---@class MiniLootMessageFormatSimpleParserResultMoneyArgs : MiniLootMessageFormatSimpleParserResultMoney
         ---@field public Value? number
-        ---@field public Type MiniLootMessageFormatSimpleParserResultMoneyTypes
 
         ---@class MiniLootMessageFormatMoney : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultMoneyArgs
-
-        ---@type table<MiniLootMessageFormatSimpleParserResultMoneyKeys, MiniLootMessageFormatToken>
-        local Tokens = {
-            Name = {
-                field = MiniLootMessageFormatField.Name,
-                type = MiniLootMessageFormatTokenType.Target,
-            },
-            Value = {
-                field = MiniLootMessageFormatField.Bonus,
-                type = MiniLootMessageFormatTokenType.Money,
-            },
-            ValueExtra = {
-                field = MiniLootMessageFormatField.BonusExtra,
-                type = MiniLootMessageFormatTokenType.Money,
-            },
-        }
 
         AppendMessages(
             {
@@ -1233,8 +1055,8 @@ do
                             "LOOT_MONEY_SPLIT_GUILD",
                         },
                         tokens = {
-                            Tokens.Value,
-                            Tokens.ValueExtra,
+                            Tokens.ValueMoney,
+                            Tokens.ValueExtraMoney,
                         },
                     },
                     {
@@ -1244,7 +1066,7 @@ do
                             "LOOT_MONEY_REFUND",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueMoney,
                         },
                     },
                     {
@@ -1252,8 +1074,8 @@ do
                             "LOOT_MONEY",
                         },
                         tokens = {
-                            Tokens.Name,
-                            Tokens.Value,
+                            Tokens.NameString,
+                            Tokens.ValueMoney,
                         },
                     },
                 },
@@ -1271,32 +1093,16 @@ do
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultLoot
-        ---@field public Name? string
-        ---@field public Link string
-        ---@field public Value? number
+        ---@field public Type MiniLootMessageFormatSimpleParserResultLootTypes
+        ---@field public Name? string If provided, the name of the player looting.
+        ---@field public Link string The item link.
+        ---@field public Value? number If provided, the number of items looted.
 
         ---@class MiniLootMessageFormatSimpleParserResultLootArgs : MiniLootMessageFormatSimpleParserResultLoot
         ---@field public Link? string
-        ---@field public Type MiniLootMessageFormatSimpleParserResultLootTypes
 
         ---@class MiniLootMessageFormatLoot : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultLootArgs
-
-        ---@type table<MiniLootMessageFormatSimpleParserResultLootKeys, MiniLootMessageFormatToken>
-        local Tokens = {
-            Name = {
-                field = MiniLootMessageFormatField.Name,
-                type = MiniLootMessageFormatTokenType.Target,
-            },
-            Link = {
-                field = MiniLootMessageFormatField.Link,
-                type = MiniLootMessageFormatTokenType.Link,
-            },
-            Value = {
-                field = MiniLootMessageFormatField.Value,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-        }
 
         AppendMessages(
             {
@@ -1317,9 +1123,9 @@ do
                             "CREATED_ITEM_MULTIPLE",
                         },
                         tokens = {
-                            Tokens.Name,
+                            Tokens.NameTarget,
                             Tokens.Link,
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                         },
                     },
                     {
@@ -1327,7 +1133,7 @@ do
                             "CREATED_ITEM",
                         },
                         tokens = {
-                            Tokens.Name,
+                            Tokens.NameTarget,
                             Tokens.Link,
                         },
                     },
@@ -1341,7 +1147,7 @@ do
                         },
                         tokens = {
                             Tokens.Link,
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                         },
                     },
                     {
@@ -1366,7 +1172,7 @@ do
                         },
                         tokens = {
                             Tokens.Link,
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                         },
                     },
                     {
@@ -1388,9 +1194,9 @@ do
                             "LOOT_ITEM_PUSHED_MULTIPLE",
                         },
                         tokens = {
-                            Tokens.Name,
+                            Tokens.NameTarget,
                             Tokens.Link,
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                         },
                     },
                     {
@@ -1400,7 +1206,7 @@ do
                             "LOOT_ITEM_PUSHED",
                         },
                         tokens = {
-                            Tokens.Name,
+                            Tokens.NameTarget,
                             Tokens.Link,
                         },
                     },
@@ -1445,41 +1251,17 @@ do
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultLootRoll
-        ---@field public Name? string
-        ---@field public Link number
-        ---@field public Value? number
-        ---@field public ValueExtra? number
+        ---@field public Type MiniLootMessageFormatSimpleParserResultLootRollTypes
+        ---@field public Name? string If provided, the name of the player looting.
+        ---@field public Link number The item link.
+        ---@field public Value? number If provided, the loot history ID.
+        ---@field public ValueExtra? number If provided, the loot history ID.
 
         ---@class MiniLootMessageFormatSimpleParserResultLootRollArgs : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Link? number
-        ---@field public Type MiniLootMessageFormatSimpleParserResultLootRollTypes
 
         ---@class MiniLootMessageFormatLootRoll : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultLootRollArgs
-
-        ---@type table<MiniLootMessageFormatSimpleParserResultLootRollKeys, MiniLootMessageFormatToken>
-        local Tokens = {
-            Name = {
-                field = MiniLootMessageFormatField.Name,
-                type = MiniLootMessageFormatTokenType.Target,
-            },
-            Link = {
-                field = MiniLootMessageFormatField.Link,
-                type = MiniLootMessageFormatTokenType.Link,
-            },
-            Value = {
-                field = MiniLootMessageFormatField.Value,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-            ValueExtra = {
-                field = MiniLootMessageFormatField.ValueExtra,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-            NameExtra = {
-                field = MiniLootMessageFormatField.NameExtra,
-                type = MiniLootMessageFormatTokenType.String,
-            },
-        }
 
         AppendMessages(
             {
@@ -1500,7 +1282,7 @@ do
                             "LOOT_ROLL_ALL_PASSED",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -1513,9 +1295,9 @@ do
                             "LOOT_ROLL_PASSED_SELF",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                             Tokens.Link,
-                            Tokens.ValueExtra,
+                            Tokens.ValueExtraNumber,
                         },
                         result = {
                             Type = "YouPass",
@@ -1528,7 +1310,7 @@ do
                             "LOOT_ROLL_PASSED",
                         },
                         tokens = {
-                            Tokens.Name,
+                            Tokens.NameTarget,
                             Tokens.Link,
                         },
                         result = {
@@ -1540,7 +1322,7 @@ do
                             "LOOT_ROLL_DISENCHANT_SELF",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -1552,7 +1334,7 @@ do
                             "LOOT_ROLL_DISENCHANT",
                         },
                         tokens = {
-                            Tokens.Name,
+                            Tokens.NameTarget,
                             Tokens.Link,
                         },
                         result = {
@@ -1564,9 +1346,9 @@ do
                             "LOOT_ROLL_GREED_SELF",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                             Tokens.Link,
-                            Tokens.ValueExtra,
+                            Tokens.ValueExtraNumber,
                         },
                         result = {
                             Type = "YouGreed",
@@ -1577,7 +1359,7 @@ do
                             "LOOT_ROLL_GREED",
                         },
                         tokens = {
-                            Tokens.Name,
+                            Tokens.NameTarget,
                             Tokens.Link,
                         },
                         result = {
@@ -1589,9 +1371,9 @@ do
                             "LOOT_ROLL_NEED_SELF",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                             Tokens.Link,
-                            Tokens.ValueExtra,
+                            Tokens.ValueExtraNumber,
                         },
                         result = {
                             Type = "YouNeed",
@@ -1602,7 +1384,7 @@ do
                             "LOOT_ROLL_NEED",
                         },
                         tokens = {
-                            Tokens.Name,
+                            Tokens.NameTarget,
                             Tokens.Link,
                         },
                         result = {
@@ -1614,9 +1396,9 @@ do
                             "LOOT_ROLL_ROLLED_DE",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                             Tokens.Link,
-                            Tokens.Name,
+                            Tokens.NameTarget,
                         },
                         result = {
                             Type = "DisenchantRoll",
@@ -1627,9 +1409,9 @@ do
                             "LOOT_ROLL_ROLLED_GREED",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                             Tokens.Link,
-                            Tokens.Name,
+                            Tokens.NameTarget,
                         },
                         result = {
                             Type = "GreedRoll",
@@ -1641,9 +1423,9 @@ do
                             "LOOT_ROLL_ROLLED_NEED",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                             Tokens.Link,
-                            Tokens.Name,
+                            Tokens.NameTarget,
                         },
                         result = {
                             Type = "NeedRoll",
@@ -1655,7 +1437,7 @@ do
                         },
                         tokens = {
                             Tokens.Link,
-                            Tokens.Name,
+                            Tokens.NameTarget,
                         },
                         result = {
                             Type = "DisenchantCredit",
@@ -1666,7 +1448,7 @@ do
                             "LOOT_ITEM_WHILE_PLAYER_INELIGIBLE",
                         },
                         tokens = {
-                            Tokens.Name,
+                            Tokens.NameTarget,
                             Tokens.Link,
                         },
                         result = {
@@ -1678,8 +1460,8 @@ do
                             "LOOT_ROLL_YOU_WON_NO_SPAM_DE",
                         },
                         tokens = {
-                            Tokens.Value,
-                            Tokens.ValueExtra,
+                            Tokens.ValueNumber,
+                            Tokens.ValueExtraNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -1691,9 +1473,9 @@ do
                             "LOOT_ROLL_WON_NO_SPAM_DE",
                         },
                         tokens = {
-                            Tokens.Value,
-                            Tokens.Name,
-                            Tokens.ValueExtra,
+                            Tokens.ValueNumber,
+                            Tokens.NameTarget,
+                            Tokens.ValueExtraNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -1705,8 +1487,8 @@ do
                             "LOOT_ROLL_YOU_WON_NO_SPAM_GREED",
                         },
                         tokens = {
-                            Tokens.Value,
-                            Tokens.ValueExtra,
+                            Tokens.ValueNumber,
+                            Tokens.ValueExtraNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -1718,9 +1500,9 @@ do
                             "LOOT_ROLL_WON_NO_SPAM_GREED",
                         },
                         tokens = {
-                            Tokens.Value,
-                            Tokens.Name,
-                            Tokens.ValueExtra,
+                            Tokens.ValueNumber,
+                            Tokens.NameTarget,
+                            Tokens.ValueExtraNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -1732,8 +1514,8 @@ do
                             "LOOT_ROLL_YOU_WON_NO_SPAM_NEED",
                         },
                         tokens = {
-                            Tokens.Value,
-                            Tokens.ValueExtra,
+                            Tokens.ValueNumber,
+                            Tokens.ValueExtraNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -1745,9 +1527,9 @@ do
                             "LOOT_ROLL_WON_NO_SPAM_NEED",
                         },
                         tokens = {
-                            Tokens.Value,
-                            Tokens.Name,
-                            Tokens.ValueExtra,
+                            Tokens.ValueNumber,
+                            Tokens.NameTarget,
+                            Tokens.ValueExtraNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -1759,9 +1541,9 @@ do
                             "LOOT_ROLL_LOST_ROLL",
                         },
                         tokens = {
-                            Tokens.Value,
-                            Tokens.NameExtra,
-                            Tokens.ValueExtra,
+                            Tokens.ValueNumber,
+                            Tokens.NameExtraString,
+                            Tokens.ValueExtraNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -1784,7 +1566,7 @@ do
                             "LOOT_ROLL_WON",
                         },
                         tokens = {
-                            Tokens.Name,
+                            Tokens.NameTarget,
                             Tokens.Link,
                         },
                         result = {
@@ -1796,7 +1578,7 @@ do
                             "LOOT_ROLL_STARTED",
                         },
                         tokens = {
-                            Tokens.Value,
+                            Tokens.ValueNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -1812,33 +1594,20 @@ do
     -- Anima Power
     do
 
-        ---@alias MiniLootMessageFormatSimpleParserResultAnimaPowerKeys "Link"|"Value"
+        ---@alias MiniLootMessageFormatSimpleParserResultAnimaPowerKeys "Link"
 
         ---@alias MiniLootMessageFormatSimpleParserResultAnimaPowerTypes "AnimaPower"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultAnimaPower
-        ---@field public Link string
-        ---@field public Value? number
+        ---@field public Type MiniLootMessageFormatSimpleParserResultAnimaPowerTypes
+        ---@field public Link string The anima power link.
 
         ---@class MiniLootMessageFormatSimpleParserResultAnimaPowerArgs : MiniLootMessageFormatSimpleParserResultAnimaPower
         ---@field public Link? string
-        ---@field public Type MiniLootMessageFormatSimpleParserResultAnimaPowerTypes
 
         ---@class MiniLootMessageFormatAnimaPower : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultAnimaPowerArgs
-
-        ---@type table<MiniLootMessageFormatSimpleParserResultCurrencyKeys, MiniLootMessageFormatToken>
-        local Tokens = {
-            Link = {
-                field = MiniLootMessageFormatField.Link,
-                type = MiniLootMessageFormatTokenType.Link,
-            },
-            Value = {
-                field = MiniLootMessageFormatField.Value,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-        }
 
         AppendMessages(
             {
@@ -1876,27 +1645,15 @@ do
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultArtifactPower
-        ---@field public Link string
-        ---@field public Value? number
+        ---@field public Type MiniLootMessageFormatSimpleParserResultArtifactPowerTypes
+        ---@field public Link string The artifact item link.
+        ---@field public Value? number If provided, the amount of power gained.
 
         ---@class MiniLootMessageFormatSimpleParserResultArtifactPowerArgs : MiniLootMessageFormatSimpleParserResultArtifactPower
         ---@field public Link? string
-        ---@field public Type MiniLootMessageFormatSimpleParserResultArtifactPowerTypes
 
         ---@class MiniLootMessageFormatArtifactPower : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultArtifactPowerArgs
-
-        ---@type table<MiniLootMessageFormatSimpleParserResultCurrencyKeys, MiniLootMessageFormatToken>
-        local Tokens = {
-            Link = {
-                field = MiniLootMessageFormatField.Link,
-                type = MiniLootMessageFormatTokenType.Link,
-            },
-            Value = {
-                field = MiniLootMessageFormatField.Value,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-        }
 
         AppendMessages(
             {
@@ -1918,7 +1675,7 @@ do
                         },
                         tokens = {
                             Tokens.Link,
-                            Tokens.Value,
+                            Tokens.ValueString,
                         },
                     },
                     -- {
@@ -1955,27 +1712,14 @@ do
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultTransmogrification
+        ---@field public Type MiniLootMessageFormatSimpleParserResultTransmogrificationTypes
         ---@field public Link string
-        ---@field public Value? number
 
         ---@class MiniLootMessageFormatSimpleParserResultTransmogrificationArgs : MiniLootMessageFormatSimpleParserResultTransmogrification
         ---@field public Link? string
-        ---@field public Type MiniLootMessageFormatSimpleParserResultTransmogrificationTypes
 
         ---@class MiniLootMessageFormatTransmogrification : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultTransmogrificationArgs
-
-        ---@type table<MiniLootMessageFormatSimpleParserResultCurrencyKeys, MiniLootMessageFormatToken>
-        local Tokens = {
-            Link = {
-                field = MiniLootMessageFormatField.Link,
-                type = MiniLootMessageFormatTokenType.Link,
-            },
-            Value = {
-                field = MiniLootMessageFormatField.Value,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-        }
 
         AppendMessages(
             {
@@ -2026,27 +1770,14 @@ do
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultIgnore
+        ---@field public Type MiniLootMessageFormatSimpleParserResultIgnoreTypes
         ---@field public Value? number
         ---@field public Money? number
 
         ---@class MiniLootMessageFormatSimpleParserResultIgnoreArgs : MiniLootMessageFormatSimpleParserResultIgnore
-        ---@field public Link? string
-        ---@field public Type MiniLootMessageFormatSimpleParserResultIgnoreTypes
 
         ---@class MiniLootMessageFormatIgnore : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultIgnoreArgs
-
-        ---@type table<MiniLootMessageFormatSimpleParserResultCurrencyKeys, MiniLootMessageFormatToken>
-        local Tokens = {
-            Value = {
-                field = MiniLootMessageFormatField.Value,
-                type = MiniLootMessageFormatTokenType.Number,
-            },
-            Money = {
-                field = MiniLootMessageFormatField.Value,
-                type = MiniLootMessageFormatTokenType.Money,
-            },
-        }
 
         AppendMessages(
             {
@@ -2067,7 +1798,7 @@ do
                             "ERR_QUEST_REWARD_EXP_I",
                         },
                         tokens = {
-                            Tokens.Value,
+                            CommonTokens.ValueNumber,
                         },
                     },
                     {
@@ -2075,7 +1806,7 @@ do
                             "ERR_QUEST_REWARD_MONEY_S",
                         },
                         tokens = {
-                            Tokens.Money,
+                            CommonTokens.ValueMoney,
                         },
                     },
                 },
@@ -2141,7 +1872,7 @@ local function ProcessMatchedToResult(messageFormat, matches)
     local numTokens = #tokens
     local result ---@type MiniLootMessageFormatSimpleParserResult?
     if messageFormat.result then
-        result = CopyTable(messageFormat.result)
+        result = TableCopy(messageFormat.result)
     end
     for i = 1, numTokens do
         local token = tokens[i]
@@ -2175,7 +1906,7 @@ end
 ---@param isSubtitle? boolean
 ---@param hideSenderInLetterbox? boolean
 ---@param supressRaidIcons? boolean
----@return MiniLootMessageFormatSimpleParserResult?
+---@return MiniLootMessageFormatSimpleParserResult?, MiniLootMessage
 local function ProcessChatMessage(event, text, playerName, languageName, channelName, playerName2, specialFlags, zoneChannelID, channelIndex, channelBaseName, languageID, lineID, guid, bnSenderID, isMobile, isSubtitle, hideSenderInLetterbox, supressRaidIcons)
     for _, message in ipairs(MessagesCollection) do
         if TableContains(message.events, event) then
@@ -2187,7 +1918,7 @@ local function ProcessChatMessage(event, text, playerName, languageName, channel
                         if matches[1] then
                             local result = ProcessMatchedToResult(messageFormat, matches)
                             if result then
-                                return result
+                                return result, message
                             end
                         end
                     end
@@ -2195,24 +1926,7 @@ local function ProcessChatMessage(event, text, playerName, languageName, channel
             end
         end
     end
-end
-
----@param val1 any
----@param val2 any
----@return boolean equal
-local function ValuesAreSameish(val1, val2)
-    if val1 == val2 then
-        return true
-    end
-    local type1 = type(val1)
-    local type2 = type(val2)
-    if type1 == "string" and type2 == "number" then
-        return tonumber(val1) == val2
-    end
-    if type1 == "number" and type2 == "string" then
-        return val1 == tonumber(val2)
-    end
-    return true
+    return ---@diagnostic disable-line: missing-return-value
 end
 
 ---@param result MiniLootMessageFormatSimpleParserResult
@@ -2254,7 +1968,7 @@ local function RunAndEvaluateTest(message, test)
     local successResult ---@type MiniLootMessageFormatSimpleParserResult?
     local closeResults ---@type MiniLootMessageFormatSimpleParserResult[]?
     local closeIndex ---@type number?
-    local args = CopyTable(test) ---@type any[]
+    local args = TableCopy(test) ---@type any[]
     local text = table.remove(args, 1) ---@type string
     for _, event in ipairs(message.events) do
         local result = ProcessChatMessage(event, text)
@@ -2284,7 +1998,7 @@ local function RunAndEvaluateTests(message)
             if closeResults then
                 for _, closeResult in ipairs(closeResults) do
                     for k, v in pairs(closeResult) do
-                        print(format("|cffFFFF55%s|r %s", tostringall(k, v)))
+                        print(format(" - |cffFFFF55%s|r %s", tostringall(k, v)))
                     end
                 end
             end
@@ -2294,7 +2008,7 @@ end
 
 local function RunMessageTests()
     for _, message in ipairs(MessagesCollection) do
-        if not message.skipAutoTests then
+        if not message.skipTests then
             local tests = message.tests
             if tests then
                 RunAndEvaluateTests(message)
@@ -2306,10 +2020,9 @@ end
 FinalizeMessages()
 RunMessageTests()
 
-ns.MessagesCollection = MessagesCollection
-ns.CreateEmptyResults = CreateEmptyResults
-ns.ProcessChatMessage = ProcessChatMessage
-
-_G.MiniLootNS = ns -- DEBUG
--- /tinspect MiniLootNS.MessagesCollection
--- /dump MiniLootNS.ProcessChatMessage("CHAT_MSG_CURRENCY", format("You receive currency: %sx10", C_CurrencyInfo.GetCurrencyLink(2778)))
+---@class MiniLootNSMessages
+ns.Messages = {
+    MiniLootMessageGroup = MiniLootMessageGroup,
+    MessagesCollection = MessagesCollection,
+    ProcessChatMessage = ProcessChatMessage,
+}
