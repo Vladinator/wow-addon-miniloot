@@ -122,7 +122,7 @@ end
 ---@param key string
 ---@param lines string[]
 local function GetLooterStringFormatted(key, lines)
-    local name = key == "" and YOU or key
+    local name = key == "" and YOU or GetShortUnitName(key)
     local line = table.concat(lines)
     return format(Formats.ScS, name, line)
 end
@@ -171,10 +171,12 @@ end
 
 ---@alias LootGroupHandler fun(key: MiniLootMessageFormatSimpleParserResultLootRollTypes, results: MiniLootMessageFormatSimpleParserResultLootRoll[]): string|string[]?
 
+local LootHistoryText = format("[%s]", LOOT)
+
 ---@param id number
 ---@param text? string
 local function GetLootHistoryLink(id, text)
-    return format("|HlootHistory:%d|h%s|h", id, text or format("[%s]", LOOT))
+    return format("|HlootHistory:%d|h%s|h", id, text or LootHistoryText)
 end
 
 ---@type table<string, LootGroupHandler>
