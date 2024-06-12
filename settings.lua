@@ -27,7 +27,7 @@ local DefaultOptions = {
     Enabled = true,
     EnabledGroups = {},
     IgnoredGroups = {},
-    Debounce = 1,
+    Debounce = 2,
     ChatFrame = MiniLootChatFrame.DEFAULT_CHAT_FRAME,
 }
 

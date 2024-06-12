@@ -1,5 +1,6 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
+local MiniLootMessageGroup = ns.Messages.MiniLootMessageGroup
 local MessagesCollection = ns.Messages.MessagesCollection
 local ProcessChatMessage = ns.Messages.ProcessChatMessage
 local TableContains = ns.Utils.TableContains
@@ -38,7 +39,20 @@ local function GetMessageEvents()
 end
 
 local MessageEvents = GetMessageEvents()
-TableCombine(MessageEvents, TableKeys(EventHandlers))
+
+---@param frame MiniLootNSEventFrame
+local function RegisterEvents(frame)
+    for event, _ in pairs(EventHandlers) do
+        pcall(frame.RegisterEvent, frame, event)
+    end
+end
+
+---@param frame MiniLootNSEventFrame
+local function UnregisterEvents(frame)
+    for event, _ in pairs(EventHandlers) do
+        pcall(frame.UnregisterEvent, frame, event)
+    end
+end
 
 ---@param onChatEvent MiniLootNSEventChatEventCallback
 local function RegisterChatEvents(onChatEvent)
@@ -64,19 +78,6 @@ local function UnregisterChatEvents(onChatEvent)
     end
 end
 
----@param frame MiniLootNSEventFrame
----@param event WowEvent
----@param ... any
-local function EventHandler(frame, event, ...)
-    if not frame.isEnabled then
-        return
-    end
-    local eventHandler = EventHandlers[event]
-    if eventHandler then
-        eventHandler(frame, event, ...)
-    end
-end
-
 ---@type MiniLootNSEventCallbackResult
 function ProcessChatEvent(frame, event, ...)
     local result, message = ProcessChatMessage(event, ...)
@@ -88,7 +89,7 @@ function ProcessChatEvent(frame, event, ...)
     if not db.EnabledGroups[group] then
         return
     end
-    if db.IgnoredGroups[group] then
+    if db.IgnoredGroups[group] or message.group == MiniLootMessageGroup.Ignore then
         return result, message, true
     end
     return result, message
@@ -96,10 +97,11 @@ end
 
 ---@class MiniLootNSReporting
 ns.Reporting = {
-    ExtraEvents = EventHandlers,
+    EventHandlers = EventHandlers,
     MessageEvents = MessageEvents,
+    RegisterEvents = RegisterEvents,
+    UnregisterEvents = UnregisterEvents,
     RegisterChatEvents = RegisterChatEvents,
     UnregisterChatEvents = UnregisterChatEvents,
-    EventHandler = EventHandler,
     ProcessChatEvent = ProcessChatEvent,
 }

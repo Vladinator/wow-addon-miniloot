@@ -3,8 +3,10 @@ local ns = select(2, ...) ---@class MiniLootNS
 local addOnName = ... ---@type string
 
 local ProcessSavedVariables = ns.Settings.ProcessSavedVariables
+local EventHandlers = ns.Reporting.EventHandlers
 local ProcessChatEvent = ns.Reporting.ProcessChatEvent
-local EventHandler = ns.Reporting.EventHandler
+local RegisterEvents = ns.Reporting.RegisterEvents
+local UnregisterEvents = ns.Reporting.UnregisterEvents
 local RegisterChatEvents = ns.Reporting.RegisterChatEvents
 local UnregisterChatEvents = ns.Reporting.UnregisterChatEvents
 local CreateOutputHandler = ns.Output.CreateOutputHandler
@@ -66,7 +68,17 @@ function frame:OnEvent(event, ...)
     if not self.db then
         return
     end
-    EventHandler(self, event, ...)
+    local eventHandler = EventHandlers[event]
+    if not eventHandler then
+        return
+    end
+    local result, message, hideChatIgnoreResult = eventHandler(self, event, ...)
+    if hideChatIgnoreResult then
+        return
+    end
+    if result and message then
+        output:Add({ result = result, message = message })
+    end
 end
 
 function frame:Enable()
@@ -74,6 +86,7 @@ function frame:Enable()
         return
     end
     self.isEnabled = true
+    RegisterEvents(frame)
     RegisterChatEvents(OnChatEvent)
 end
 
@@ -82,6 +95,7 @@ function frame:Disable()
         return
     end
     self.isEnabled = false
+    UnregisterEvents(frame)
     UnregisterChatEvents(OnChatEvent)
 end
 

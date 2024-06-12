@@ -505,7 +505,7 @@ local function GetLinkTexture(link, data, text, mawPowerUnit)
     if not link then
         return
     end
-    local prefix, id = link:match("^(%D+):(%d+)")
+    local prefix, id = link:match("|H(%D+):(%d+)")
     if prefix == "item" then
         return C_Item.GetItemIconByID(link)
     end
@@ -538,11 +538,12 @@ local function GetAtlasTierInfo(text)
 end
 
 ---@param itemLink string
----@return number itemLevel, string equipSlot
+---@return number? itemLevel, string? equipSlot
 local function GetItemLevelAndEquipSlot(itemLink)
     local _, _, _, equipSlot = C_Item.GetItemInfoInstant(itemLink)
+    local _, _, _, baseItemLevel, _, _, _, _, tempEquipSlot = C_Item.GetItemInfo(itemLink)
     local actualItemLevel, previewLevel, sparseItemLevel = C_Item.GetDetailedItemLevelInfo(itemLink)
-    return actualItemLevel, equipSlot
+    return actualItemLevel or baseItemLevel, equipSlot or tempEquipSlot
 end
 
 ---@param texture number|string
@@ -603,8 +604,8 @@ local function GetLootIcon(link, hyperlink, simple, customColor, appendItemLevel
         appendText = format(":Q%s", tier)
     end
     if appendItemLevel then
-        local itemLevel, equipSlot = GetItemLevelAndEquipSlot(link)
-        if itemLevel > 1 then
+        local itemLevel = GetItemLevelAndEquipSlot(link)
+        if itemLevel and itemLevel > 1 then
             appendText = format("%s:%s", appendText or "", itemLevel)
         end
     end

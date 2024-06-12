@@ -1761,10 +1761,9 @@ do
     end
 
     -- Ignore
-    --[[
     do
 
-        ---@alias MiniLootMessageFormatSimpleParserResultIgnoreKeys "Value"|"Money"
+        ---@alias MiniLootMessageFormatSimpleParserResultIgnoreKeys "Value"
 
         ---@alias MiniLootMessageFormatSimpleParserResultIgnoreTypes "Ignore"
 
@@ -1772,7 +1771,6 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultIgnore
         ---@field public Type MiniLootMessageFormatSimpleParserResultIgnoreTypes
         ---@field public Value? number
-        ---@field public Money? number
 
         ---@class MiniLootMessageFormatSimpleParserResultIgnoreArgs : MiniLootMessageFormatSimpleParserResultIgnore
 
@@ -1798,7 +1796,7 @@ do
                             "ERR_QUEST_REWARD_EXP_I",
                         },
                         tokens = {
-                            CommonTokens.ValueNumber,
+                            Tokens.ValueNumber,
                         },
                     },
                     {
@@ -1806,7 +1804,7 @@ do
                             "ERR_QUEST_REWARD_MONEY_S",
                         },
                         tokens = {
-                            CommonTokens.ValueMoney,
+                            Tokens.ValueMoney,
                         },
                     },
                 },
@@ -1814,7 +1812,6 @@ do
         )
 
     end
-    --]]
 
 end
 
