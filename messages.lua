@@ -19,9 +19,14 @@ local MiniLootMessageGroup = {
     Currency = "Currency",
     Money = "Money",
     Loot = "Loot",
-    LootRollDecision = "LootRollDecision",
-    -- LootRollRolled = "LootRollRolled",
-    -- LootRollResult = "LootRollResult",
+    LootRoll = "LootRoll",
+    LootRollYouDecide = "LootRollYouDecide",
+    LootRollDecide = "LootRollDecide",
+    -- LootRollYouRolled = "LootRollYouRolled",
+    LootRollRolled = "LootRollRolled",
+    LootRollYouResult = "LootRollYouResult",
+    LootRollResult = "LootRollResult",
+    LootRollInfo = "LootRollInfo",
     AnimaPower = "AnimaPower",
     ArtifactPower = "ArtifactPower",
     Transmogrification = "Transmogrification",
@@ -1219,7 +1224,7 @@ do
     -- Loot Roll
     do
 
-        ---@alias MiniLootMessageFormatSimpleParserResultLootRollKeys "Name"|"Link"|"Value"|"ValueExtra"|"NameExtra"
+        ---@alias MiniLootMessageFormatSimpleParserResultLootRollKeys "Name"|"Link"|"Value"|"ValueExtra"
 
         ---@alias MiniLootMessageFormatSimpleParserResultLootRollTypes
         ---|"FallbackRoll"
@@ -1243,7 +1248,6 @@ do
         ---|"YouNeedResult"
         ---|"NeedResult"
         ---|"IneligibleResult"
-        ---|"YouLostResult"
         ---|"LostResult"
         ---|"YouWinnerResult"
         ---|"WinnerResult"
@@ -1253,19 +1257,57 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type MiniLootMessageFormatSimpleParserResultLootRollTypes
         ---@field public Name? string If provided, the name of the player looting.
-        ---@field public Link number The item link.
+        ---@field public Link string The item link.
         ---@field public Value? number If provided, the loot history ID.
         ---@field public ValueExtra? number If provided, the loot history ID.
 
         ---@class MiniLootMessageFormatSimpleParserResultLootRollArgs : MiniLootMessageFormatSimpleParserResultLootRoll
-        ---@field public Link? number
+        ---@field public Link? string
+
+        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollInfo
+        ---@field public Type "AllPass"
+        ---@field public Link string The item link.
+        ---@field public Value number Loot history ID.
+        ---@field public Name? string The name of the player. Relevant for `DisenchantCredit` and `IneligibleResult`.
+
+        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouDecide
+        ---@field public Type "YouPass"|"YouDisenchant"|"YouGreed"|"YouNeed"
+        ---@field public Link string The item link.
+        ---@field public Value number Loot history ID.
+        ---@field public ValueExtra? number Loot history ID.
+
+        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollDecide
+        ---@field public Type "Pass"|"Disenchant"|"Greed"|"Need"
+        ---@field public Link string The item link.
+        ---@field public Name string The name of the player.
+
+        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollRolled
+        ---@field public Type "DisenchantRoll"|"GreedRoll"|"NeedRoll"
+        ---@field public Link string The item link.
+        ---@field public Name string The name of the player.
+        ---@field public Value number The number rolled.
+
+        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouResult
+        ---@field public Type "YouDisenchantResult"|"YouGreedResult"|"YouNeedResult"
+        ---@field public Link string The item link.
+        ---@field public Value number Loot history ID.
+        ---@field public ValueExtra number The number rolled.
+
+        -- Note that `YouWinnerResult` and `WinnerResult` only have `Link` and `Name` assigned.
+        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollResult
+        ---@field public Type "DisenchantResult"|"GreedResult"|"NeedResult"|"LostResult"|"YouWinnerResult"|"WinnerResult"
+        ---@field public Link string The item link.
+        ---@field public Name string The name of the player.
+        ---@field public Value number Loot history ID.
+        ---@field public ValueExtra number The number rolled.
+        ---@field public NameExtraString? string The roll type like `Need` or `Greed`, etc.
 
         ---@class MiniLootMessageFormatLootRoll : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultLootRollArgs
 
         AppendMessages(
             {
-                group = MiniLootMessageGroup.LootRollDecision,
+                group = MiniLootMessageGroup.LootRoll,
                 events = {
                     "CHAT_MSG_LOOT",
                 },
@@ -1275,6 +1317,7 @@ do
                 },
             },
             {
+                group = MiniLootMessageGroup.LootRollInfo,
                 ---@type MiniLootMessageFormatLootRoll[]
                 formats = {
                     {
@@ -1289,6 +1332,12 @@ do
                             Type = "AllPass",
                         },
                     },
+                },
+            },
+            {
+                group = MiniLootMessageGroup.LootRollYouDecide,
+                ---@type MiniLootMessageFormatLootRoll[]
+                formats = {
                     {
                         formats = {
                             "LOOT_ROLL_PASSED_SELF_AUTO",
@@ -1305,20 +1354,6 @@ do
                     },
                     {
                         formats = {
-                            "LOOT_ROLL_PASSED_AUTO",
-                            "LOOT_ROLL_PASSED_AUTO_FEMALE",
-                            "LOOT_ROLL_PASSED",
-                        },
-                        tokens = {
-                            Tokens.NameTarget,
-                            Tokens.Link,
-                        },
-                        result = {
-                            Type = "Pass",
-                        },
-                    },
-                    {
-                        formats = {
                             "LOOT_ROLL_DISENCHANT_SELF",
                         },
                         tokens = {
@@ -1327,18 +1362,6 @@ do
                         },
                         result = {
                             Type = "YouDisenchant",
-                        },
-                    },
-                    {
-                        formats = {
-                            "LOOT_ROLL_DISENCHANT",
-                        },
-                        tokens = {
-                            Tokens.NameTarget,
-                            Tokens.Link,
-                        },
-                        result = {
-                            Type = "Disenchant",
                         },
                     },
                     {
@@ -1356,18 +1379,6 @@ do
                     },
                     {
                         formats = {
-                            "LOOT_ROLL_GREED",
-                        },
-                        tokens = {
-                            Tokens.NameTarget,
-                            Tokens.Link,
-                        },
-                        result = {
-                            Type = "Greed",
-                        },
-                    },
-                    {
-                        formats = {
                             "LOOT_ROLL_NEED_SELF",
                         },
                         tokens = {
@@ -1377,6 +1388,50 @@ do
                         },
                         result = {
                             Type = "YouNeed",
+                        },
+                    },
+                },
+            },
+            {
+                group = MiniLootMessageGroup.LootRollDecide,
+                ---@type MiniLootMessageFormatLootRoll[]
+                formats = {
+                    {
+                        formats = {
+                            "LOOT_ROLL_PASSED_AUTO",
+                            "LOOT_ROLL_PASSED_AUTO_FEMALE",
+                            "LOOT_ROLL_PASSED",
+                        },
+                        tokens = {
+                            Tokens.NameTarget,
+                            Tokens.Link,
+                        },
+                        result = {
+                            Type = "Pass",
+                        },
+                    },
+                    {
+                        formats = {
+                            "LOOT_ROLL_DISENCHANT",
+                        },
+                        tokens = {
+                            Tokens.NameTarget,
+                            Tokens.Link,
+                        },
+                        result = {
+                            Type = "Disenchant",
+                        },
+                    },
+                    {
+                        formats = {
+                            "LOOT_ROLL_GREED",
+                        },
+                        tokens = {
+                            Tokens.NameTarget,
+                            Tokens.Link,
+                        },
+                        result = {
+                            Type = "Greed",
                         },
                     },
                     {
@@ -1391,6 +1446,12 @@ do
                             Type = "Need",
                         },
                     },
+                },
+            },
+            {
+                group = MiniLootMessageGroup.LootRollRolled,
+                ---@type MiniLootMessageFormatLootRoll[]
+                formats = {
                     {
                         formats = {
                             "LOOT_ROLL_ROLLED_DE",
@@ -1431,30 +1492,12 @@ do
                             Type = "NeedRoll",
                         },
                     },
-                    {
-                        formats = {
-                            "LOOT_DISENCHANT_CREDIT",
-                        },
-                        tokens = {
-                            Tokens.Link,
-                            Tokens.NameTarget,
-                        },
-                        result = {
-                            Type = "DisenchantCredit",
-                        },
-                    },
-                    {
-                        formats = {
-                            "LOOT_ITEM_WHILE_PLAYER_INELIGIBLE",
-                        },
-                        tokens = {
-                            Tokens.NameTarget,
-                            Tokens.Link,
-                        },
-                        result = {
-                            Type = "IneligibleResult",
-                        },
-                    },
+                },
+            },
+            {
+                group = MiniLootMessageGroup.LootRollYouResult,
+                ---@type MiniLootMessageFormatLootRoll[]
+                formats = {
                     {
                         formats = {
                             "LOOT_ROLL_YOU_WON_NO_SPAM_DE",
@@ -1470,6 +1513,38 @@ do
                     },
                     {
                         formats = {
+                            "LOOT_ROLL_YOU_WON_NO_SPAM_GREED",
+                        },
+                        tokens = {
+                            Tokens.ValueNumber,
+                            Tokens.ValueExtraNumber,
+                            Tokens.Link,
+                        },
+                        result = {
+                            Type = "YouGreedResult",
+                        },
+                    },
+                    {
+                        formats = {
+                            "LOOT_ROLL_YOU_WON_NO_SPAM_NEED",
+                        },
+                        tokens = {
+                            Tokens.ValueNumber,
+                            Tokens.ValueExtraNumber,
+                            Tokens.Link,
+                        },
+                        result = {
+                            Type = "YouNeedResult",
+                        },
+                    },
+                },
+            },
+            {
+                group = MiniLootMessageGroup.LootRollResult,
+                ---@type MiniLootMessageFormatLootRoll[]
+                formats = {
+                    {
+                        formats = {
                             "LOOT_ROLL_WON_NO_SPAM_DE",
                         },
                         tokens = {
@@ -1480,19 +1555,6 @@ do
                         },
                         result = {
                             Type = "DisenchantResult",
-                        },
-                    },
-                    {
-                        formats = {
-                            "LOOT_ROLL_YOU_WON_NO_SPAM_GREED",
-                        },
-                        tokens = {
-                            Tokens.ValueNumber,
-                            Tokens.ValueExtraNumber,
-                            Tokens.Link,
-                        },
-                        result = {
-                            Type = "YouGreedResult",
                         },
                     },
                     {
@@ -1511,19 +1573,6 @@ do
                     },
                     {
                         formats = {
-                            "LOOT_ROLL_YOU_WON_NO_SPAM_NEED",
-                        },
-                        tokens = {
-                            Tokens.ValueNumber,
-                            Tokens.ValueExtraNumber,
-                            Tokens.Link,
-                        },
-                        result = {
-                            Type = "YouNeedResult",
-                        },
-                    },
-                    {
-                        formats = {
                             "LOOT_ROLL_WON_NO_SPAM_NEED",
                         },
                         tokens = {
@@ -1536,6 +1585,12 @@ do
                             Type = "NeedResult",
                         },
                     },
+                },
+            },
+            {
+                group = MiniLootMessageGroup.LootRollResult,
+                ---@type MiniLootMessageFormatLootRoll[]
+                formats = {
                     {
                         formats = {
                             "LOOT_ROLL_LOST_ROLL",
@@ -1573,6 +1628,12 @@ do
                             Type = "WinnerResult",
                         },
                     },
+                },
+            },
+            {
+                group = MiniLootMessageGroup.LootRollInfo,
+                ---@type MiniLootMessageFormatLootRoll[]
+                formats = {
                     {
                         formats = {
                             "LOOT_ROLL_STARTED",
@@ -1583,6 +1644,30 @@ do
                         },
                         result = {
                             Type = "StartRoll",
+                        },
+                    },
+                    {
+                        formats = {
+                            "LOOT_DISENCHANT_CREDIT",
+                        },
+                        tokens = {
+                            Tokens.Link,
+                            Tokens.NameTarget,
+                        },
+                        result = {
+                            Type = "DisenchantCredit",
+                        },
+                    },
+                    {
+                        formats = {
+                            "LOOT_ITEM_WHILE_PLAYER_INELIGIBLE",
+                        },
+                        tokens = {
+                            Tokens.NameTarget,
+                            Tokens.Link,
+                        },
+                        result = {
+                            Type = "IneligibleResult",
                         },
                     },
                 },
@@ -1765,7 +1850,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultIgnoreKeys "Value"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultIgnoreTypes "Ignore"
+        ---@alias MiniLootMessageFormatSimpleParserResultIgnoreTypes "Ignore"|"IgnoreMoney"
 
         ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultIgnore
@@ -1805,6 +1890,9 @@ do
                         },
                         tokens = {
                             Tokens.ValueMoney,
+                        },
+                        result = {
+                            Type = "IgnoreMoney",
                         },
                     },
                 },
@@ -1970,7 +2058,8 @@ local function RunAndEvaluateTest(message, test)
     for _, event in ipairs(message.events) do
         local result = ProcessChatMessage(event, text)
         if result then
-            local success = CompareTestResults(result, args, isMoney)
+            local isMoneyResult = result.Type == "IgnoreMoney"
+            local success = CompareTestResults(result, args, isMoney or isMoneyResult)
             if success then
                 successResult = result
                 break

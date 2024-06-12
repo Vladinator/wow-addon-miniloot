@@ -309,6 +309,9 @@ local function ValuesAreSameish(val1, val2)
     if type1 == "number" and type2 == "string" then
         return val1 == tonumber(val2)
     end
+    if type1 == "boolean" or type2 == "boolean" then
+        return (not not val1) == (not not val2)
+    end
     return true
 end
 
@@ -326,6 +329,7 @@ local SimpleHexColors = {
     Red = "FF3333",
     Green = "33FF33",
     Blue = "3333FF",
+    White = "FFFFFF",
     Gray = "CCCCCC",
 }
 
@@ -333,7 +337,7 @@ local SimpleHexColors = {
 ---@param delta number
 ---@return string
 local function ColorByDelta(text, delta)
-    local color = delta < 0 and SimpleHexColors.Red or delta > 0 and SimpleHexColors.Green or SimpleHexColors.Gray
+    local color = delta < 0 and SimpleHexColors.Red or delta > 0 and SimpleHexColors.Green or SimpleHexColors.White
     return format("|cff%s%s|r", color, text)
 end
 

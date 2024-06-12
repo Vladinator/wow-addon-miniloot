@@ -7,6 +7,8 @@ local SumByKey = ns.Utils.SumByKey
 local SumByKeyPretty = ns.Utils.SumByKeyPretty
 local ConvertToMoneyString = ns.Utils.ConvertToMoneyString
 local GetLootIcon = ns.Utils.GetLootIcon
+local GetShortUnitName = ns.Utils.GetShortUnitName
+local GetShortFactionName = ns.Utils.GetShortFactionName
 
 local MiniLootMessageGroup = ns.Messages.MiniLootMessageGroup
 
@@ -167,6 +169,98 @@ local function TableGroupFormat_NameValue(results)
     )
 end
 
+---@alias LootGroupHandler fun(key: MiniLootMessageFormatSimpleParserResultLootRollTypes, results: MiniLootMessageFormatSimpleParserResultLootRoll[]): string|string[]?
+
+---@param id number
+---@param text? string
+local function GetLootHistoryLink(id, text)
+    return format("|HlootHistory:%d|h%s|h", id, text or format("[%s]", LOOT))
+end
+
+---@type table<string, LootGroupHandler>
+local LootGrouphandlers = {
+    ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollInfo[]
+    LootRollInfo = function(key, results)
+        local prefix = GetLootHistoryLink(results[1].Value)
+        return TableMap(results, function(result)
+            local link = GetLootIconFormatted(result.Link)
+            return format("%s Everyone passed on %s", prefix, link)
+        end)
+    end,
+    ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouDecide[]
+    LootRollYouDecide = function(key, results)
+        local prefix = GetLootHistoryLink(results[1].Value)
+        return TableMap(results, function(result)
+            local action = result.Type == "YouPass" and "Pass" or result.Type == "YouDisenchant" and "Disenchant" or result.Type == "YouGreed" and "Greed" or result.Type == "YouNeed" and "Need" or "?"
+            local link = GetLootIconFormatted(result.Link)
+            return format("%s %s rolled %s on %s", prefix, YOU, action, link)
+        end)
+    end,
+    ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollDecide[]
+    LootRollDecide = function(key, results)
+        return TableMap(results, function(result)
+            local name = GetShortUnitName(result.Name)
+            local link = GetLootIconFormatted(result.Link)
+            return format("%s rolled %s on %s", name, result.Type, link)
+        end)
+    end,
+    ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollRolled[]
+    LootRollRolled = function(key, results)
+        return TableMap(results, function(result)
+            local name = GetShortUnitName(result.Name)
+            local action = result.Type == "DisenchantRoll" and "Disenchant" or result.Type == "GreedRoll" and "Greed" or result.Type == "NeedRoll" and "Need" or "?"
+            local link = GetLootIconFormatted(result.Link)
+            return format("%s rolled %s (%d) on %s", name, action, result.Value, link)
+        end)
+    end,
+    ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouResult[]
+    LootRollYouResult = function(key, results)
+        local prefix = GetLootHistoryLink(results[1].Value)
+        return TableMap(results, function(result)
+            local link = GetLootIconFormatted(result.Link)
+            return format("%s %s rolled %s (%d) on %s", prefix, YOU, key, result.ValueExtra, link)
+        end)
+    end,
+    ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollResult[]
+    LootRollResult = function(key, results)
+        local isWinner = key == "WinnerResult" or key == "YouWinnerResult"
+        local prefix = not isWinner and GetLootHistoryLink(results[1].Value)
+        return TableMap(results, function(result)
+            local name = result.Name and GetShortUnitName(result.Name) or YOU
+            local link = GetLootIconFormatted(result.Link)
+            if isWinner then
+                return format("%s won %s", name, link)
+            end
+            return format("%s %s rolled %s (%d) on %s", prefix, name, result.NameExtraString or "?", result.ValueExtra, link)
+        end)
+    end,
+}
+
+---@type table<MiniLootMessageFormatSimpleParserResultLootRollTypes, LootGroupHandler>
+local LootGroupMap = {
+    AllPass = LootGrouphandlers.LootRollInfo,
+    YouPass = LootGrouphandlers.LootRollYouDecide,
+    YouDisenchant = LootGrouphandlers.LootRollYouDecide,
+    YouGreed = LootGrouphandlers.LootRollYouDecide,
+    YouNeed = LootGrouphandlers.LootRollYouDecide,
+    Pass = LootGrouphandlers.LootRollDecide,
+    Disenchant = LootGrouphandlers.LootRollDecide,
+    Greed = LootGrouphandlers.LootRollDecide,
+    Need = LootGrouphandlers.LootRollDecide,
+    DisenchantRoll = LootGrouphandlers.LootRollRolled,
+    GreedRoll = LootGrouphandlers.LootRollRolled,
+    NeedRoll = LootGrouphandlers.LootRollRolled,
+    YouDisenchantResult = LootGrouphandlers.LootRollYouResult,
+    YouGreedResult = LootGrouphandlers.LootRollYouResult,
+    YouNeedResult = LootGrouphandlers.LootRollYouResult,
+    DisenchantResult = LootGrouphandlers.LootRollResult,
+    GreedResult = LootGrouphandlers.LootRollResult,
+    NeedResult = LootGrouphandlers.LootRollResult,
+    LostResult = LootGrouphandlers.LootRollResult,
+    YouWinnerResult = LootGrouphandlers.LootRollResult,
+    WinnerResult = LootGrouphandlers.LootRollResult,
+}
+
 ---@type table<MiniLootMessageGroup, MiniLootMessageFormatter>
 local Formatters = {}
 
@@ -206,25 +300,45 @@ Formatters[MiniLootMessageGroup.Loot] = function(results)
 end
 
 ---@param results MiniLootMessageFormatSimpleParserResultLootRoll[]
-Formatters[MiniLootMessageGroup.LootRollDecision] = function(results)
+Formatters[MiniLootMessageGroup.LootRoll] = function(results)
+    return TableGroupFormatOuter(
+        results,
+        "Type",
+        ---@param groupKey MiniLootMessageFormatSimpleParserResultLootRollTypes
+        ---@param groupResults MiniLootMessageFormatSimpleParserResultLootRoll[]
+        function(groupKey, groupResults)
+            local handler = LootGroupMap[groupKey]
+            if handler then
+                return handler(groupKey, groupResults)
+            end
+        end
+    )
 end
-
--- ---@param results MiniLootMessageFormatSimpleParserResultLootRoll[]
--- Formatters[MiniLootMessageGroup.LootRollResult] = function(results)
--- end
-
--- ---@param results MiniLootMessageFormatSimpleParserResultLootRoll[]
--- Formatters[MiniLootMessageGroup.LootRollRolled] = function(results)
--- end
 
 ---@param results MiniLootMessageFormatSimpleParserResultMoney[]
 Formatters[MiniLootMessageGroup.Money] = function(results)
-    return TableGroupFormat_NameValue(results)
+    return TableGroupFormatOuter(
+        results,
+        "Name",
+        ---@param groupResults MiniLootMessageFormatSimpleParserResultMoney[]
+        function(groupKey, groupResults)
+            local name = groupKey == "" and YOU or GetShortUnitName(groupKey)
+            return SumResultsTotalsByKeyFormatted(name, groupResults, "Value")
+        end
+    )
 end
 
 ---@param results MiniLootMessageFormatSimpleParserResultReputation[]
 Formatters[MiniLootMessageGroup.Reputation] = function(results)
-    return TableGroupFormat_NameValue(results)
+    return TableGroupFormatOuter(
+        results,
+        "Name",
+        ---@param groupResults MiniLootMessageFormatSimpleParserResultReputation[]
+        function(groupKey, groupResults)
+            local name = GetShortFactionName(groupKey)
+            return SumResultsTotalsByKeyFormatted(name, groupResults, "Value")
+        end
+    )
 end
 
 ---@param results MiniLootMessageFormatSimpleParserResultTransmogrification[]

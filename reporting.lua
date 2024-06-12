@@ -1,11 +1,10 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
+local db = ns.Settings.db
 local MiniLootMessageGroup = ns.Messages.MiniLootMessageGroup
 local MessagesCollection = ns.Messages.MessagesCollection
 local ProcessChatMessage = ns.Messages.ProcessChatMessage
 local TableContains = ns.Utils.TableContains
-local TableCombine = ns.Utils.TableCombine
-local TableKeys = ns.Utils.TableKeys
 
 ---@type MiniLootNSEventCallbackResult
 local ProcessChatEvent
@@ -85,8 +84,7 @@ function ProcessChatEvent(frame, event, ...)
         return
     end
     local group = message.group
-    local db = frame.db
-    if not db.EnabledGroups[group] then
+    if db.EnabledGroups[group] == false then
         return
     end
     if db.IgnoredGroups[group] or message.group == MiniLootMessageGroup.Ignore then

@@ -7,18 +7,18 @@
 ## SavedVariables: MiniLootDB2, MiniLootDB
 ## X-Curse-Project-ID: 43440
 ## X-WoWI-ID: 19598
-locale.lua
-config.lua
-events.lua
-tooltip.lua
-options.lua
-util.lua
-core.lua
-#debug.lua
-#utils.lua
-#messages.lua
-#reporting.lua
-#formatter.lua
-#output.lua
-#settings.lua
-#init.lua
+#locale.lua
+#config.lua
+#events.lua
+#tooltip.lua
+#options.lua
+#util.lua
+#core.lua
+debug.lua
+utils.lua
+messages.lua
+settings.lua
+reporting.lua
+formatter.lua
+output.lua
+init.lua

@@ -27,7 +27,7 @@ local DefaultOptions = {
     Enabled = true,
     EnabledGroups = {},
     IgnoredGroups = {},
-    Debounce = 2,
+    Debounce = 0,
     ChatFrame = MiniLootChatFrame.DEFAULT_CHAT_FRAME,
 }
 
@@ -61,10 +61,26 @@ local function ProcessSavedVariables()
     return db
 end
 
-ProcessSavedVariables()
+---@class MiniLootNSSettings
+---@field public db MiniLootNSSettingsOptions
+
+---@type MiniLootNSSettingsOptions
+local dbProxy = setmetatable({}, {
+    __index = function(self, key)
+        local db = ProcessSavedVariables()
+        return db[key]
+    end,
+})
+
+local function GetChatFrame()
+    local chatName = dbProxy.ChatFrame
+    local chatFrame = _G[chatName] ---@type MiniLootChatFramePolyfill
+    return chatFrame
+end
 
 ---@class MiniLootNSSettings
 ns.Settings = {
+    db = dbProxy,
     DefaultOptions = DefaultOptions,
-    ProcessSavedVariables = ProcessSavedVariables,
+    GetChatFrame = GetChatFrame,
 }

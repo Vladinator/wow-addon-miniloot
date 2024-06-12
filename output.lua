@@ -1,5 +1,7 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
+local db = ns.Settings.db
+local GetChatFrame = ns.Settings.GetChatFrame
 local TableCopy = ns.Utils.TableCopy
 local TableCombine = ns.Utils.TableCombine
 local TableGroup = ns.Utils.TableGroup
@@ -108,7 +110,7 @@ function MiniLootNSOutputHandler:OnAdd()
     if self.timer then
         self.timer:Cancel()
     end
-    self.timer = C_Timer.NewTimer(self.frame.db.Debounce, self.timerOnTick)
+    self.timer = C_Timer.NewTimer(db.Debounce, self.timerOnTick)
 end
 
 function MiniLootNSOutputHandler:Flush()
@@ -116,7 +118,7 @@ function MiniLootNSOutputHandler:Flush()
     if buffer:IsEmpty() then
         return
     end
-    local chatFrame = self.frame:GetChatFrame()
+    local chatFrame = GetChatFrame()
     local lines = {} ---@type string[]
     local groups = buffer:GroupResults()
     for _, group in ipairs(groups) do
@@ -141,7 +143,11 @@ end
 ---@param item MiniLootBufferItem
 function MiniLootNSOutputHandler:Add(item)
     self.buffer:Add(item)
-    self:OnAdd()
+    if db.Debounce == 0 then
+        self:Flush()
+    else
+        self:OnAdd()
+    end
 end
 
 ---@param frame MiniLootNSEventFrame
