@@ -313,7 +313,7 @@ end
 
 ---@param results MiniLootMessageFormatSimpleParserResultExperience[]
 Formatters[MiniLootMessageGroup.Experience] = function(results)
-    return format(Formats.ScS, SumByKeyPretty(results, "Value"))
+    return format(Formats.ScS, XP, SumByKeyPretty(results, "Value"))
 end
 
 ---@param results MiniLootMessageFormatSimpleParserResultFollowerExperience[]

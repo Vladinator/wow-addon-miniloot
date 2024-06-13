@@ -150,6 +150,7 @@ local Tokens = {
 }
 
 ---@alias MiniLootMessageFormatSimpleParserResultType
+---|"Fallback"
 ---|MiniLootMessageFormatSimpleParserResultReputationTypes
 ---|MiniLootMessageFormatSimpleParserResultHonorTypes
 ---|MiniLootMessageFormatSimpleParserResultExperienceTypes
@@ -1976,7 +1977,7 @@ local function ProcessMatchedToResult(messageFormat, matches)
         local key, value = ProcessTokens(token, match)
         if key then
             if not result then
-                result = {}
+                result = { Type = "Fallback" }
             end
             result[key] = value
         end

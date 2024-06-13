@@ -23,7 +23,7 @@ local MiniLootChatFrame = {
 ---@field IgnoredGroups table<MiniLootMessageGroup, boolean?>
 ---@field DebounceGroups table<MiniLootMessageGroup, number?>
 ---@field EnabledTooltips table<MiniLootTooltipHandlerType, boolean?>
----@field Filters MiniLootFilter[]
+---@field Filters MiniLootFilterEntry[]
 
 ---@class MiniLootNSSettingsOptions
 local DefaultOptions = {
@@ -55,7 +55,7 @@ do
     DefaultOptions.Filters[#DefaultOptions.Filters + 1] = {
         group = MiniLootMessageGroup.Loot,
         type = "Loot",
-        key = "Value",
+        key = "Link",
         convert = "quality",
         comparator = "ge",
         value = Enum.ItemQuality.Common,
@@ -64,7 +64,7 @@ do
     DefaultRemixOptions.Filters[#DefaultRemixOptions.Filters + 1] = {
         group = MiniLootMessageGroup.Loot,
         type = "Loot",
-        key = "Value",
+        key = "Link",
         convert = "quality",
         comparator = "ge",
         value = Enum.ItemQuality.Rare,

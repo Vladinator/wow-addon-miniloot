@@ -21,18 +21,11 @@ local GetLinkQuality = ns.Utils.GetLinkQuality
 ---@field public comparator MiniLootFilterComparators
 ---@field public value any
 
----@param src MiniLootFilter
----@param dst MiniLootFilter
----@return MiniLootFilter dst
-local function CopyFilter(src, dst)
-    dst.group = src.group
-    dst.type = src.type
-    dst.key = src.key
-    dst.convert = src.convert
-    dst.comparator = src.comparator
-    dst.value = src.value
-    return dst
-end
+---@alias MiniLootFilterEntry MiniLootFilter|MiniLootFilterCollection
+
+---@class MiniLootFilterCollection
+---@field public logic "and"|"or"
+---@field public children MiniLootFilterEntry
 
 ---@param value any
 ---@param convert MiniLootFilterConverters
@@ -93,14 +86,21 @@ end
 ---@param filter MiniLootFilter
 ---@param result MiniLootMessageFormatSimpleParserResult
 ---@param message MiniLootMessage
----@return boolean success
-local function ProcessFilter(filter, result, message)
-    if filter.group ~= message.group then
+---@return boolean isRelevant
+local function IsFilterRelevant(filter, result, message)
+    if filter.group and filter.group ~= message.group then
         return false
     end
-    if filter.type ~= result.Type then
+    if filter.type and filter.type ~= result.Type then
         return false
     end
+    return true
+end
+
+---@param filter MiniLootFilter
+---@param result MiniLootMessageFormatSimpleParserResult
+---@return boolean satisfiesFilter
+local function ProcessFilterValues(filter, result)
     local resultValue = result[filter.key] ---@type any
     if filter.convert then
         resultValue = ConvertValue(resultValue, filter.convert)
@@ -111,20 +111,77 @@ end
 ---@param filters MiniLootFilter[]
 ---@param result MiniLootMessageFormatSimpleParserResult
 ---@param message MiniLootMessage
----@return boolean success, MiniLootFilter filter
+---@return boolean? isFiltered, MiniLootFilter? filteredBy
 local function ProcessFilters(filters, result, message)
+    local numRelevant = 0
     for _, filter in ipairs(filters) do
-        local success = ProcessFilter(filter, result, message)
-        if success then
-            return true, filter
+        if IsFilterRelevant(filter, result, message) then
+            numRelevant = numRelevant + 1
+            local satisfiesFilter = ProcessFilterValues(filter, result)
+            if not satisfiesFilter then
+                return true, filter
+            end
         end
     end
-    return false ---@diagnostic disable-line: missing-return-value
+    if numRelevant > 0 then
+        return false
+    end
+end
+
+---@param filtersCollections MiniLootFilterEntry[]
+---@param result MiniLootMessageFormatSimpleParserResult
+---@param message MiniLootMessage
+---@return boolean? isFiltered, MiniLootFilterEntry? filteredBy
+local function ProcessRequirements(filtersCollections, result, message)
+    local numRelevant = 0
+    ---@param filterCollection MiniLootFilterEntry
+    ---@return boolean? isFiltered, MiniLootFilterEntry? filteredBy, number count, number total
+    local function processFilterCollection(filterCollection)
+        local count = 0
+        local total = 0
+        if filterCollection.logic then
+            local isAndLogic = filterCollection.logic == "and"
+            ---@type MiniLootFilterEntry[]
+            local subFilterCollection = filterCollection.children ---@diagnostic disable-line: assign-type-mismatch
+            for _, subChild in ipairs(subFilterCollection) do
+                local subIsFiltered, subFilteredBy, subCount, subTotal = processFilterCollection(subChild)
+                total = total + subTotal
+                if subIsFiltered then
+                    count = count + subCount
+                    if not isAndLogic then
+                        return true, subFilteredBy, count, total
+                    end
+                end
+            end
+            if isAndLogic then
+                return count ~= total, nil, count, total
+            end
+            return count > 0, nil, count, total
+        end
+        ---@type MiniLootFilter
+        local filter = filterCollection ---@diagnostic disable-line: assign-type-mismatch
+        if IsFilterRelevant(filter, result, message) then
+            total = total + 1
+            local satisfiesFilter = ProcessFilterValues(filter, result)
+            if not satisfiesFilter then
+                count = count + 1
+                return true, filter, count, total
+            end
+        end
+        return nil, nil, count, total
+    end
+    for _, filterCollection in ipairs(filtersCollections) do
+        local isFiltered, filteredBy, count, total = processFilterCollection(filterCollection)
+        if isFiltered then
+            return true, filteredBy
+        end
+    end
+    if numRelevant > 0 then
+        return false
+    end
 end
 
 ---@class MiniLootNSFilters
 ns.Filters = {
-    CopyFilter = CopyFilter,
-    ProcessFilter = ProcessFilter,
-    ProcessFilters = ProcessFilters,
+    ProcessRequirements = ProcessRequirements,
 }
