@@ -12,7 +12,30 @@ local GetShortFactionName = ns.Utils.GetShortFactionName
 
 local MiniLootMessageGroup = ns.Messages.MiniLootMessageGroup
 
----@alias MiniLootMessageFormatter fun(results: MiniLootMessageFormatSimpleParserResult[]): string|number|string[]|number[]?
+---@enum MiniLootMessageFormats
+local Formats = {
+    S = "%s",
+    SxD = "%sx%d",
+    ScS = "%s: %s",
+    ScSxD = "%s: %sx%d",
+    ScSS = "%s: %s %s",
+}
+
+---@alias MiniLootMessageFormatterOutputData string|number|string[]|number[]
+
+---@enum MiniLootMessageFormatterOutputType
+local MiniLootMessageFormatterOutputType = {
+    PassThru = "PassThru",
+    GroupOnPrefix = "GroupOnPrefix",
+}
+
+---@class MiniLootMessageFormatterOutput
+---@field public Type MiniLootMessageFormatterOutputType
+---@field public Prefix string
+---@field public Format MiniLootMessageFormats
+---@field public Data MiniLootMessageFormatterOutputData
+
+---@alias MiniLootMessageFormatter fun(results: MiniLootMessageFormatSimpleParserResult[]): MiniLootMessageFormatterOutput|MiniLootMessageFormatterOutputData?
 
 ---@generic T
 ---@param results MiniLootMessageFormatSimpleParserResult[]
@@ -85,19 +108,12 @@ local function TableGroupFormatOuter(results, key, outerFunc)
     return lines
 end
 
-local Formats = {
-    S = "%s",
-    SxD = "%sx%d",
-    ScS = "%s: %s",
-    ScSxD = "%s: %sx%d",
-}
-
 ---@param link string
-local function GetLootIconFormatted(link)
+---@param isMawPower? boolean
+local function GetLootIconFormatted(link, isMawPower)
     return GetLootIcon(link, true, false, nil, true, nil)
 end
 
----@generic T
 ---@param prefix string
 ---@param results MiniLootMessageFormatSimpleParserResult[]
 ---@param key string
@@ -117,6 +133,17 @@ local function SumResultsTotalsByKeyFormatted(prefix, results, key)
         return format(Formats.SxD, link, total)
     end
     return format(Formats.S, link)
+end
+
+---@param name string
+---@param results MiniLootMessageFormatSimpleParserResult[]
+local function SumReputationTotalsByKeyFormatted(name, results)
+    local firstResult = results[1]
+    if not firstResult then
+        return
+    end
+    local total = SumByKey(results, "Value")
+    return format(Formats.ScSS, YOU, name, total)
 end
 
 ---@param key string
@@ -268,12 +295,15 @@ local Formatters = {}
 
 ---@param results MiniLootMessageFormatSimpleParserResultAnimaPower[]
 Formatters[MiniLootMessageGroup.AnimaPower] = function(results)
-    -- TODO
+    local links = TableMap(results, function(result) return GetLootIconFormatted(result.Link, true) end)
+    local suffix = table.concat(links)
+    return format(Formats.ScS, YOU, suffix)
 end
 
 ---@param results MiniLootMessageFormatSimpleParserResultArtifactPower[]
 Formatters[MiniLootMessageGroup.ArtifactPower] = function(results)
-    -- TODO
+    local link = GetLootIconFormatted(results[1].Link)
+    return format(Formats.ScS, link, SumByKeyPretty(results, "Value"))
 end
 
 ---@param results MiniLootMessageFormatSimpleParserResultCurrency[]
@@ -283,7 +313,7 @@ end
 
 ---@param results MiniLootMessageFormatSimpleParserResultExperience[]
 Formatters[MiniLootMessageGroup.Experience] = function(results)
-    return format("%s: %s", XP, SumByKeyPretty(results, "Value"))
+    return format(Formats.ScS, SumByKeyPretty(results, "Value"))
 end
 
 ---@param results MiniLootMessageFormatSimpleParserResultFollowerExperience[]
@@ -293,7 +323,7 @@ end
 
 ---@param results MiniLootMessageFormatSimpleParserResultHonor[]
 Formatters[MiniLootMessageGroup.Honor] = function(results)
-    return format("%s: %s", HONOR, SumByKeyPretty(results, "Value"))
+    return format(Formats.ScS, HONOR, SumByKeyPretty(results, "Value"))
 end
 
 ---@param results MiniLootMessageFormatSimpleParserResultLoot[]
@@ -332,13 +362,13 @@ end
 
 ---@param results MiniLootMessageFormatSimpleParserResultReputation[]
 Formatters[MiniLootMessageGroup.Reputation] = function(results)
-    return TableGroupFormatOuter(
+    TableGroupFormatOuter(
         results,
         "Name",
         ---@param groupResults MiniLootMessageFormatSimpleParserResultReputation[]
         function(groupKey, groupResults)
             local name = GetShortFactionName(groupKey)
-            return SumResultsTotalsByKeyFormatted(name, groupResults, "Value")
+            return SumReputationTotalsByKeyFormatted(name, groupResults)
         end
     )
 end
@@ -373,7 +403,11 @@ local function Format(group, results)
     if not formatter then
         return
     end
-    return formatter(results)
+    local output = formatter(results)
+    if type(output) == "table" and output.Type then
+        return output.Data
+    end
+    return output
 end
 
 ---@class MiniLootNSFormatter

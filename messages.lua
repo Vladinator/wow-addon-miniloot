@@ -1732,7 +1732,7 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultArtifactPower
         ---@field public Type MiniLootMessageFormatSimpleParserResultArtifactPowerTypes
         ---@field public Link string The artifact item link.
-        ---@field public Value? number If provided, the amount of power gained.
+        ---@field public Value number The amount of power gained.
 
         ---@class MiniLootMessageFormatSimpleParserResultArtifactPowerArgs : MiniLootMessageFormatSimpleParserResultArtifactPower
         ---@field public Link? string
@@ -1760,28 +1760,9 @@ do
                         },
                         tokens = {
                             Tokens.Link,
-                            Tokens.ValueString,
+                            Tokens.ValueNumber,
                         },
                     },
-                    -- {
-                    --     formats = {
-                    --         "LOOT_ITEM_PUSHED_SELF",
-                    --     },
-                    --     tokens = {
-                    --         Tokens.Link,
-                    --     },
-                    --     parser = function(results)
-                    --         ---@type MiniLootMessageFormatSimpleParserResultArtifactPower|false?
-                    --         local temp = SimpleParser(results)
-                    --         if not temp then
-                    --             return temp
-                    --         end
-                    --         if temp.Link then -- TODO: is item realted to artifact power? then we ignore/hide processing it like loot - this should be in the main handler for item looting?
-                    --             return false
-                    --         end
-                    --         return temp
-                    --     end,
-                    -- },
                 },
             }
         )

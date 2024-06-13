@@ -20,6 +20,7 @@ local MiniLootChatFrame = {
 ---@class MiniLootNSSettingsOptions
 ---@field EnabledGroups table<MiniLootMessageGroup, boolean?>
 ---@field IgnoredGroups table<MiniLootMessageGroup, boolean?>
+---@field DebounceGroups table<MiniLootMessageGroup, number?>
 ---@field ChatFrame MiniLootChatFrame
 
 ---@class MiniLootNSSettingsOptions
@@ -27,13 +28,19 @@ local DefaultOptions = {
     Enabled = true,
     EnabledGroups = {},
     IgnoredGroups = {},
-    Debounce = 0,
+    DebounceGroups = {},
+    Debounce = 2,
     ChatFrame = MiniLootChatFrame.DEFAULT_CHAT_FRAME,
+    EnableTooltips = true,
+    EnabledTooltips = {},
 }
 
-for _, v in pairs(MiniLootMessageGroup) do
-    DefaultOptions.EnabledGroups[v] = true
+for k, v in pairs(MiniLootMessageGroup) do
+    DefaultOptions.EnabledGroups[v] = nil
     DefaultOptions.IgnoredGroups[v] = nil
+    if k:find("^LootRoll") then
+        DefaultOptions.DebounceGroups[k] = 0
+    end
 end
 
 ---@class MiniLootNSSettingsMetatable

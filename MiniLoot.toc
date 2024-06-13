@@ -21,4 +21,5 @@ settings.lua
 reporting.lua
 formatter.lua
 output.lua
+tooltips.lua
 init.lua

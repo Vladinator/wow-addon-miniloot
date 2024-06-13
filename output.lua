@@ -37,6 +37,19 @@ function MiniLootNSBuffer:Clear()
     self.length = 0
 end
 
+---@param group MiniLootMessageGroup
+function MiniLootNSBuffer:ClearGroup(group)
+    local length = self.length
+    for i = #self.buffer, 1, -1 do
+        local item = self.buffer[i]
+        if item.message.group == group then
+            length = length - 1
+            table.remove(self.buffer, i)
+        end
+    end
+    self.length = length
+end
+
 function MiniLootNSBuffer:GroupResults()
     local groups, keys = TableGroup(
         self.buffer,
@@ -113,7 +126,8 @@ function MiniLootNSOutputHandler:OnAdd()
     self.timer = C_Timer.NewTimer(db.Debounce, self.timerOnTick)
 end
 
-function MiniLootNSOutputHandler:Flush()
+---@param flushGroup? MiniLootMessageGroup
+function MiniLootNSOutputHandler:Flush(flushGroup)
     local buffer = self.buffer
     if buffer:IsEmpty() then
         return
@@ -122,22 +136,28 @@ function MiniLootNSOutputHandler:Flush()
     local lines = {} ---@type string[]
     local groups = buffer:GroupResults()
     for _, group in ipairs(groups) do
-        local itemLines = Format(group.name, group.results)
-        if itemLines then
-            local lineType = type(itemLines)
-            if lineType == "table" then
-                TableCombine(lines, itemLines)
-            elseif lineType == "string" then
-                lines[#lines + 1] = itemLines
-            else
-                lines[#lines + 1] = tostring(itemLines)
+        if not flushGroup or group.name == flushGroup then
+            local itemLines = Format(group.name, group.results)
+            if itemLines then
+                local lineType = type(itemLines)
+                if lineType == "table" then
+                    TableCombine(lines, itemLines)
+                elseif lineType == "string" then
+                    lines[#lines + 1] = itemLines
+                else
+                    lines[#lines + 1] = tostring(itemLines)
+                end
             end
         end
     end
     for _, line in ipairs(lines) do
         chatFrame:AddMessage(line, 1, 1, 0)
     end
-    buffer:Clear()
+    if flushGroup then
+        buffer:ClearGroup(flushGroup)
+    else
+        buffer:Clear()
+    end
 end
 
 ---@param item MiniLootBufferItem
@@ -145,9 +165,15 @@ function MiniLootNSOutputHandler:Add(item)
     self.buffer:Add(item)
     if db.Debounce == 0 then
         self:Flush()
-    else
-        self:OnAdd()
+        return
     end
+    local group = item.message.group
+    local debounce = db.DebounceGroups[group]
+    if debounce == 0 then
+        self:Flush(group)
+        return
+    end
+    self:OnAdd()
 end
 
 ---@param frame MiniLootNSEventFrame

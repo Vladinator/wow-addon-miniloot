@@ -155,7 +155,6 @@ local function TableReduce(tbl, func, init)
     return temp
 end
 
----@generic T
 ---@param tbl table<any, any>
 local function TableSwap(tbl)
     local keys = TableKeys(tbl)
@@ -616,6 +615,20 @@ local function GetLootIcon(link, hyperlink, simple, customColor, appendItemLevel
     return GetChatLootIcon(color, data, texture, hyperlink, simple, customColor, appendText)
 end
 
+local function GetChatFrames()
+    local chatFrames = {} ---@type MiniLootChatFramePolyfill[]
+    local index = 0
+    for i = 1, 100 do
+        local name = format("ChatFrame%d", i)
+        local chatFrame = _G[name] ---@type MiniLootChatFramePolyfill?
+        if chatFrame then
+            index = index + 1
+            chatFrames[index] = chatFrame
+        end
+    end
+    return chatFrames
+end
+
 ---@class MiniLootNSUtils
 ns.Utils = {
     SimpleHexColors = SimpleHexColors,
@@ -652,4 +665,5 @@ ns.Utils = {
     GetChatIconMarkup = GetChatIconMarkup,
     GetChatLootIcon = GetChatLootIcon,
     GetLootIcon = GetLootIcon,
+    GetChatFrames = GetChatFrames,
 }

@@ -11,6 +11,9 @@ local UnregisterEvents = ns.Reporting.UnregisterEvents
 local RegisterChatEvents = ns.Reporting.RegisterChatEvents
 local UnregisterChatEvents = ns.Reporting.UnregisterChatEvents
 local CreateOutputHandler = ns.Output.CreateOutputHandler
+local GetChatFrames = ns.Utils.GetChatFrames
+local EnableHyperlinks = ns.Tooltip.EnableHyperlinks
+local DisableHyperlinks = ns.Tooltip.DisableHyperlinks
 
 ---@alias MiniLootChatFramePolyfill MessageFrame
 
@@ -95,6 +98,13 @@ function frame:UpdateState()
         self:Enable()
     else
         self:Disable()
+    end
+    for _, chatFrame in ipairs(GetChatFrames()) do
+        if db.EnableTooltips then
+            EnableHyperlinks(chatFrame)
+        else
+            DisableHyperlinks(chatFrame)
+        end
     end
 end
 
