@@ -23,7 +23,7 @@ local MiniLootChatFrame = {
 ---@field IgnoredGroups table<MiniLootMessageGroup, boolean?>
 ---@field DebounceGroups table<MiniLootMessageGroup, number?>
 ---@field EnabledTooltips table<MiniLootTooltipHandlerType, boolean?>
----@field Filters table<MiniLootMessageGroup, MiniLootFilterSV[]>
+---@field Filters MiniLootFilter[]
 
 ---@class MiniLootNSSettingsOptions
 local DefaultOptions = {
@@ -45,11 +45,31 @@ for k, v in pairs(MiniLootMessageGroup) do
     if k:find("^LootRoll") then
         DefaultOptions.DebounceGroups[k] = 0
     end
-    DefaultOptions.Filters[k] = {}
+    DefaultOptions.Filters = {}
 end
 
 ---@class MiniLootNSSettingsOptions
 local DefaultRemixOptions = TableCopy(DefaultOptions)
+
+do
+    DefaultOptions.Filters[#DefaultOptions.Filters + 1] = {
+        group = MiniLootMessageGroup.Loot,
+        type = "Loot",
+        key = "Value",
+        convert = "quality",
+        comparator = "ge",
+        value = Enum.ItemQuality.Common,
+    }
+
+    DefaultRemixOptions.Filters[#DefaultRemixOptions.Filters + 1] = {
+        group = MiniLootMessageGroup.Loot,
+        type = "Loot",
+        key = "Value",
+        convert = "quality",
+        comparator = "ge",
+        value = Enum.ItemQuality.Rare,
+    }
+end
 
 ---@class MiniLootNSSettingsMetatable
 local OptionsMetatable = {

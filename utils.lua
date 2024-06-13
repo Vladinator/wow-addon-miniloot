@@ -629,6 +629,29 @@ local function GetChatFrames()
     return chatFrames
 end
 
+local HexColorPattern = "|c[fF][fF]([0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])"
+
+local HexColorToQuality = {
+    ["9d9d9d"] = Enum.ItemQuality.Poor,
+    ["ffffff"] = Enum.ItemQuality.Common,
+    ["1eff00"] = Enum.ItemQuality.Uncommon,
+    ["0070dd"] = Enum.ItemQuality.Rare,
+    ["a335ee"] = Enum.ItemQuality.Epic,
+    ["ff8000"] = Enum.ItemQuality.Legendary,
+    ["e6cc80"] = Enum.ItemQuality.Artifact,
+    ["00ccff"] = Enum.ItemQuality.Heirloom,
+}
+
+---@param link string
+---@return number? qualityID
+local function GetLinkQuality(link)
+    local hex = link:match(HexColorPattern)
+    if not hex then
+        return
+    end
+    return HexColorToQuality[hex] or HexColorToQuality[hex:lower()]
+end
+
 ---@class MiniLootNSUtils
 ns.Utils = {
     SimpleHexColors = SimpleHexColors,
@@ -666,4 +689,5 @@ ns.Utils = {
     GetChatLootIcon = GetChatLootIcon,
     GetLootIcon = GetLootIcon,
     GetChatFrames = GetChatFrames,
+    GetLinkQuality = GetLinkQuality,
 }

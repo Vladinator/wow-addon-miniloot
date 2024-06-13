@@ -4,6 +4,7 @@ local db = ns.Settings.db
 local MiniLootMessageGroup = ns.Messages.MiniLootMessageGroup
 local MessagesCollection = ns.Messages.MessagesCollection
 local ProcessChatMessage = ns.Messages.ProcessChatMessage
+local ProcessFilters = ns.Filters.ProcessFilters
 local TableContains = ns.Utils.TableContains
 
 ---@type MiniLootNSEventCallbackResult
@@ -88,6 +89,10 @@ function ProcessChatEvent(frame, event, ...)
         return
     end
     if db.IgnoredGroups[group] or message.group == MiniLootMessageGroup.Ignore then
+        return result, message, true
+    end
+    local success = ProcessFilters(db.Filters, result, message)
+    if not success then
         return result, message, true
     end
     return result, message
