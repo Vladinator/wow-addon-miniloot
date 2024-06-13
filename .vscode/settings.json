@@ -138,6 +138,7 @@
         "YELLOW_FONT_COLOR",
         "YOU",
         "YOU_LOOT_MONEY",
-        "YOU_LOOT_MONEY_GUILD"
+        "YOU_LOOT_MONEY_GUILD",
+        "LOOT"
     ]
 }

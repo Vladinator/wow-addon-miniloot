@@ -149,8 +149,38 @@ local Tokens = {
     },
 }
 
+---@alias MiniLootMessageFormatSimpleParserResultType
+---|MiniLootMessageFormatSimpleParserResultReputationTypes
+---|MiniLootMessageFormatSimpleParserResultHonorTypes
+---|MiniLootMessageFormatSimpleParserResultExperienceTypes
+-- ---|MiniLootMessageFormatSimpleParserResultGuildExperienceTypes
+---|MiniLootMessageFormatSimpleParserResultFollowerExperienceTypes
+---|MiniLootMessageFormatSimpleParserResultCurrencyTypes
+---|MiniLootMessageFormatSimpleParserResultMoneyTypes
+---|MiniLootMessageFormatSimpleParserResultLootTypes
+---|MiniLootMessageFormatSimpleParserResultLootRollTypes
+---|MiniLootMessageFormatSimpleParserResultAnimaPowerTypes
+---|MiniLootMessageFormatSimpleParserResultArtifactPowerTypes
+---|MiniLootMessageFormatSimpleParserResultTransmogrificationTypes
+---|MiniLootMessageFormatSimpleParserResultIgnoreTypes
+
+---@alias MiniLootMessageFormatSimpleParserResultKeys
+---|MiniLootMessageFormatSimpleParserResultReputationKeys
+---|MiniLootMessageFormatSimpleParserResultHonorKeys
+---|MiniLootMessageFormatSimpleParserResultExperienceKeys
+-- ---|MiniLootMessageFormatSimpleParserResultGuildExperienceKeys
+---|MiniLootMessageFormatSimpleParserResultFollowerExperienceKeys
+---|MiniLootMessageFormatSimpleParserResultCurrencyKeys
+---|MiniLootMessageFormatSimpleParserResultMoneyKeys
+---|MiniLootMessageFormatSimpleParserResultLootKeys
+---|MiniLootMessageFormatSimpleParserResultLootRollKeys
+---|MiniLootMessageFormatSimpleParserResultAnimaPowerKeys
+---|MiniLootMessageFormatSimpleParserResultArtifactPowerKeys
+---|MiniLootMessageFormatSimpleParserResultTransmogrificationKeys
+---|MiniLootMessageFormatSimpleParserResultIgnoreKeys
+
 ---@class MiniLootMessageFormatSimpleParserResult : table
----@field public Type any
+---@field public Type MiniLootMessageFormatSimpleParserResultType
 
 ---@alias MiniLootMessageFormatSimpleParser fun(results: MiniLootMessageFormatTokenResult[]): MiniLootMessageFormatSimpleParserResult|false?
 

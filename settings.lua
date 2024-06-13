@@ -18,30 +18,38 @@ local MiniLootChatFrame = {
 }
 
 ---@class MiniLootNSSettingsOptions
+---@field ChatFrame MiniLootChatFrame
 ---@field EnabledGroups table<MiniLootMessageGroup, boolean?>
 ---@field IgnoredGroups table<MiniLootMessageGroup, boolean?>
 ---@field DebounceGroups table<MiniLootMessageGroup, number?>
----@field ChatFrame MiniLootChatFrame
+---@field EnabledTooltips table<MiniLootTooltipHandlerType, boolean?>
+---@field Filters table<MiniLootMessageGroup, MiniLootFilterSV[]>
 
 ---@class MiniLootNSSettingsOptions
 local DefaultOptions = {
     Enabled = true,
+    EnableTooltips = true,
+    EnableRemixMode = true,
+    ChatFrame = MiniLootChatFrame.DEFAULT_CHAT_FRAME,
+    Debounce = 2,
     EnabledGroups = {},
     IgnoredGroups = {},
     DebounceGroups = {},
-    Debounce = 2,
-    ChatFrame = MiniLootChatFrame.DEFAULT_CHAT_FRAME,
-    EnableTooltips = true,
     EnabledTooltips = {},
+    Filters = {},
 }
 
 for k, v in pairs(MiniLootMessageGroup) do
-    DefaultOptions.EnabledGroups[v] = nil
-    DefaultOptions.IgnoredGroups[v] = nil
+    DefaultOptions.EnabledGroups[k] = nil
+    DefaultOptions.IgnoredGroups[k] = nil
     if k:find("^LootRoll") then
         DefaultOptions.DebounceGroups[k] = 0
     end
+    DefaultOptions.Filters[k] = {}
 end
+
+---@class MiniLootNSSettingsOptions
+local DefaultRemixOptions = TableCopy(DefaultOptions)
 
 ---@class MiniLootNSSettingsMetatable
 local OptionsMetatable = {
@@ -55,17 +63,37 @@ local OptionsMetatable = {
     end,
 }
 
----@return MiniLootNSSettingsOptions
+---@class MiniLootNSSettingsMetatable
+local RemixOptionsMetatable = {
+    __index = function(self, key)
+        local value = DefaultRemixOptions[key]
+        if type(value) == "table" then
+            value = TableCopy(value)
+            rawset(self, key, value)
+        end
+        return value
+    end,
+}
+
+---@return MiniLootNSSettingsOptions db, MiniLootNSSettingsOptions remixDb
 local function ProcessSavedVariables()
     local db = _G.MiniLootDB2
+    local remixDb = _G.MiniLootRemixDB2
     if type(db) ~= "table" then
         db = {}
         _G.MiniLootDB2 = db
     end
+    if type(remixDb) ~= "table" then
+        remixDb = {}
+        _G.MiniLootRemixDB2 = remixDb
+    end
     if not getmetatable(db) then
         setmetatable(db, OptionsMetatable)
     end
-    return db
+    if not getmetatable(remixDb) then
+        setmetatable(remixDb, RemixOptionsMetatable)
+    end
+    return db, remixDb
 end
 
 ---@class MiniLootNSSettings
@@ -79,15 +107,52 @@ local dbProxy = setmetatable({}, {
     end,
 })
 
+---@type MiniLootNSSettingsOptions
+local remixDbProxy = setmetatable({}, {
+    __index = function(self, key)
+        local _, remixDb = ProcessSavedVariables()
+        return remixDb[key]
+    end,
+})
+
+---@param db MiniLootNSSettingsOptions
+---@param key string
+local function CanUseRemixDB(db, key)
+    if key == "EnableRemixMode" or db.EnableRemixMode == false then
+        return false
+    end
+    local timerunningSeasonID = PlayerGetTimerunningSeasonID and PlayerGetTimerunningSeasonID()
+    return timerunningSeasonID and timerunningSeasonID > 0
+end
+
+---@type MiniLootNSSettingsOptions
+local flexDbProxy = setmetatable({}, {
+    __index = function(self, key)
+        local db, remixDb = ProcessSavedVariables()
+        if CanUseRemixDB(db, key) then
+            return remixDb[key]
+        end
+        return db[key]
+    end,
+    __newindex = function (self, key, value)
+        local db, remixDb = ProcessSavedVariables()
+        if CanUseRemixDB(db, key) then
+            remixDb[key] = value
+        else
+            db[key] = value
+        end
+    end,
+})
+
 local function GetChatFrame()
-    local chatName = dbProxy.ChatFrame
+    local chatName = flexDbProxy.ChatFrame
     local chatFrame = _G[chatName] ---@type MiniLootChatFramePolyfill
     return chatFrame
 end
 
 ---@class MiniLootNSSettings
 ns.Settings = {
-    db = dbProxy,
+    db = flexDbProxy,
     DefaultOptions = DefaultOptions,
     GetChatFrame = GetChatFrame,
 }

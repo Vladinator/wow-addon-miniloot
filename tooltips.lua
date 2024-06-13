@@ -400,12 +400,12 @@ local function OnHyperlinkEnter(chatFrame, linkData, link)
             local pattern = handler.Pattern
             if type(pattern) == "table" then
                 for _, p in ipairs(pattern) do
-                    if linkData:find(p) then
+                    if p:find(linkData) then
                         matched = true
                         break
                     end
                 end
-            elseif pattern:find(linkData) then
+            elseif linkData:find(pattern) then
                 matched = true
             end
             if matched then
