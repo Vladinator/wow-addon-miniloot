@@ -1,14 +1,17 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
+local SimpleHexColors = ns.Utils.SimpleHexColors
 local TableGroup = ns.Utils.TableGroup
 local TableCombine = ns.Utils.TableCombine
 local TableMap = ns.Utils.TableMap
 local SumByKey = ns.Utils.SumByKey
 local SumByKeyPretty = ns.Utils.SumByKeyPretty
 local ConvertToMoneyString = ns.Utils.ConvertToMoneyString
+local FormatNumber = ns.Utils.FormatNumber
 local GetLootIcon = ns.Utils.GetLootIcon
 local GetShortUnitName = ns.Utils.GetShortUnitName
 local GetShortFactionName = ns.Utils.GetShortFactionName
+local IsQuestItem = ns.Utils.IsQuestItem
 
 local MiniLootMessageGroup = ns.Messages.MiniLootMessageGroup
 
@@ -16,6 +19,7 @@ local MiniLootMessageGroup = ns.Messages.MiniLootMessageGroup
 local Formats = {
     S = "%s",
     SxD = "%sx%d",
+    SxS = "%sx%s",
     ScS = "%s: %s",
     ScSxD = "%s: %sx%d",
     ScSS = "%s: %s %s",
@@ -111,7 +115,9 @@ end
 ---@param link string
 ---@param isMawPower? boolean
 local function GetLootIconFormatted(link, isMawPower)
-    return GetLootIcon(link, true, false, nil, true, nil)
+    local customColor = IsQuestItem(link) and SimpleHexColors.Red or nil
+    local isMawPowerUnit = isMawPower and "player" or nil
+    return GetLootIcon(link, true, false, customColor, true, isMawPowerUnit)
 end
 
 ---@param prefix string
@@ -130,7 +136,7 @@ local function SumResultsTotalsByKeyFormatted(prefix, results, key)
     end
     local link = GetLootIconFormatted(prefix)
     if total > 1 then
-        return format(Formats.SxD, link, total)
+        return format(Formats.SxS, link, FormatNumber(total))
     end
     return format(Formats.S, link)
 end
@@ -142,7 +148,7 @@ local function SumReputationTotalsByKeyFormatted(name, results)
     if not firstResult then
         return
     end
-    local total = SumByKey(results, "Value")
+    local total = SumByKeyPretty(results, "Value")
     return format(Formats.ScSS, YOU, name, total)
 end
 

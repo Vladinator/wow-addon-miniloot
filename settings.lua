@@ -23,20 +23,20 @@ local MiniLootChatFrame = {
 ---@field IgnoredGroups table<MiniLootMessageGroup, boolean?>
 ---@field DebounceGroups table<MiniLootMessageGroup, number?>
 ---@field EnabledTooltips table<MiniLootTooltipHandlerType, boolean?>
----@field Filters MiniLootFilterEntry[]
+---@field Filters MiniLootFilters
 
 ---@class MiniLootNSSettingsOptions
 local DefaultOptions = {
-    Enabled = true,
-    EnableTooltips = true,
-    EnableRemixMode = true,
-    ChatFrame = MiniLootChatFrame.DEFAULT_CHAT_FRAME,
-    Debounce = 2,
-    EnabledGroups = {},
-    IgnoredGroups = {},
-    DebounceGroups = {},
-    EnabledTooltips = {},
-    Filters = {},
+    Enabled = true, --- actively monitor loot messages and apply transformations
+    EnableTooltips = true, --- show tooltips above chat frame when hovering links
+    EnableRemixMode = true, --- enable separate profile with settings when on a remix character
+    ChatFrame = MiniLootChatFrame.DEFAULT_CHAT_FRAME, --- the default output chat frame
+    Debounce = 2, --- gather loot messages and when it settles this many seconds later we print the summary
+    EnabledGroups = {}, --- these groups are enabled for processing
+    IgnoredGroups = {}, --- these groups are ignored and will be filtered from the chat
+    DebounceGroups = {}, --- these groups use a custom `Debounce` value
+    EnabledTooltips = {}, --- only used if `EnableTooltips` is enabled, only tooltips of this type will be shown when hovering links
+    Filters = {}, --- list of filters (rules or rule groups) to better specify what we wish to see printed to the chat frame
 }
 
 for k, v in pairs(MiniLootMessageGroup) do
@@ -52,7 +52,18 @@ end
 local DefaultRemixOptions = TableCopy(DefaultOptions)
 
 do
-    DefaultOptions.Filters[#DefaultOptions.Filters + 1] = {
+    ---@type MiniLootFilterRule
+    local ItemIsQuest = {
+        group = MiniLootMessageGroup.Loot,
+        type = "Loot",
+        key = "Link",
+        convert = "quest",
+        comparator = "eq",
+        value = true,
+    }
+
+    ---@type MiniLootFilterRule
+    local ItemQualityCommonOrHigher = {
         group = MiniLootMessageGroup.Loot,
         type = "Loot",
         key = "Link",
@@ -61,13 +72,30 @@ do
         value = Enum.ItemQuality.Common,
     }
 
-    DefaultRemixOptions.Filters[#DefaultRemixOptions.Filters + 1] = {
+    ---@type MiniLootFilterRule
+    local ItemQualityRareOrHigher = {
         group = MiniLootMessageGroup.Loot,
         type = "Loot",
         key = "Link",
         convert = "quality",
         comparator = "ge",
         value = Enum.ItemQuality.Rare,
+    }
+
+    DefaultOptions.Filters[#DefaultOptions.Filters + 1] = {
+        logic = "or",
+        children = {
+            ItemIsQuest,
+            ItemQualityCommonOrHigher,
+        },
+    }
+
+    DefaultRemixOptions.Filters[#DefaultRemixOptions.Filters + 1] = {
+        logic = "or",
+        children = {
+            ItemIsQuest,
+            ItemQualityRareOrHigher,
+        },
     }
 end
 

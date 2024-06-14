@@ -1,6 +1,7 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
 local GetLinkQuality = ns.Utils.GetLinkQuality
+local IsQuestItem = ns.Utils.IsQuestItem
 
 ---@alias MiniLootFilterComparators
 ---|"eq"
@@ -12,8 +13,12 @@ local GetLinkQuality = ns.Utils.GetLinkQuality
 
 ---@alias MiniLootFilterConverters
 ---|"quality"
+---|"quest"
 
----@class MiniLootFilter
+---@alias MiniLootFilter MiniLootFilterRule|MiniLootFilterRuleGroup
+---@alias MiniLootFilters MiniLootFilterRule[]|MiniLootFilterRuleGroup[]
+
+---@class MiniLootFilterRule
 ---@field public group? MiniLootMessageGroup
 ---@field public type? MiniLootMessageFormatSimpleParserResultType
 ---@field public key MiniLootMessageFormatSimpleParserResultKeys
@@ -21,11 +26,9 @@ local GetLinkQuality = ns.Utils.GetLinkQuality
 ---@field public comparator MiniLootFilterComparators
 ---@field public value any
 
----@alias MiniLootFilterEntry MiniLootFilter|MiniLootFilterCollection
-
----@class MiniLootFilterCollection
+---@class MiniLootFilterRuleGroup
 ---@field public logic "and"|"or"
----@field public children MiniLootFilterEntry
+---@field public children MiniLootFilters
 
 ---@param value any
 ---@param convert MiniLootFilterConverters
@@ -35,9 +38,15 @@ local function ConvertValue(value, convert)
     if convert == "quality" then
         local quality ---@type number?
         if valueType == "string" then
-            quality = GetLinkQuality(valueType)
+            quality = GetLinkQuality(value)
         end
         return quality
+    elseif convert == "quest" then
+        local quest ---@type boolean?
+        if valueType == "string" then
+            quest = IsQuestItem(value)
+        end
+        return quest
     end
     return value
 end
@@ -83,43 +92,66 @@ local function CompareValues(value1, comparator, value2)
     return false
 end
 
----@param filter MiniLootFilter
+---@param rule MiniLootFilterRule
 ---@param result MiniLootMessageFormatSimpleParserResult
 ---@param message MiniLootMessage
 ---@return boolean isRelevant
-local function IsFilterRelevant(filter, result, message)
-    if filter.group and filter.group ~= message.group then
+local function IsRuleRelevant(rule, result, message)
+    if rule.group and rule.group ~= message.group then
         return false
     end
-    if filter.type and filter.type ~= result.Type then
+    if rule.type and rule.type ~= result.Type then
         return false
     end
     return true
 end
 
----@param filter MiniLootFilter
----@param result MiniLootMessageFormatSimpleParserResult
----@return boolean satisfiesFilter
-local function ProcessFilterValues(filter, result)
-    local resultValue = result[filter.key] ---@type any
-    if filter.convert then
-        resultValue = ConvertValue(resultValue, filter.convert)
-    end
-    return CompareValues(filter.value, filter.comparator, resultValue)
-end
-
----@param filters MiniLootFilter[]
+---@param ruleGroup MiniLootFilterRuleGroup
 ---@param result MiniLootMessageFormatSimpleParserResult
 ---@param message MiniLootMessage
----@return boolean? isFiltered, MiniLootFilter? filteredBy
-local function ProcessFilters(filters, result, message)
+---@return boolean isRelevant
+local function IsRuleGroupRelevant(ruleGroup, result, message)
+    for _, child in ipairs(ruleGroup.children) do
+        if child.logic then
+            ---@type MiniLootFilterRuleGroup
+            local childRuleGroup = child ---@diagnostic disable-line: assign-type-mismatch
+            if not IsRuleGroupRelevant(childRuleGroup, result, message) then
+                return false
+            end
+        else
+            ---@type MiniLootFilterRule
+            local childRule = child ---@diagnostic disable-line: assign-type-mismatch
+            if not IsRuleRelevant(childRule, result, message) then
+                return false
+            end
+        end
+    end
+    return true
+end
+
+---@param rule MiniLootFilterRule
+---@param result MiniLootMessageFormatSimpleParserResult
+---@return boolean satisfiesRule
+local function EvaluateRule(rule, result)
+    local resultValue = result[rule.key] ---@type any
+    if rule.convert then
+        resultValue = ConvertValue(resultValue, rule.convert)
+    end
+    return CompareValues(resultValue, rule.comparator, rule.value)
+end
+
+---@param rules MiniLootFilterRule[]
+---@param result MiniLootMessageFormatSimpleParserResult
+---@param message MiniLootMessage
+---@return boolean? isFiltered, MiniLootFilterRule? filteredBy
+local function EvaluateRules(rules, result, message)
     local numRelevant = 0
-    for _, filter in ipairs(filters) do
-        if IsFilterRelevant(filter, result, message) then
+    for _, rule in ipairs(rules) do
+        if IsRuleRelevant(rule, result, message) then
             numRelevant = numRelevant + 1
-            local satisfiesFilter = ProcessFilterValues(filter, result)
-            if not satisfiesFilter then
-                return true, filter
+            local satisfiesRule = EvaluateRule(rule, result)
+            if not satisfiesRule then
+                return true, rule
             end
         end
     end
@@ -128,60 +160,89 @@ local function ProcessFilters(filters, result, message)
     end
 end
 
----@param filtersCollections MiniLootFilterEntry[]
+---@param ruleGroup MiniLootFilterRuleGroup
 ---@param result MiniLootMessageFormatSimpleParserResult
 ---@param message MiniLootMessage
----@return boolean? isFiltered, MiniLootFilterEntry? filteredBy
-local function ProcessRequirements(filtersCollections, result, message)
-    local numRelevant = 0
-    ---@param filterCollection MiniLootFilterEntry
-    ---@return boolean? isFiltered, MiniLootFilterEntry? filteredBy, number count, number total
-    local function processFilterCollection(filterCollection)
-        local count = 0
-        local total = 0
-        if filterCollection.logic then
-            local isAndLogic = filterCollection.logic == "and"
-            ---@type MiniLootFilterEntry[]
-            local subFilterCollection = filterCollection.children ---@diagnostic disable-line: assign-type-mismatch
-            for _, subChild in ipairs(subFilterCollection) do
-                local subIsFiltered, subFilteredBy, subCount, subTotal = processFilterCollection(subChild)
-                total = total + subTotal
-                if subIsFiltered then
-                    count = count + subCount
-                    if not isAndLogic then
-                        return true, subFilteredBy, count, total
-                    end
-                end
-            end
-            if isAndLogic then
-                return count ~= total, nil, count, total
-            end
-            return count > 0, nil, count, total
-        end
-        ---@type MiniLootFilter
-        local filter = filterCollection ---@diagnostic disable-line: assign-type-mismatch
-        if IsFilterRelevant(filter, result, message) then
-            total = total + 1
-            local satisfiesFilter = ProcessFilterValues(filter, result)
-            if not satisfiesFilter then
-                count = count + 1
-                return true, filter, count, total
+---@return boolean satisfiesRuleGroup
+local function EvaluateRuleGroup(ruleGroup, result, message)
+    local logic = ruleGroup.logic
+    local satisfiesRuleGroup = logic == "and"
+    for _, child in ipairs(ruleGroup.children) do
+        local satisfiesChild = satisfiesRuleGroup
+        if child.logic then
+            ---@type MiniLootFilterRuleGroup
+            local childRuleGroup = child ---@diagnostic disable-line: assign-type-mismatch
+            satisfiesChild = EvaluateRuleGroup(childRuleGroup, result, message)
+        else
+            ---@type MiniLootFilterRule
+            local childRule = child ---@diagnostic disable-line: assign-type-mismatch
+            if IsRuleRelevant(childRule, result, message) then
+                satisfiesChild = EvaluateRule(childRule, result)
             end
         end
-        return nil, nil, count, total
+        if logic == "and" then
+            satisfiesRuleGroup = satisfiesRuleGroup and satisfiesChild
+            if not satisfiesRuleGroup then
+                break
+            end
+        else
+            satisfiesRuleGroup = satisfiesRuleGroup or satisfiesChild
+            if satisfiesRuleGroup then
+                break
+            end
+        end
     end
-    for _, filterCollection in ipairs(filtersCollections) do
-        local isFiltered, filteredBy, count, total = processFilterCollection(filterCollection)
-        if isFiltered then
-            return true, filteredBy
+    return satisfiesRuleGroup
+end
+
+---@param ruleGroups MiniLootFilterRuleGroup[]
+---@param result MiniLootMessageFormatSimpleParserResult
+---@param message MiniLootMessage
+---@return boolean? isFiltered, MiniLootFilterRuleGroup? filteredBy
+local function EvaluateRuleGroups(ruleGroups, result, message)
+    local numRelevant = 0
+    for _, ruleGroup in ipairs(ruleGroups) do
+        if IsRuleGroupRelevant(ruleGroup, result, message) then
+            numRelevant = numRelevant + 1
+            local satisfiesRuleGroup = EvaluateRuleGroup(ruleGroup, result, message)
+            if not satisfiesRuleGroup then
+                return true, ruleGroup
+            end
         end
     end
     if numRelevant > 0 then
         return false
     end
+end
+
+---@param entries MiniLootFilters
+---@param result MiniLootMessageFormatSimpleParserResult
+---@param message MiniLootMessage
+---@return boolean isFiltered, MiniLootFilter? filteredBy
+local function EvaluateFilters(entries, result, message)
+    for _, entry in ipairs(entries) do
+        local satisfies ---@type boolean?
+        if entry.logic then
+            ---@type MiniLootFilterRuleGroup
+            local temp = entry ---@diagnostic disable-line: assign-type-mismatch
+            if IsRuleGroupRelevant(temp, result, message) then
+                satisfies = EvaluateRuleGroup(temp, result, message)
+            end
+        else
+            ---@type MiniLootFilterRule
+            local rule = entry ---@diagnostic disable-line: assign-type-mismatch
+            if IsRuleRelevant(rule, result, message) then
+                satisfies = EvaluateRule(rule, result)
+            end
+        end
+        if satisfies == false then
+            return true, entry
+        end
+    end
+    return false
 end
 
 ---@class MiniLootNSFilters
 ns.Filters = {
-    ProcessRequirements = ProcessRequirements,
+    EvaluateFilters = EvaluateFilters,
 }

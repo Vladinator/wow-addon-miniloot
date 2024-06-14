@@ -466,7 +466,7 @@ local function GetShortFactionName(name, maxLength)
     return format("|cff%s%s|r", SimpleHexColors.FactionPurple, name)
 end
 
-local LinkMarkupPattern = "|c([0-9a-fA-F]+)|H(.-)|h%[(.-)%]|h|r"
+local LinkMarkupPattern = "|c[fF][fF]([0-9a-fA-F]+)|H(.-)|h%[(.-)%]|h|r"
 local AtlasMarkupPattern = "(|A:(.-[Tt][Ii][Ee][Rr](%d+)):(.-)|a)"
 
 ---@param unit UnitToken
@@ -563,12 +563,12 @@ local function GetChatIconMarkup(texture, trim, size)
     return format("|T%s%s|t", texture, temp)
 end
 
----@param color? string
+---@param color? string `RRGGBB`
 ---@param data? string
 ---@param texture number|string
 ---@param hyperlink? boolean
 ---@param simple? boolean
----@param customColor? string
+---@param customColor? string `RRGGBB`
 ---@param appendText? string
 ---@return string chatItemLink
 local function GetChatLootIcon(color, data, texture, hyperlink, simple, customColor, appendText)
@@ -585,13 +585,13 @@ local function GetChatLootIcon(color, data, texture, hyperlink, simple, customCo
     if customColor then
         color = customColor
     end
-    return format("|c%s%s|r", color, temp)
+    return format("|cff%s%s|r", color, temp)
 end
 
 ---@param link string
 ---@param hyperlink? boolean
 ---@param simple? boolean
----@param customColor? string
+---@param customColor? string `RRGGBB`
 ---@param appendItemLevel? boolean
 ---@param mawPowerUnit? UnitToken
 ---@return string itemLink
@@ -652,6 +652,13 @@ local function GetLinkQuality(link)
     return HexColorToQuality[hex] or HexColorToQuality[hex:lower()]
 end
 
+---@param link string
+---@return boolean
+local function IsQuestItem(link)
+    local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(link)
+    return classID == Enum.ItemClass.Questitem
+end
+
 ---@class MiniLootNSUtils
 ns.Utils = {
     SimpleHexColors = SimpleHexColors,
@@ -690,4 +697,5 @@ ns.Utils = {
     GetLootIcon = GetLootIcon,
     GetChatFrames = GetChatFrames,
     GetLinkQuality = GetLinkQuality,
+    IsQuestItem = IsQuestItem,
 }
