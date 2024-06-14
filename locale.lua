@@ -1,22 +1,15 @@
---
--- If you want to help translate the AddOn please go to the CurseForge project page:
--- http://wow.curseforge.com/addons/miniloot/localization/
---
+local ns = select(2, ...) ---@class MiniLootNS
 
-local addonName, ns = ...
-ns.locale = {}
-
--- the client locale
 local locale = GetLocale()
 
--- untranslated phrases get flagged
-setmetatable(ns.locale, {
+---@class MiniLootNSLocale
+ns.locale = setmetatable({}, {
 	__index = function(self, key)
-		return "[" .. locale .. "]" .. tostring(key)
-	end
+		return format("[%s] %s", locale, tostring(key))
+	end,
 })
 
--- shorthand table reference
+---@class MiniLootNSLocale
 local L = ns.locale
 
 -- English
@@ -168,52 +161,42 @@ L.OPTION_IGNORE_GROUP_TRANSMOGRIFICATION_DESC = "The default message when looks 
 L.OPTION_IGNORE_GROUP_IGNORE_TITLE = "Verbose quest rewards"
 L.OPTION_IGNORE_GROUP_IGNORE_DESC = "Additional gold and experience messages when delivering quests."
 
--- German (Germany)
 if locale == "deDE" then
 
 --@localization(locale="deDE", format="lua_additive_table", handle-unlocalized="blank", escape-non-ascii=false, table-name="L")@
 
--- Spanish (Spain)
 elseif locale == "esES" then
 
 --@localization(locale="esES", format="lua_additive_table", handle-unlocalized="blank", escape-non-ascii=false, table-name="L")@
 
--- Spanish (Mexico)
 elseif locale == "esMX" then
 
 --@localization(locale="esMX", format="lua_additive_table", handle-unlocalized="blank", escape-non-ascii=false, table-name="L")@
 
--- French (France)
 elseif locale == "frFR" then
 
 --@localization(locale="frFR", format="lua_additive_table", handle-unlocalized="blank", escape-non-ascii=false, table-name="L")@
 
--- Italian (Italy)
 elseif locale == "itIT" then
 
 --@localization(locale="itIT", format="lua_additive_table", handle-unlocalized="blank", escape-non-ascii=false, table-name="L")@
 
--- Korean (Korea)
 elseif locale == "koKR" then
 
 --@localization(locale="koKR", format="lua_additive_table", handle-unlocalized="blank", escape-non-ascii=false, table-name="L")@
 
--- Portuguese (Brazil)
 elseif locale == "ptBR" then
 
 --@localization(locale="ptBR", format="lua_additive_table", handle-unlocalized="blank", escape-non-ascii=false, table-name="L")@
 
--- Russian (Russia)
 elseif locale == "ruRU" then
 
 --@localization(locale="ruRU", format="lua_additive_table", handle-unlocalized="blank", escape-non-ascii=false, table-name="L")@
 
--- Chinese (China) (simplified)
 elseif locale == "zhCN" then
 
 --@localization(locale="zhCN", format="lua_additive_table", handle-unlocalized="blank", escape-non-ascii=false, table-name="L")@
 
--- Chinese (Taiwan) (traditional)
 elseif locale == "zhTW" then
 
 --@localization(locale="zhTW", format="lua_additive_table", handle-unlocalized="blank", escape-non-ascii=false, table-name="L")@

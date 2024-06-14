@@ -659,6 +659,131 @@ local function IsQuestItem(link)
     return classID == Enum.ItemClass.Questitem
 end
 
+---@param link string
+---@param arg1? number
+---@param arg2? number
+---@param hideVendorPrice? boolean
+---@return TooltipDataLine[]? lines
+local function GetHyperlinkTooltipLines(link, arg1, arg2, hideVendorPrice)
+    local data = C_TooltipInfo.GetHyperlink(link, arg1, arg2, hideVendorPrice)
+    if not data then
+        return
+    end
+    return data.lines
+end
+
+---@param link string
+---@param leftText? string
+---@param rightText? string
+---@return TooltipDataLine? line, number lineIndex
+local function GetHyperlinkLineInTooltip(link, leftText, rightText)
+    local lines = GetHyperlinkTooltipLines(link)
+    if not lines then
+        return ---@diagnostic disable-line: missing-return-value
+    end
+    for i = 2, #lines do
+        local line = lines[i]
+        if leftText and leftText == line.leftText then
+            return line, i
+        end
+        if rightText and rightText == line.rightText then
+            return line, i
+        end
+    end
+    return ---@diagnostic disable-line: missing-return-value
+end
+
+---@param link string
+---@return boolean isUnique, boolean isUniqueEquipped
+local function IsUniqueItem(link)
+    local isUnique = not not GetHyperlinkLineInTooltip(link, ITEM_UNIQUE)
+    local isUniqueEquipped = not not GetHyperlinkLineInTooltip(link, ITEM_UNIQUE_EQUIPPABLE)
+    return isUnique, isUniqueEquipped
+end
+
+---@param link string
+---@return boolean isQuestStartingItem
+local function IsQuestStartingItem(link)
+    local isQuestStartingItem = not not GetHyperlinkLineInTooltip(link, ITEM_STARTS_QUEST)
+    return isQuestStartingItem
+end
+
+---@param link string
+---@return boolean isUncollected
+local function IsAppearanceUncollected(link)
+    local isUncollected = not not GetHyperlinkLineInTooltip(link, TRANSMOGRIFY_TOOLTIP_APPEARANCE_UNKNOWN)
+    return isUncollected
+end
+
+---@param link string
+---@param includeBank? boolean
+---@param includeUses? boolean
+---@param includeReagentBank? boolean
+---@return number count
+local function GetItemCount(link, includeBank, includeUses, includeReagentBank)
+    if includeBank == nil then
+        includeBank = true
+    end
+    if includeUses == nil then
+        includeUses = true
+    end
+    if includeReagentBank == nil then
+        includeReagentBank = true
+    end
+    return C_Item.GetItemCount(link, includeBank, includeUses, includeReagentBank)
+end
+
+---@param link number|string
+---@return CurrencyInfo info
+local function GetCurrencyInfo(link)
+    local id = link
+    if type(id) == "string" then
+        id = C_CurrencyInfo.GetCurrencyIDFromLink(id)
+    end
+    return C_CurrencyInfo.GetCurrencyInfo(id)
+end
+
+---@param link number|string
+---@param amount? number
+---@return string link
+local function GetCurrencyLink(link, amount)
+    local id = link
+    if type(id) == "string" then
+        id = C_CurrencyInfo.GetCurrencyIDFromLink(id)
+    end
+    return C_CurrencyInfo.GetCurrencyLink(id, amount)
+end
+
+---@param link number|string
+---@return number count, number maxCount, number weeklyRemainingCount
+local function GetCurrencyCount(link)
+    local info = GetCurrencyInfo(link)
+    return info.quantity, info.maxQuantity, info.maxWeeklyQuantity - info.quantityEarnedThisWeek
+end
+
+---@param link string
+local function IsItemAnimaPower(link)
+    return type(link) == "string" and link:find("mawpower:") and true or false
+end
+
+---@param rank number
+---@param xp number
+---@param tier number
+---@return number nextRank, number currentXP, number nextRankXP
+local function GetArtifactInfo(rank, xp, tier)
+    local origRank = rank
+    local rankXP
+    repeat
+        rankXP = C_ArtifactUI.GetCostForPointAtRank(rank, tier)
+        if rankXP > 0 and xp >= rankXP then
+            xp = xp - rankXP
+            rank = rank + 1
+        end
+    until rankXP <= 0 or xp < rankXP
+    local nextRank = rank - origRank
+    return nextRank, xp, rankXP
+end
+
 ---@class MiniLootNSUtils
 ns.Utils = {
     SimpleHexColors = SimpleHexColors,
@@ -698,4 +823,15 @@ ns.Utils = {
     GetChatFrames = GetChatFrames,
     GetLinkQuality = GetLinkQuality,
     IsQuestItem = IsQuestItem,
+    GetHyperlinkTooltipLines = GetHyperlinkTooltipLines,
+    GetHyperlinkLineInTooltip = GetHyperlinkLineInTooltip,
+    IsUniqueItem = IsUniqueItem,
+    IsQuestStartingItem = IsQuestStartingItem,
+    IsAppearanceUncollected = IsAppearanceUncollected,
+    GetItemCount = GetItemCount,
+    GetCurrencyInfo = GetCurrencyInfo,
+    GetCurrencyLink = GetCurrencyLink,
+    GetCurrencyCount = GetCurrencyCount,
+    IsItemAnimaPower = IsItemAnimaPower,
+    GetArtifactInfo = GetArtifactInfo,
 }
