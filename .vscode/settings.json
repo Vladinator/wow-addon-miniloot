@@ -73,8 +73,11 @@
         "ITEM_BIND_QUEST",
         "ITEM_STARTS_QUEST",
         "ITEM_UNIQUE",
+        "ITEM_UNIQUE_EQUIPPABLE",
         "LARGE_NUMBER_SEPERATOR",
         "LE_REALM_RELATION_VIRTUAL",
+        "LinkUtil",
+        "LOOT",
         "LOOT_CURRENCY_REFUND",
         "LOOT_DISENCHANT_CREDIT",
         "LOOT_ITEM",
@@ -138,7 +141,6 @@
         "YELLOW_FONT_COLOR",
         "YOU",
         "YOU_LOOT_MONEY",
-        "YOU_LOOT_MONEY_GUILD",
-        "LOOT"
+        "YOU_LOOT_MONEY_GUILD"
     ]
 }
