@@ -52,6 +52,7 @@ local function OnChatEvent(chatFrame, event, ...)
     return false, ...
 end
 
+---@type fun()
 local HookSetItemRef do
 
     ---@alias SetItemRefPolyfill fun(link: string, text: string, button: MouseButton, chatFrame: MiniLootChatFramePolyfill, ...: any)
