@@ -1,5 +1,6 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
+local SimpleHexColors = ns.Utils.SimpleHexColors
 local TableCopy = ns.Utils.TableCopy
 local TableContains = ns.Utils.TableContains
 local TableMerge = ns.Utils.TableMerge
@@ -2092,11 +2093,11 @@ local function RunAndEvaluateTests(message)
     for _, test in ipairs(message.tests) do
         local testResult, closeResults = RunAndEvaluateTest(message, test)
         if not testResult then
-            print(format("|cffFF5555%s|r failed |cffFF5555%s|r", message.group, test[1]))
+            print(format("%s |cff%sfailed|r %s", message.group, SimpleHexColors.Red, test[1]))
             if closeResults then
                 for _, closeResult in ipairs(closeResults) do
                     for k, v in pairs(closeResult) do
-                        print(format(" - |cffFFFF55%s|r %s", tostringall(k, v)))
+                        print(format(" - |cff%s%s|r %s", SimpleHexColors.Yellow, tostringall(k, v)))
                     end
                 end
             end

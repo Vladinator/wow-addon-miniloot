@@ -14,6 +14,7 @@ local IsQuestItem = ns.Utils.IsQuestItem
 ---@alias MiniLootFilterConverters
 ---|"quality"
 ---|"quest"
+---|"itemClass"
 
 ---@alias MiniLootFilter MiniLootFilterRule|MiniLootFilterRuleGroup
 ---@alias MiniLootFilters MiniLootFilterRule[]|MiniLootFilterRuleGroup[]
@@ -47,6 +48,12 @@ local function ConvertValue(value, convert)
             quest = IsQuestItem(value)
         end
         return quest
+    elseif convert == "itemClass" then
+        local itemClass, _ ---@type number?
+        if valueType == "string" then
+            _, _, _, _, _, itemClass = C_Item.GetItemInfoInstant(value)
+        end
+        return itemClass
     end
     return value
 end

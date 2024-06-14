@@ -70,6 +70,16 @@ do
     }
 
     ---@type MiniLootFilterRule
+    local ItemIsGem = {
+        group = MiniLootMessageGroup.Loot,
+        type = "Loot",
+        key = "Link",
+        convert = "itemClass",
+        comparator = "eq",
+        value = Enum.ItemClass.Gem,
+    }
+
+    ---@type MiniLootFilterRule
     local ItemQualityCommonOrHigher = {
         group = MiniLootMessageGroup.Loot,
         type = "Loot",
@@ -101,6 +111,7 @@ do
         logic = "or",
         children = {
             ItemIsQuest,
+            ItemIsGem,
             ItemQualityRareOrHigher,
         },
     }
