@@ -39,19 +39,26 @@ local DefaultOptions = {
     Filters = {}, --- list of filters (rules or rule groups) to better specify what we wish to see printed to the chat frame
 }
 
-for k, v in pairs(MiniLootMessageGroup) do
-    DefaultOptions.EnabledGroups[k] = nil
-    DefaultOptions.IgnoredGroups[k] = nil
-    if k:find("^LootRoll") then
-        DefaultOptions.DebounceGroups[k] = 0
+do
+
+    for k, _ in pairs(MiniLootMessageGroup) do
+        DefaultOptions.EnabledGroups[k] = nil
+        DefaultOptions.IgnoredGroups[k] = nil
+        if k:find("^LootRoll") then
+            DefaultOptions.DebounceGroups[k] = 0
+        end
+        DefaultOptions.Filters = {}
     end
-    DefaultOptions.Filters = {}
+
+    DefaultOptions.DebounceGroups[MiniLootMessageGroup.Transmogrification] = 0
+
 end
 
 ---@class MiniLootNSSettingsOptions
 local DefaultRemixOptions = TableCopy(DefaultOptions)
 
 do
+
     ---@type MiniLootFilterRule
     local ItemIsQuest = {
         group = MiniLootMessageGroup.Loot,
@@ -97,6 +104,7 @@ do
             ItemQualityRareOrHigher,
         },
     }
+
 end
 
 ---@class MiniLootNSSettingsMetatable
