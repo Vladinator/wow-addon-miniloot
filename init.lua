@@ -19,7 +19,7 @@ local EnableHyperlinks = ns.Tooltip.EnableHyperlinks
 local DisableHyperlinks = ns.Tooltip.DisableHyperlinks
 local SetupUI = ns.UI.SetupUI
 
----@alias MiniLootChatFramePolyfill MessageFrame
+---@class MiniLootChatFramePolyfill : MessageFrame
 
 ---@alias MiniLootNSEventCallback fun(self: MiniLootNSEventFrame, event: WowEvent, ...: any)
 

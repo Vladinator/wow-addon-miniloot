@@ -10,9 +10,12 @@ local L = ns.Locale
 ---@generic T
 ---@alias MiniLootInterfacePanelWidgetCreateWidget fun(self: T, panel: MiniLootInterfacePanel, ...: any): T
 
----@alias MiniLootInterfacePanelWidgetType
----|"None"
----|"CheckBox"
+---@enum MiniLootInterfacePanelWidgetType
+local WidgetType = {
+    Generic = "Generic",
+    CheckBox = "CheckBox",
+    ChatFrame = "ChatFrame",
+}
 
 ---@class MiniLootInterfacePanelOption
 ---@field public Type MiniLootInterfacePanelWidgetType
@@ -21,13 +24,29 @@ local L = ns.Locale
 ---@type MiniLootInterfacePanelOption[]
 local Options = {
     -- {
-    --     Type = "None",
+    --     Type = WidgetType.Generic,
     --     Label = "Test 1",
     -- },
     -- {
-    --     Type = "CheckBox",
+    --     Type = WidgetType.CheckBox,
     --     Label = "Test 2",
     -- },
+    -- {
+    --     Type = WidgetType.ChatFrame,
+    --     Label = "Test 3",
+    -- },
+    -- {
+    --     Type = WidgetType.ChatFrame,
+    --     Label = "Test 4",
+    -- },
+}
+
+---@enum MiniLootInterfacePanelUIColor
+local UIColor = {
+    Transparent = CreateColor(0, 0, 0, 0),
+    Black = CreateColor(0, 0, 0),
+    White = CreateColor(1, 1, 1),
+    White10 = CreateColor(1, 1, 1, 0.1),
 }
 
 ---@class MiniLootInterfacePanelWidget : Frame
@@ -40,22 +59,26 @@ local MiniLootInterfacePanelWidget = {}
 
 do
 
-    MiniLootInterfacePanelWidget.Type = "None"
-
     ---@type MiniLootInterfacePanelWidgetOnLoad
     function MiniLootInterfacePanelWidget:OnLoad(panel, ...)
         panel.Widgets[#panel.Widgets + 1] = self
+        self.width = nil ---@type number?
+        self.height = nil ---@type number?
         self.Label = self:CreateFontString(nil, "ARTWORK", "GameFontHighlightLeft")
         self.Label:SetAllPoints()
         self.Background = self:CreateTexture(nil, "BACKGROUND")
-        self.Background:SetAllPoints()
-        self.Background:SetColorTexture(random(50, 100)/100, random(50, 100)/100, random(50, 100)/100)
+        self.Background:SetPoint("TOPLEFT", -4, 2)
+        self.Background:SetPoint("BOTTOMRIGHT", 4, -2)
+        self.Background:SetColorTexture(1, 1, 1)
+        self.Background:SetTexture(166265)
+        self.Background:SetGradient("HORIZONTAL", UIColor.White10, UIColor.Transparent)
     end
 
     ---@type MiniLootInterfacePanelWidgetCreateWidget
     function MiniLootInterfacePanelWidget:CreateWidget(panel, ...)
         local widget = CreateFrame("Frame", nil, panel) ---@class MiniLootInterfacePanelWidget
         Mixin(widget, self)
+        widget.Type = WidgetType.Generic
         widget:OnLoad(panel, ...)
         return widget
     end
@@ -65,9 +88,35 @@ do
     end
 
     function MiniLootInterfacePanelWidget:Refresh()
+        local width, height = self:GetPreferredSize()
+        self:SetSize(width, height)
         local option = self.Option
         self.Label:SetText(option.Label)
         self:Show()
+    end
+
+    ---@param defaultWidth? number
+    ---@param defaultHeight? number
+    function MiniLootInterfacePanelWidget:SetDefaultSize(defaultWidth, defaultHeight)
+        self.defaultWidth = defaultWidth or self.defaultWidth
+        self.defaultHeight = defaultHeight or self.defaultHeight
+    end
+
+    ---@return number? defaultWidth, number? defaultHeight
+    function MiniLootInterfacePanelWidget:GetDefaultSize()
+        return self.defaultWidth, self.defaultHeight
+    end
+
+    ---@param width? number
+    ---@param height? number
+    function MiniLootInterfacePanelWidget:SetPreferredSize(width, height)
+        self.width = width or self.width
+        self.height = height or self.height
+    end
+
+    ---@return number width, number height
+    function MiniLootInterfacePanelWidget:GetPreferredSize()
+        return self.width or self.defaultWidth or 0, self.height or self.defaultHeight or 0
     end
 
     ---@param option MiniLootInterfacePanelOption
@@ -78,21 +127,106 @@ do
 
 end
 
----@class MiniLootInterfacePanelWidgetCheckBox : MiniLootInterfacePanelWidget, CheckButton
+---@class MiniLootInterfacePanelWidgetCheckBox : MiniLootInterfacePanelWidget
 local MiniLootInterfacePanelWidgetCheckBox = Mixin({}, MiniLootInterfacePanelWidget)
 
 do
 
-    MiniLootInterfacePanelWidgetCheckBox.Type = "CheckBox"
+    ---@type MiniLootInterfacePanelWidgetOnLoad
+    function MiniLootInterfacePanelWidgetCheckBox:OnLoad(panel, ...)
+        MiniLootInterfacePanelWidget.OnLoad(self, panel)
+        local element = self.Element ---@class MiniLootInterfacePanelWidgetCheckBoxElement
+        element:SetPoint("TOPLEFT", self.Label, "TOPLEFT", 128, 0)
+        element:SetSize(64, 64)
+        self:SetPreferredSize(nil, 64)
+        element.Background = element:CreateTexture(nil, "BACKGROUND")
+        element.Background:SetAllPoints()
+        element.Background:SetColorTexture(1, 0, 0)
+    end
 
     ---@type MiniLootInterfacePanelWidgetCreateWidget
     function MiniLootInterfacePanelWidgetCheckBox:CreateWidget(panel, ...)
-        local widget = CreateFrame("CheckButton", nil, panel) ---@class MiniLootInterfacePanelWidgetCheckBox
+        local widget = CreateFrame("Frame", nil, panel) ---@class MiniLootInterfacePanelWidgetCheckBox
         Mixin(widget, self)
+        widget.Type = WidgetType.CheckBox
+        widget.Element = CreateFrame("CheckButton", nil, widget) ---@class MiniLootInterfacePanelWidgetCheckBoxElement : CheckButton
         widget:OnLoad(panel, ...)
         return widget
     end
 
+end
+
+---@class MiniLootInterfacePanelWidgetChatFrame : MiniLootInterfacePanelWidget
+local MiniLootInterfacePanelWidgetChatFrame = Mixin({}, MiniLootInterfacePanelWidget)
+
+do
+
+    ---@type MiniLootInterfacePanelWidgetOnLoad
+    function MiniLootInterfacePanelWidgetChatFrame:OnLoad(panel, ...)
+        MiniLootInterfacePanelWidget.OnLoad(self, panel)
+        local element = self.Element ---@class MiniLootInterfacePanelWidgetChatFrameElement
+        element:SetPoint("TOPLEFT", self.Label, "TOPLEFT", 128, 0)
+        element:SetSize(128, 128)
+        self:SetPreferredSize(nil, 128)
+        element.Background = element:CreateTexture(nil, "BACKGROUND")
+        element.Background:SetAllPoints()
+        element.Background:SetColorTexture(0, 1, 0)
+    end
+
+    ---@type MiniLootInterfacePanelWidgetCreateWidget
+    function MiniLootInterfacePanelWidgetChatFrame:CreateWidget(panel, ...)
+        local widget = CreateFrame("Frame", nil, panel) ---@class MiniLootInterfacePanelWidgetChatFrame
+        Mixin(widget, self)
+        widget.Type = WidgetType.ChatFrame
+        widget.Element = CreateFrame("MessageFrame", nil, widget) ---@class MiniLootInterfacePanelWidgetChatFrameElement : MiniLootChatFramePolyfill
+        widget:OnLoad(panel, ...)
+        return widget
+    end
+
+end
+
+---@class MiniLootInterfacePanelWidgetMap
+---@field public Type MiniLootInterfacePanelWidgetType
+---@field public Widget MiniLootInterfacePanelWidget
+
+---@type MiniLootInterfacePanelWidgetMap[]
+local WidgetMap = {
+    {
+        Type = WidgetType.Generic,
+        Widget = MiniLootInterfacePanelWidget,
+    },
+    {
+        Type = WidgetType.CheckBox,
+        Widget = MiniLootInterfacePanelWidgetCheckBox,
+    },
+    {
+        Type = WidgetType.ChatFrame,
+        Widget = MiniLootInterfacePanelWidgetChatFrame,
+    },
+}
+
+---@param panel MiniLootInterfacePanel
+---@param type MiniLootInterfacePanelWidgetType
+local function GetPanelPool(panel, type)
+    for _, map in ipairs(WidgetMap) do
+        if map.Type == type then
+            local name = format("%sPool", map.Type)
+            local pool = panel[name] ---@type ObjectPoolPolyfill
+            return pool or false, map.Widget, name, map.Type
+        end
+    end
+end
+
+---@param panel MiniLootInterfacePanel
+---@return fun(): pool: ObjectPoolPolyfill, widget: MiniLootInterfacePanelWidget, name: string, type: MiniLootInterfacePanelWidgetType
+local function EnumeratePanelPools(panel)
+    local index = 0
+    return function()
+        index = index + 1
+        local map = WidgetMap[index]
+        if not map then return end ---@diagnostic disable-line: missing-return-value
+        return GetPanelPool(panel, map.Type) ---@diagnostic disable-line: return-type-mismatch
+    end
 end
 
 ---@alias ObjectPoolPolyfillObj MiniLootInterfacePanelWidget
@@ -130,25 +264,23 @@ local Panel
 
 ---@param self MiniLootInterfacePanel
 local function PanelRefresh(self)
-    self.WidgetPool:ReleaseAll()
-    self.WidgetCheckBoxPool:ReleaseAll()
+    for pool in EnumeratePanelPools(self) do
+        pool:ReleaseAll()
+    end
     local widget ---@type MiniLootInterfacePanelWidget?
     local prevWidget ---@type MiniLootInterfacePanelWidget?
     local maxWidth, maxHeight = self:GetSize()
-    local widgetWidth = maxWidth - self.offsetX*2 -- 665-16*2 = 633
+    local widgetWidth = maxWidth - self.offsetX*3 -- 665-16*3 = 617
     local widgetHeight = maxHeight/20 -- 601/20 ~= 30
     for _, option in ipairs(Panel.Options) do
-        if option.Type == "CheckBox" then
-            ---@type MiniLootInterfacePanelWidgetCheckBox
-            widget = self.WidgetCheckBoxPool:Acquire() ---@diagnostic disable-line: assign-type-mismatch
+        local pool = GetPanelPool(self, option.Type)
+        if pool then
+            widget = pool:Acquire()
+            widget:SetDefaultSize(widgetWidth, widgetHeight)
             widget:SetOption(option)
-        else
-            widget = self.WidgetPool:Acquire()
-            widget:SetOption(option)
+            widget:SetPoint("TOPLEFT", prevWidget or self.Description, "BOTTOMLEFT", 0, -8)
+            prevWidget = widget
         end
-        widget:SetSize(widgetWidth, widgetHeight)
-        widget:SetPoint("TOPLEFT", prevWidget or self.Description, "BOTTOMLEFT", 0, -8)
-        prevWidget = widget
     end
 end
 
@@ -171,9 +303,12 @@ local function CreateInterfacePanel()
     Panel.Description:SetJustifyV("TOP")
     Panel.Widgets = {}
     Panel.Options = Options
-    local poolReleaseWidget = function(_, obj) obj:ReleaseWidget() end
-    Panel.WidgetPool = CreateObjectPool(function() return MiniLootInterfacePanelWidget:CreateWidget(Panel) end, poolReleaseWidget)
-    Panel.WidgetCheckBoxPool = CreateObjectPool(function() return MiniLootInterfacePanelWidgetCheckBox:CreateWidget(Panel) end, poolReleaseWidget)
+    local function poolReleaseWidget(_, obj)
+        obj:ReleaseWidget()
+    end
+    for _, widget, name in EnumeratePanelPools(Panel) do
+        Panel[name] = CreateObjectPool(function() return widget:CreateWidget(Panel) end, poolReleaseWidget)
+    end
     Panel.Refresh = PanelRefresh
     Panel:HookScript("OnShow", Panel.Refresh)
     return Panel
