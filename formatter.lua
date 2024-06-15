@@ -149,24 +149,24 @@ end
 
 ---@param link string
 ---@param count? number
+---@param canCountBags? boolean
 ---@param isMawPower? boolean
-local function GetLootIconCountFormatted(link, count, isMawPower)
+local function GetLootIconCountFormatted(link, count, canCountBags, isMawPower)
     local iconLink = GetLootIconFormatted(link, isMawPower)
-    count = count or 0
-    if not db.ItemCount then
+    count = count and count > 0 and count or 1
+    if not canCountBags or not db.ItemCount then
         if count > 1 then
             return format(Formats.SxS, iconLink, FormatNumber(count))
         end
         return format(Formats.S, iconLink)
     end
-    local prevCount = GetItemCount(link, db.ItemCountBank, db.ItemCountUses, db.ItemCountReagentBank)
-    prevCount = prevCount - count
-    if count > 1 and prevCount > 0 then
-        return format(Formats.SxSCC, iconLink, FormatNumber(count), SimpleHexColors.Gray, FormatNumber(prevCount))
+    local bagCount = GetItemCount(link, db.ItemCountBank, db.ItemCountUses, db.ItemCountReagentBank)
+    if count > 1 and bagCount > 0 then
+        return format(Formats.SxSCC, iconLink, FormatNumber(count), SimpleHexColors.DarkGray, FormatNumber(bagCount))
     elseif count > 1 then
         return format(Formats.SxS, iconLink, FormatNumber(count))
-    elseif prevCount > 0 then
-        return format(Formats.SCC, iconLink, SimpleHexColors.Gray, FormatNumber(prevCount))
+    elseif bagCount > 0 then
+        return format(Formats.SCC, iconLink, SimpleHexColors.DarkGray, FormatNumber(bagCount))
     end
     return format(Formats.S, iconLink)
 end
@@ -185,7 +185,8 @@ local function SumResultsTotalsByKeyFormatted(prefix, results, key)
         local money = ConvertToMoneyString(total)
         return format(Formats.ScS, prefix, money)
     end
-    return GetLootIconCountFormatted(prefix, total)
+    local canCountBags = not firstResult.Name or firstResult.Name == "" ---@diagnostic disable-line: undefined-field
+    return GetLootIconCountFormatted(prefix, total, canCountBags)
 end
 
 ---@param name string

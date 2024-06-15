@@ -330,6 +330,7 @@ local SimpleHexColors = {
     Blue = "3333FF",
     White = "FFFFFF",
     Gray = "CCCCCC",
+    DarkGray = "999999",
 }
 
 ---@param text string|number
