@@ -107,8 +107,21 @@ function MiniLootNSOutputHandler:OnLoad(frame)
     self.buffer = CreateBuffer()
     self.lastAdd = 0
     self.lastOutput = 0
+    self.prevInCombat = nil ---@type boolean?
+    self.inCombat = nil ---@type boolean?
     self.timer = nil ---@type cbObject?
     self.timerOnTick = function()
+        if not db.DebounceInCombat then
+            self.prevInCombat = self.inCombat
+            self.inCombat = InCombatLockdown()
+            if self.inCombat then
+                return
+            end
+            if self.prevInCombat then
+                self:OnAdd()
+                return
+            end
+        end
         if self.timer then
             self.timer:Cancel()
             self.timer = nil

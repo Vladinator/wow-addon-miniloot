@@ -1,16 +1,19 @@
-## Interface: 11403
+## Interface: 11502
 ## IconTexture: 2056011
 ## Title: MiniLoot
 ## Notes: Reduces chat related spam by a whole deal!
 ## Author: Vladinator
-## Version: 1.14.4.230919
-## SavedVariables: MiniLootDB
+## Version: 1.15.2.240615
+## SavedVariables: MiniLootDB, MiniLootDB2, MiniLootRemixDB2
 ## X-Curse-Project-ID: 43440
 ## X-WoWI-ID: 19598
-locale.lua
-config.lua
-events.lua
-tooltip.lua
-options.lua
-util.lua
-core.lua
+debug.lua
+utils.lua
+filters.lua
+messages.lua
+settings.lua
+reporting.lua
+formatter.lua
+output.lua
+tooltips.lua
+init.lua
