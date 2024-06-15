@@ -112,6 +112,16 @@ local function TableGroupFormatOuter(results, key, outerFunc)
     return lines
 end
 
+---@param name? string
+---@return string `You` or player name with link support
+local function ConvertNameToUnitNameFormatted(name)
+    if not name or name == "" then
+        return YOU
+    end
+    local shortName = GetShortUnitName(name)
+    return format("|Hplayer:%s|h%s|h", name, shortName)
+end
+
 ---@param link string
 ---@param isMawPower? boolean
 local function GetLootIconFormatted(link, isMawPower)
@@ -155,7 +165,7 @@ end
 ---@param key string
 ---@param lines string[]
 local function GetLooterStringFormatted(key, lines)
-    local name = key == "" and YOU or GetShortUnitName(key)
+    local name = ConvertNameToUnitNameFormatted(key)
     local line = table.concat(lines)
     return format(Formats.ScS, name, line)
 end
@@ -234,7 +244,7 @@ local LootGrouphandlers = {
     ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollDecide[]
     LootRollDecide = function(key, results)
         return TableMap(results, function(result)
-            local name = GetShortUnitName(result.Name)
+            local name = ConvertNameToUnitNameFormatted(result.Name)
             local link = GetLootIconFormatted(result.Link)
             return format("%s rolled %s on %s", name, result.Type, link)
         end)
@@ -242,7 +252,7 @@ local LootGrouphandlers = {
     ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollRolled[]
     LootRollRolled = function(key, results)
         return TableMap(results, function(result)
-            local name = GetShortUnitName(result.Name)
+            local name = ConvertNameToUnitNameFormatted(result.Name)
             local action = result.Type == "DisenchantRoll" and "Disenchant" or result.Type == "GreedRoll" and "Greed" or result.Type == "NeedRoll" and "Need" or "?"
             local link = GetLootIconFormatted(result.Link)
             return format("%s rolled %s (%d) on %s", name, action, result.Value, link)
@@ -261,7 +271,7 @@ local LootGrouphandlers = {
         local isWinner = key == "WinnerResult" or key == "YouWinnerResult"
         local prefix = not isWinner and GetLootHistoryLink(results[1].Value)
         return TableMap(results, function(result)
-            local name = result.Name and GetShortUnitName(result.Name) or YOU
+            local name = ConvertNameToUnitNameFormatted(result.Name)
             local link = GetLootIconFormatted(result.Link)
             if isWinner then
                 return format("%s won %s", name, link)
@@ -360,7 +370,7 @@ Formatters[MiniLootMessageGroup.Money] = function(results)
         "Name",
         ---@param groupResults MiniLootMessageFormatSimpleParserResultMoney[]
         function(groupKey, groupResults)
-            local name = groupKey == "" and YOU or GetShortUnitName(groupKey)
+            local name = ConvertNameToUnitNameFormatted(groupKey)
             return SumResultsTotalsByKeyFormatted(name, groupResults, "Value")
         end
     )
