@@ -592,23 +592,27 @@ end
 ---@param hyperlink? boolean
 ---@param simple? boolean
 ---@param customColor? string `RRGGBB`
+---@param appendTier? boolean
 ---@param appendItemLevel? boolean
+---@param appendItemLevelEquipmentOnly? boolean
 ---@param mawPowerUnit? UnitToken
 ---@return string itemLink
-local function GetLootIcon(link, hyperlink, simple, customColor, appendItemLevel, mawPowerUnit)
+local function GetLootIcon(link, hyperlink, simple, customColor, appendTier, appendItemLevel, appendItemLevelEquipmentOnly, mawPowerUnit)
     local color, data, text = link:match(LinkMarkupPattern) ---@type string?, string?, string?
     local texture = GetLinkTexture(link, data, text, mawPowerUnit)
     if not texture then
         return link
     end
-    local tierAtlas, tierAtlasName, tier, tierAtlasSuffix = GetAtlasTierInfo(text)
     local appendText ---@type string?
-    if tier then
-        appendText = format(":Q%s", tier)
+    if appendTier then
+        local tierAtlas, tierAtlasName, tier, tierAtlasSuffix = GetAtlasTierInfo(text)
+        if tier then
+            appendText = format(":Q%s", tier)
+        end
     end
     if appendItemLevel then
-        local itemLevel = GetItemLevelAndEquipSlot(link)
-        if itemLevel and itemLevel > 1 then
+        local itemLevel, equipSlot = GetItemLevelAndEquipSlot(link)
+        if itemLevel and itemLevel > 1 and (not appendItemLevelEquipmentOnly or equipSlot) then
             appendText = format("%s:%s", appendText or "", itemLevel)
         end
     end

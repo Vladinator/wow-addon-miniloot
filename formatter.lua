@@ -1,5 +1,6 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
+local db = ns.Settings.db
 local SimpleHexColors = ns.Utils.SimpleHexColors
 local TableGroup = ns.Utils.TableGroup
 local TableCombine = ns.Utils.TableCombine
@@ -9,6 +10,7 @@ local SumByKeyPretty = ns.Utils.SumByKeyPretty
 local ConvertToMoneyString = ns.Utils.ConvertToMoneyString
 local FormatNumber = ns.Utils.FormatNumber
 local GetLootIcon = ns.Utils.GetLootIcon
+local GetItemCount = ns.Utils.GetItemCount
 local GetShortUnitName = ns.Utils.GetShortUnitName
 local GetShortFactionName = ns.Utils.GetShortFactionName
 local IsQuestItem = ns.Utils.IsQuestItem
@@ -20,6 +22,8 @@ local Formats = {
     S = "%s",
     SxD = "%sx%d",
     SxS = "%sx%s",
+    SxSCC = "%sx%s|cff%s(%s)|r",
+    SCC = "%s|cff%s(%s)|r",
     ScS = "%s: %s",
     ScSxD = "%s: %sx%d",
     ScSS = "%s: %s %s",
@@ -118,8 +122,21 @@ local function ConvertNameToUnitNameFormatted(name)
     if not name or name == "" then
         return YOU
     end
-    local shortName = GetShortUnitName(name)
+    local shortName = name
+    if db.ShortenPlayerNames then
+        shortName = GetShortUnitName(name)
+    end
     return format("|Hplayer:%s|h%s|h", name, shortName)
+end
+
+---@param name string
+---@return string
+local function ConvertNameToFactionNameFormatted(name)
+    local shortName = name
+    if db.ShortenFactionNames then
+        shortName = GetShortFactionName(name, db.ShortenFactionNamesLength)
+    end
+    return shortName
 end
 
 ---@param link string
@@ -127,7 +144,31 @@ end
 local function GetLootIconFormatted(link, isMawPower)
     local customColor = IsQuestItem(link) and SimpleHexColors.Red or nil
     local isMawPowerUnit = isMawPower and "player" or nil
-    return GetLootIcon(link, true, false, customColor, true, isMawPowerUnit)
+    return GetLootIcon(link, true, false, customColor, db.ItemTier, db.ItemLevel, db.ItemLevelEquipmentOnly, isMawPowerUnit)
+end
+
+---@param link string
+---@param count? number
+---@param isMawPower? boolean
+local function GetLootIconCountFormatted(link, count, isMawPower)
+    local iconLink = GetLootIconFormatted(link, isMawPower)
+    count = count or 0
+    if not db.ItemCount then
+        if count > 1 then
+            return format(Formats.SxS, iconLink, FormatNumber(count))
+        end
+        return format(Formats.S, iconLink)
+    end
+    local prevCount = GetItemCount(link, db.ItemCountBank, db.ItemCountUses, db.ItemCountReagentBank)
+    prevCount = prevCount - count
+    if count > 1 and prevCount > 0 then
+        return format(Formats.SxSCC, iconLink, FormatNumber(count), SimpleHexColors.Gray, FormatNumber(prevCount))
+    elseif count > 1 then
+        return format(Formats.SxS, iconLink, FormatNumber(count))
+    elseif prevCount > 0 then
+        return format(Formats.SCC, iconLink, SimpleHexColors.Gray, FormatNumber(prevCount))
+    end
+    return format(Formats.S, iconLink)
 end
 
 ---@param prefix string
@@ -144,11 +185,7 @@ local function SumResultsTotalsByKeyFormatted(prefix, results, key)
         local money = ConvertToMoneyString(total)
         return format(Formats.ScS, prefix, money)
     end
-    local link = GetLootIconFormatted(prefix)
-    if total > 1 then
-        return format(Formats.SxS, link, FormatNumber(total))
-    end
-    return format(Formats.S, link)
+    return GetLootIconCountFormatted(prefix, total)
 end
 
 ---@param name string
@@ -383,7 +420,7 @@ Formatters[MiniLootMessageGroup.Reputation] = function(results)
         "Name",
         ---@param groupResults MiniLootMessageFormatSimpleParserResultReputation[]
         function(groupKey, groupResults)
-            local name = GetShortFactionName(groupKey)
+            local name = ConvertNameToFactionNameFormatted(groupKey)
             return SumReputationTotalsByKeyFormatted(name, groupResults)
         end
     )
