@@ -53,6 +53,7 @@ local UIColor = {
 ---@field public Option MiniLootInterfacePanelOption
 ---@field public Type MiniLootInterfacePanelWidgetType
 ---@field public OnLoad MiniLootInterfacePanelWidgetOnLoad
+---@field public Element? Region
 
 ---@class MiniLootInterfacePanelWidget
 local MiniLootInterfacePanelWidget = {}
@@ -72,6 +73,12 @@ do
         self.Background:SetColorTexture(1, 1, 1)
         self.Background:SetTexture(166265)
         self.Background:SetGradient("HORIZONTAL", UIColor.White10, UIColor.Transparent)
+        local element = self.Element
+        if not element then
+            return
+        end
+        element:SetPoint("TOPLEFT", self.Label, "TOPLEFT", 128, 0)
+        element:SetPoint("BOTTOMRIGHT", self.Label, "BOTTOMRIGHT", 0, 0)
     end
 
     ---@type MiniLootInterfacePanelWidgetCreateWidget
@@ -136,9 +143,6 @@ do
     function MiniLootInterfacePanelWidgetCheckBox:OnLoad(panel, ...)
         MiniLootInterfacePanelWidget.OnLoad(self, panel)
         local element = self.Element ---@class MiniLootInterfacePanelWidgetCheckBoxElement
-        element:SetPoint("TOPLEFT", self.Label, "TOPLEFT", 128, 0)
-        element:SetSize(64, 64)
-        self:SetPreferredSize(nil, 64)
         element.Background = element:CreateTexture(nil, "BACKGROUND")
         element.Background:SetAllPoints()
         element.Background:SetColorTexture(1, 0, 0)
@@ -165,9 +169,6 @@ do
     function MiniLootInterfacePanelWidgetChatFrame:OnLoad(panel, ...)
         MiniLootInterfacePanelWidget.OnLoad(self, panel)
         local element = self.Element ---@class MiniLootInterfacePanelWidgetChatFrameElement
-        element:SetPoint("TOPLEFT", self.Label, "TOPLEFT", 128, 0)
-        element:SetSize(128, 128)
-        self:SetPreferredSize(nil, 128)
         element.Background = element:CreateTexture(nil, "BACKGROUND")
         element.Background:SetAllPoints()
         element.Background:SetColorTexture(0, 1, 0)
@@ -269,45 +270,86 @@ local function PanelRefresh(self)
     end
     local widget ---@type MiniLootInterfacePanelWidget?
     local prevWidget ---@type MiniLootInterfacePanelWidget?
-    local maxWidth, maxHeight = self:GetSize()
-    local widgetWidth = maxWidth - self.offsetX*3 -- 665-16*3 = 617
-    local widgetHeight = maxHeight/20 -- 601/20 ~= 30
+    local scrollBox = self.ScrollBox
+    local scrollContent = self.ScrollContent
+    local maxWidth, maxHeight = scrollBox:GetSize()
+    local widgetWidth = maxWidth - self.offsetX*2
+    local widgetHeight = maxHeight/20
+    local totalHeight = self.minHeight
     for _, option in ipairs(Panel.Options) do
         local pool = GetPanelPool(self, option.Type)
         if pool then
             widget = pool:Acquire()
             widget:SetDefaultSize(widgetWidth, widgetHeight)
             widget:SetOption(option)
-            widget:SetPoint("TOPLEFT", prevWidget or self.Description, "BOTTOMLEFT", 0, -8)
+            widget:SetPoint("TOPLEFT", prevWidget or scrollContent.Description, "BOTTOMLEFT", 0, -8)
+            totalHeight = totalHeight + widget:GetHeight()
             prevWidget = widget
         end
     end
+    scrollContent:SetHeight(totalHeight)
 end
+
+---@class MiniLootInterfacePanelScrollPolyfill
+---@field public SetInterpolateScroll fun(self: MiniLootInterfacePanelScrollPolyfill, state: boolean)
+---@field public SetPanExtent fun(self: MiniLootInterfacePanelScrollPolyfill, size: number)
+
+---@class MiniLootInterfacePanelScrollBox : Frame
 
 local function CreateInterfacePanel()
     Panel = CreateFrame("Frame", nil, InterfaceOptionsFramePanelContainer) ---@class MiniLootInterfacePanel
     Panel:Hide()
     Panel:SetAllPoints()
     Panel.name = addOnName
-    Panel.offsetX = 16
-    Panel.Title = Panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    Panel.Title:SetPoint("TOPLEFT", 16, -16)
-    Panel.Title:SetText(addOnName)
-    Panel.Description = Panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    Panel.Description:SetPoint("TOPLEFT", Panel.Title, "BOTTOMLEFT", 0, -8)
-    Panel.Description:SetPoint("RIGHT", -32, 0)
-    Panel.Description:SetText(L.PANEL_DESCRIPTION)
-    Panel.Description:SetMaxLines(3)
-    Panel.Description:SetNonSpaceWrap(true)
-    Panel.Description:SetJustifyH("LEFT")
-    Panel.Description:SetJustifyV("TOP")
     Panel.Widgets = {}
     Panel.Options = Options
+    Panel.offsetX = 16
+    Panel.minHeight = 64
+    local scrollBox = CreateFrame("Frame", nil, Panel, "WowScrollBox") ---@class MiniLootInterfacePanelScrollBox : MiniLootInterfacePanelScrollPolyfill
+    Panel.ScrollBox = scrollBox
+    scrollBox:SetPoint("TOPLEFT", 16, -16)
+    scrollBox:SetPoint("BOTTOMRIGHT", -16, 16)
+    scrollBox:SetInterpolateScroll(true)
+    local scrollBar = CreateFrame("EventFrame", nil, Panel, "MinimalScrollBar") ---@class MiniLootInterfacePanelScrollBar : EventFrame, MiniLootInterfacePanelScrollPolyfill
+    Panel.ScrollBar = scrollBar
+    scrollBar:SetPoint("TOPLEFT", scrollBox, "TOPRIGHT")
+    scrollBar:SetPoint("BOTTOMLEFT", scrollBox, "BOTTOMRIGHT")
+    scrollBar:SetInterpolateScroll(true)
+    -- scrollBar:SetPoint("TOPLEFT", scrollBox, "TOPRIGHT", 4, -3)
+    -- scrollBar:SetPoint("BOTTOMLEFT", scrollBox, "BOTTOMRIGHT", 4, 2)
+    local scrollContent = CreateFrame("Frame", nil, scrollBox) ---@class MiniLootInterfacePanelScrollBoxContent : Frame
+    Panel.ScrollContent = scrollContent
+    scrollContent:SetAllPoints()
+    scrollContent.scrollable = true
+    scrollContent.Title = scrollContent:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    scrollContent.Title:SetPoint("TOPLEFT", 16, -16)
+    scrollContent.Title:SetText(addOnName)
+    local description = scrollContent:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall") ---@class MiniLootInterfacePanelScrollBoxDescription : FontString
+    scrollContent.Description = description
+    description:SetPoint("TOPLEFT", scrollContent.Title, "BOTTOMLEFT", 0, -8)
+    description:SetPoint("RIGHT", -32, 0)
+    description:SetText(L.PANEL_DESCRIPTION)
+    description:SetMaxLines(3)
+    description:SetNonSpaceWrap(true)
+    description:SetJustifyH("LEFT")
+    description:SetJustifyV("TOP")
+    local scrollView = CreateScrollBoxLinearView() ---@class MiniLootInterfacePanelScrollView : MiniLootInterfacePanelScrollPolyfill
+    Panel.ScrollView = scrollView
+    scrollView:SetPanExtent(100)
+    scrollContent:SetHeight(Panel.minHeight + #Options*32)
+    ScrollUtil.InitScrollBoxWithScrollBar(scrollBox, scrollBar, scrollView)
     local function poolReleaseWidget(_, obj)
         obj:ReleaseWidget()
     end
     for _, widget, name in EnumeratePanelPools(Panel) do
-        Panel[name] = CreateObjectPool(function() return widget:CreateWidget(Panel) end, poolReleaseWidget)
+        Panel[name] = CreateObjectPool(
+            function()
+                local obj = widget:CreateWidget(Panel)
+                obj:SetParent(scrollBox)
+                return obj
+            end,
+            poolReleaseWidget
+        )
     end
     Panel.Refresh = PanelRefresh
     Panel:HookScript("OnShow", Panel.Refresh)
@@ -338,6 +380,7 @@ end
 local function SetupUI()
     local panel = GetInterfacePanel()
     AddInterfacePanel(panel)
+    _G.T = panel -- DEBUG
 end
 
 ---@class MiniLootNSUI
