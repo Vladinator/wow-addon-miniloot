@@ -8,6 +8,7 @@
 ## X-Curse-Project-ID: 43440
 ## X-WoWI-ID: 19598
 debug.lua
+locale.lua
 utils.lua
 filters.lua
 messages.lua
@@ -16,4 +17,5 @@ reporting.lua
 formatter.lua
 output.lua
 tooltips.lua
+ui.lua
 init.lua

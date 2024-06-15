@@ -17,6 +17,7 @@ local GetUnitMawPowerInfo = ns.Utils.GetUnitMawPowerInfo
 local GetHyperlinkTooltipLines = ns.Utils.GetHyperlinkTooltipLines
 local EnableHyperlinks = ns.Tooltip.EnableHyperlinks
 local DisableHyperlinks = ns.Tooltip.DisableHyperlinks
+local SetupUI = ns.UI.SetupUI
 
 ---@alias MiniLootChatFramePolyfill MessageFrame
 
@@ -164,6 +165,7 @@ function frame:OnEvent(event, ...)
             self.isLoaded = true
             self:UpdateState()
             HookSetItemRef()
+            SetupUI()
         end
     end
     if not self.isLoaded then
