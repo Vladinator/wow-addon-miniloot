@@ -11,6 +11,7 @@ local ConvertToMoneyString = ns.Utils.ConvertToMoneyString
 local FormatNumber = ns.Utils.FormatNumber
 local GetLootIcon = ns.Utils.GetLootIcon
 local GetItemCount = ns.Utils.GetItemCount
+local GetCurrencyCount = ns.Utils.GetCurrencyCount
 local GetShortUnitName = ns.Utils.GetShortUnitName
 local GetShortFactionName = ns.Utils.GetShortFactionName
 local IsQuestItem = ns.Utils.IsQuestItem
@@ -161,6 +162,9 @@ local function GetLootIconCountFormatted(link, count, canCountBags, isMawPower)
         return format(Formats.S, iconLink)
     end
     local bagCount = GetItemCount(link, db.ItemCountBank, db.ItemCountUses, db.ItemCountReagentBank)
+    if bagCount == 0 and db.ItemCountCurrency then
+        bagCount = GetCurrencyCount(link)
+    end
     if count > 1 and bagCount > 0 then
         return format(Formats.SxSCC, iconLink, FormatNumber(count), SimpleHexColors.DarkGray, FormatNumber(bagCount))
     elseif count > 1 then

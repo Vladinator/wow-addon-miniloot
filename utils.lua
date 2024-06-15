@@ -541,13 +541,23 @@ local function GetAtlasTierInfo(text)
     return tierAtlas, tierAtlasName, tier, tierAtlasSuffix
 end
 
+local NonEquippableSlots = {
+    [""] = true,
+    ["INVTYPE_NON_EQUIP"] = true,
+    ["INVTYPE_NON_EQUIP_IGNORE"] = true,
+}
+
 ---@param itemLink string
 ---@return number? itemLevel, string? equipSlot
 local function GetItemLevelAndEquipSlot(itemLink)
     local _, _, _, equipSlot = C_Item.GetItemInfoInstant(itemLink)
     local _, _, _, baseItemLevel, _, _, _, _, tempEquipSlot = C_Item.GetItemInfo(itemLink)
     local actualItemLevel, previewLevel, sparseItemLevel = C_Item.GetDetailedItemLevelInfo(itemLink)
-    return actualItemLevel or baseItemLevel, equipSlot or tempEquipSlot
+    equipSlot = equipSlot or tempEquipSlot
+    if equipSlot and NonEquippableSlots[equipSlot] then
+        equipSlot = nil ---@diagnostic disable-line: cast-local-type
+    end
+    return actualItemLevel or baseItemLevel, equipSlot
 end
 
 ---@param texture number|string
@@ -739,7 +749,7 @@ local function GetItemCount(link, includeBank, includeUses, includeReagentBank)
 end
 
 ---@param link number|string
----@return CurrencyInfo info
+---@return CurrencyInfo? info
 local function GetCurrencyInfo(link)
     local id = link
     if type(id) == "string" then
@@ -750,7 +760,7 @@ end
 
 ---@param link number|string
 ---@param amount? number
----@return string link
+---@return string? link
 local function GetCurrencyLink(link, amount)
     local id = link
     if type(id) == "string" then
@@ -763,6 +773,9 @@ end
 ---@return number count, number maxCount, number weeklyRemainingCount
 local function GetCurrencyCount(link)
     local info = GetCurrencyInfo(link)
+    if not info then
+        return 0, 0, 0
+    end
     return info.quantity, info.maxQuantity, info.maxWeeklyQuantity - info.quantityEarnedThisWeek
 end
 

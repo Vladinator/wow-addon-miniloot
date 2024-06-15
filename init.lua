@@ -121,7 +121,9 @@ local HookSetItemRef do
         elseif linkType == "currency" then
             local num1, num2 = tonumberall(arg1, arg2)
             local realLink = GetCurrencyLink(num1, num2)
-            text = FixHyperlink(link, text, realLink)
+            if realLink then
+                text = FixHyperlink(link, text, realLink)
+            end
         elseif linkType == "battlepet" then
             local realLink = GetHyperlinkByLink(link)
             if realLink then
