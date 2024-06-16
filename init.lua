@@ -23,7 +23,7 @@ local SetupUI = ns.UI.SetupUI
 
 ---@alias MiniLootNSEventCallback fun(self: MiniLootNSEventFrame, event: WowEvent, ...: any)
 
----@alias MiniLootNSEventCallbackResult fun(self: MiniLootNSEventFrame, event: WowEvent, ...: any): result: MiniLootMessageFormatSimpleParserResult?, message: MiniLootMessage?, hideChatIgnoreResult: boolean?
+---@alias MiniLootNSEventCallbackResult fun(self: MiniLootNSEventFrame, event: WowEvent, ...: any): result: MiniLootMessageFormatSimpleParserResults?, message: MiniLootMessage?, hideChatIgnoreResult: boolean?
 
 ---@alias MiniLootNSEventChatEventCallback fun(chatFrame: MiniLootChatFramePolyfill, event: WowEvent, ...: any): filter: boolean?, ...
 

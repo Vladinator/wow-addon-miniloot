@@ -44,10 +44,10 @@ local MiniLootMessageFormatterOutputType = {
 ---@field public Format MiniLootMessageFormats
 ---@field public Data MiniLootMessageFormatterOutputData
 
----@alias MiniLootMessageFormatter fun(results: MiniLootMessageFormatSimpleParserResult[]): MiniLootMessageFormatterOutput|MiniLootMessageFormatterOutputData?
+---@alias MiniLootMessageFormatter fun(results: MiniLootMessageFormatSimpleParserResults[]): MiniLootMessageFormatterOutput|MiniLootMessageFormatterOutputData?
 
 ---@generic T
----@param results MiniLootMessageFormatSimpleParserResult[]
+---@param results MiniLootMessageFormatSimpleParserResults[]
 ---@param key string
 ---@param subKey string
 ---@param innerFunc fun(groupKey: string, groupResults: T[]): string|string[]?
@@ -57,12 +57,12 @@ local function TableGroupFormatInnerOuter(results, key, subKey, innerFunc, outer
     local groupLines ---@type string[]?
     for i = 1, #groups do
         local subGroupLines ---@type string[]?
-        local group = groups[i] ---@type MiniLootMessageFormatSimpleParserResult[]
-        local groupKey = groupKeys[i]
+        local group = groups[i] ---@type MiniLootMessageFormatSimpleParserResults[]
+        local groupKey = groupKeys[i] ---@type MiniLootMessageFormatSimpleParserResultKeys
         local subGroups, subGroupKeys = TableGroup(group, subKey)
         for j = 1, #subGroups do
-            local subGroup = subGroups[j] ---@type MiniLootMessageFormatSimpleParserResult[]
-            local subGroupKey = subGroupKeys[j]
+            local subGroup = subGroups[j] ---@type MiniLootMessageFormatSimpleParserResults[]
+            local subGroupKey = subGroupKeys[j] ---@type MiniLootMessageFormatSimpleParserResultKeys
             local subGroupData = innerFunc(subGroupKey, subGroup)
             if subGroupData then
                 if not subGroupLines then
@@ -93,7 +93,7 @@ local function TableGroupFormatInnerOuter(results, key, subKey, innerFunc, outer
 end
 
 ---@generic T
----@param results MiniLootMessageFormatSimpleParserResult[]
+---@param results MiniLootMessageFormatSimpleParserResults[]
 ---@param key string
 ---@param outerFunc fun(groupKey: string, groupResults: T[]): string|string[]?
 local function TableGroupFormatOuter(results, key, outerFunc)
@@ -101,7 +101,7 @@ local function TableGroupFormatOuter(results, key, outerFunc)
     local lines ---@type string[]?
     for i = 1, #groups do
         local group = groups[i] ---@type MiniLootMessageFormatSimpleParserResultMoney[]
-        local groupKey = keys[i]
+        local groupKey = keys[i] ---@type MiniLootMessageFormatSimpleParserResultKeys
         local groupData = outerFunc(groupKey, group)
         if groupData then
             if not lines then
@@ -145,7 +145,7 @@ end
 local function GetLootIconFormatted(link, isMawPower)
     local customColor = IsQuestItem(link) and SimpleHexColors.Red or nil
     local isMawPowerUnit = isMawPower and "player" or nil
-    return GetLootIcon(link, true, false, customColor, db.ItemTier, db.ItemLevel, db.ItemLevelEquipmentOnly, isMawPowerUnit)
+    return GetLootIcon(link, true, false, customColor, isMawPowerUnit)
 end
 
 ---@param link string
@@ -176,7 +176,7 @@ local function GetLootIconCountFormatted(link, count, canCountBags, isMawPower)
 end
 
 ---@param prefix string
----@param results MiniLootMessageFormatSimpleParserResult[]
+---@param results MiniLootMessageFormatSimpleParserResults[]
 ---@param key string
 local function SumResultsTotalsByKeyFormatted(prefix, results, key)
     local firstResult = results[1]
@@ -189,12 +189,12 @@ local function SumResultsTotalsByKeyFormatted(prefix, results, key)
         local money = ConvertToMoneyString(total)
         return format(Formats.ScS, prefix, money)
     end
-    local canCountBags = not firstResult.Name or firstResult.Name == "" ---@diagnostic disable-line: undefined-field
+    local canCountBags = not firstResult.Name or firstResult.Name == ""
     return GetLootIconCountFormatted(prefix, total, canCountBags)
 end
 
 ---@param name string
----@param results MiniLootMessageFormatSimpleParserResult[]
+---@param results MiniLootMessageFormatSimpleParserResults[]
 local function SumReputationTotalsByKeyFormatted(name, results)
     local firstResult = results[1]
     if not firstResult then
@@ -455,7 +455,7 @@ Formatters[MiniLootMessageGroup.Transmogrification] = function(results)
 end
 
 ---@param group MiniLootMessageGroup
----@param results MiniLootMessageFormatSimpleParserResult[]
+---@param results MiniLootMessageFormatSimpleParserResults[]
 local function Format(group, results)
     local formatter = Formatters[group]
     if not formatter then

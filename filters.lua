@@ -100,7 +100,7 @@ local function CompareValues(value1, comparator, value2)
 end
 
 ---@param rule MiniLootFilterRule
----@param result MiniLootMessageFormatSimpleParserResult
+---@param result MiniLootMessageFormatSimpleParserResults
 ---@param message MiniLootMessage
 ---@return boolean isRelevant
 local function IsRuleRelevant(rule, result, message)
@@ -114,7 +114,7 @@ local function IsRuleRelevant(rule, result, message)
 end
 
 ---@param ruleGroup MiniLootFilterRuleGroup
----@param result MiniLootMessageFormatSimpleParserResult
+---@param result MiniLootMessageFormatSimpleParserResults
 ---@param message MiniLootMessage
 ---@return boolean isRelevant
 local function IsRuleGroupRelevant(ruleGroup, result, message)
@@ -137,7 +137,7 @@ local function IsRuleGroupRelevant(ruleGroup, result, message)
 end
 
 ---@param rule MiniLootFilterRule
----@param result MiniLootMessageFormatSimpleParserResult
+---@param result MiniLootMessageFormatSimpleParserResults
 ---@return boolean satisfiesRule
 local function EvaluateRule(rule, result)
     local resultValue = result[rule.key] ---@type any
@@ -148,7 +148,7 @@ local function EvaluateRule(rule, result)
 end
 
 ---@param rules MiniLootFilterRule[]
----@param result MiniLootMessageFormatSimpleParserResult
+---@param result MiniLootMessageFormatSimpleParserResults
 ---@param message MiniLootMessage
 ---@return boolean? isFiltered, MiniLootFilterRule? filteredBy
 local function EvaluateRules(rules, result, message)
@@ -168,7 +168,7 @@ local function EvaluateRules(rules, result, message)
 end
 
 ---@param ruleGroup MiniLootFilterRuleGroup
----@param result MiniLootMessageFormatSimpleParserResult
+---@param result MiniLootMessageFormatSimpleParserResults
 ---@param message MiniLootMessage
 ---@return boolean satisfiesRuleGroup
 local function EvaluateRuleGroup(ruleGroup, result, message)
@@ -203,7 +203,7 @@ local function EvaluateRuleGroup(ruleGroup, result, message)
 end
 
 ---@param ruleGroups MiniLootFilterRuleGroup[]
----@param result MiniLootMessageFormatSimpleParserResult
+---@param result MiniLootMessageFormatSimpleParserResults
 ---@param message MiniLootMessage
 ---@return boolean? isFiltered, MiniLootFilterRuleGroup? filteredBy
 local function EvaluateRuleGroups(ruleGroups, result, message)
@@ -223,7 +223,7 @@ local function EvaluateRuleGroups(ruleGroups, result, message)
 end
 
 ---@param entries MiniLootFilters
----@param result MiniLootMessageFormatSimpleParserResult
+---@param result MiniLootMessageFormatSimpleParserResults
 ---@param message MiniLootMessage
 ---@return boolean isFiltered, MiniLootFilter? filteredBy
 local function EvaluateFilters(entries, result, message)

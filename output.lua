@@ -10,11 +10,11 @@ local Format = ns.Formatter.Format
 
 ---@class MiniLootBufferItem
 ---@field public message MiniLootMessage
----@field public result MiniLootMessageFormatSimpleParserResult
+---@field public result MiniLootMessageFormatSimpleParserResults
 
 ---@class MiniLootBufferItemGroup
 ---@field public name MiniLootMessageGroup
----@field public results MiniLootMessageFormatSimpleParserResult[]
+---@field public results MiniLootMessageFormatSimpleParserResults[]
 
 ---@class MiniLootNSBuffer
 local MiniLootNSBuffer = {}

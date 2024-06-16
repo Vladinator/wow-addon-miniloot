@@ -1,5 +1,7 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
+local db = ns.Settings.db
+
 ---@generic T
 ---@param tbl T[]
 ---@param shallow? boolean
@@ -341,7 +343,7 @@ local function ColorByDelta(text, delta)
     return format("|cff%s%s|r", color, text)
 end
 
----@param results MiniLootMessageFormatSimpleParserResult[]
+---@param results MiniLootMessageFormatSimpleParserResults[]
 ---@param key string
 ---@return number total
 local function SumByKey(results, key)
@@ -359,7 +361,7 @@ local function SumByKey(results, key)
     )
 end
 
----@param results MiniLootMessageFormatSimpleParserResult[]
+---@param results MiniLootMessageFormatSimpleParserResults[]
 ---@param key string
 ---@param skipColor? boolean
 ---@return string prettyTotal, number total
@@ -564,11 +566,13 @@ end
 ---@param trim? number
 ---@param size? number
 local function GetChatIconMarkup(texture, trim, size)
+    trim = trim or db.IconTrim
+    size = size or db.IconSize
     local temp = ":0:0"
-    if trim and size and trim > 1 and size > 0 then
+    if trim and size and trim > 0 and size > 0 then
         local ratio = size/100
-        local minPX = floor(ratio * trim)
-        local maxPX = floor(ratio * (100 - trim))
+        local minPX = floor(ratio * trim + 0.5)
+        local maxPX = floor(ratio * (100 - trim) + 0.5)
         temp = format(":%d:%d:0:0:%d:%d:%d:%d:%d:%d", size, size, size, size, minPX, maxPX, minPX, maxPX)
     end
     return format("|T%s%s|t", texture, temp)
@@ -603,27 +607,24 @@ end
 ---@param hyperlink? boolean
 ---@param simple? boolean
 ---@param customColor? string `RRGGBB`
----@param appendTier? boolean
----@param appendItemLevel? boolean
----@param appendItemLevelEquipmentOnly? boolean
 ---@param mawPowerUnit? UnitToken
 ---@return string itemLink
-local function GetLootIcon(link, hyperlink, simple, customColor, appendTier, appendItemLevel, appendItemLevelEquipmentOnly, mawPowerUnit)
+local function GetLootIcon(link, hyperlink, simple, customColor, mawPowerUnit)
     local color, data, text = link:match(LinkMarkupPattern) ---@type string?, string?, string?
     local texture = GetLinkTexture(link, data, text, mawPowerUnit)
     if not texture then
         return link
     end
     local appendText ---@type string?
-    if appendTier then
+    if db.ItemTier then
         local tierAtlas, tierAtlasName, tier, tierAtlasSuffix = GetAtlasTierInfo(text)
         if tier then
             appendText = format(":Q%s", tier)
         end
     end
-    if appendItemLevel then
+    if db.ItemLevel then
         local itemLevel, equipSlot = GetItemLevelAndEquipSlot(link)
-        if itemLevel and itemLevel > 1 and (not appendItemLevelEquipmentOnly or equipSlot) then
+        if itemLevel and itemLevel > 1 and (not db.ItemLevelEquipmentOnly or equipSlot) then
             appendText = format("%s:%s", appendText or "", itemLevel)
         end
     end

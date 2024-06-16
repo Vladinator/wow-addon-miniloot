@@ -181,14 +181,30 @@ local Tokens = {
 ---|MiniLootMessageFormatSimpleParserResultTransmogrificationKeys
 ---|MiniLootMessageFormatSimpleParserResultIgnoreKeys
 
----@class MiniLootMessageFormatSimpleParserResult : table
+---@alias MiniLootMessageFormatSimpleParserResults
+---|MiniLootMessageFormatSimpleParserResultFallback
+---|MiniLootMessageFormatSimpleParserResultReputation
+---|MiniLootMessageFormatSimpleParserResultHonor
+---|MiniLootMessageFormatSimpleParserResultExperience
+-- ---|MiniLootMessageFormatSimpleParserResultGuildExperience
+---|MiniLootMessageFormatSimpleParserResultFollowerExperience
+---|MiniLootMessageFormatSimpleParserResultCurrency
+---|MiniLootMessageFormatSimpleParserResultMoney
+---|MiniLootMessageFormatSimpleParserResultLoot
+---|MiniLootMessageFormatSimpleParserResultLootRoll
+---|MiniLootMessageFormatSimpleParserResultAnimaPower
+---|MiniLootMessageFormatSimpleParserResultArtifactPower
+---|MiniLootMessageFormatSimpleParserResultTransmogrification
+---|MiniLootMessageFormatSimpleParserResultIgnore
+
+---@class MiniLootMessageFormatSimpleParserResultFallback
 ---@field public Type MiniLootMessageFormatSimpleParserResultType
 
----@alias MiniLootMessageFormatSimpleParser fun(results: MiniLootMessageFormatTokenResult[]): MiniLootMessageFormatSimpleParserResult|false?
+---@alias MiniLootMessageFormatSimpleParser fun(results: MiniLootMessageFormatTokenResult[]): MiniLootMessageFormatSimpleParserResults|false?
 
----@alias MiniLootMessageFormatSimpleMap fun(result: MiniLootMessageFormatSimpleParserResult): MiniLootMessageFormatSimpleParserResult|false?
+---@alias MiniLootMessageFormatSimpleMap fun(result: MiniLootMessageFormatSimpleParserResults): MiniLootMessageFormatSimpleParserResults|false?
 
----@alias MiniLootMessageFormatSimpleParserMap fun(results: MiniLootMessageFormatTokenResult[], mapper: MiniLootMessageFormatSimpleMap): MiniLootMessageFormatSimpleParserResult|false?
+---@alias MiniLootMessageFormatSimpleParserMap fun(results: MiniLootMessageFormatTokenResult[], mapper: MiniLootMessageFormatSimpleMap): MiniLootMessageFormatSimpleParserResults|false?
 
 ---@class MiniLootMessageFormatToken
 ---@field public field MiniLootMessageFormatField
@@ -204,14 +220,14 @@ local Tokens = {
 ---@field public formats string[]
 ---@field public patterns? string[]
 ---@field public tokens MiniLootMessageFormatToken[]
----@field public result? MiniLootMessageFormatSimpleParserResult
+---@field public result? MiniLootMessageFormatSimpleParserResults
 ---@field public parser? MiniLootMessageFormatSimpleParser
 
 ---@class MiniLootMessage
 ---@field public group MiniLootMessageGroup
 ---@field public events WowEvent[]
 ---@field public formats MiniLootMessageFormat[]
----@field public result? MiniLootMessageFormatSimpleParserResult
+---@field public result? MiniLootMessageFormatSimpleParserResults
 ---@field public parser? MiniLootMessageFormatSimpleParser
 ---@field public tests? any[]
 ---@field public skipTests? boolean
@@ -472,7 +488,6 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultReputationTypes "Reputation"|"ReputationLoss"
 
-        ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultReputation
         ---@field public Type MiniLootMessageFormatSimpleParserResultReputationTypes
         ---@field public Name string The name of the faction.
@@ -584,7 +599,6 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultHonorTypes "Honor"
 
-        ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultHonor
         ---@field public Type MiniLootMessageFormatSimpleParserResultHonorTypes
         ---@field public Name? string If provided, this is the name of the player that granted us Honor.
@@ -659,7 +673,6 @@ do
         ---|"ExperienceBonus"
         ---|"ExperiencePenalty"
 
-        ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultExperience
         ---@field public Type MiniLootMessageFormatSimpleParserResultExperienceTypes
         ---@field public Name? string If provided, the name of the NPC that died and granted XP.
@@ -904,7 +917,6 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultGuildExperienceTypes "GuildExperience"
 
-        ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultGuildExperience
         ---@field public Type MiniLootMessageFormatSimpleParserResultGuildExperienceTypes
         ---@field public Value number The amount of guild XP earned.
@@ -951,7 +963,6 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultFollowerExperienceTypes "FollowerExperience"
 
-        ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultFollowerExperience
         ---@field public Type MiniLootMessageFormatSimpleParserResultFollowerExperienceTypes
         ---@field public Name string The name of the follower earning the XP.
@@ -1001,7 +1012,6 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultCurrencyTypes "Currency"
 
-        ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultCurrency
         ---@field public Type MiniLootMessageFormatSimpleParserResultCurrencyTypes
         ---@field public Link string The currency link.
@@ -1059,7 +1069,6 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultMoneyTypes "Money"
 
-        ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultMoney
         ---@field public Type MiniLootMessageFormatSimpleParserResultMoneyTypes
         ---@field public Name? string If provided, this player earned the gold.
@@ -1128,7 +1137,6 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultLootTypes "Loot"
 
-        ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultLoot
         ---@field public Type MiniLootMessageFormatSimpleParserResultLootTypes
         ---@field public Name? string If provided, the name of the player looting.
@@ -1285,7 +1293,6 @@ do
         ---|"WinnerResult"
         ---|"StartRoll"
 
-        ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type MiniLootMessageFormatSimpleParserResultLootRollTypes
         ---@field public Name? string If provided, the name of the player looting.
@@ -1715,7 +1722,6 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultAnimaPowerTypes "AnimaPower"
 
-        ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultAnimaPower
         ---@field public Type MiniLootMessageFormatSimpleParserResultAnimaPowerTypes
         ---@field public Link string The anima power link.
@@ -1760,7 +1766,6 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultArtifactPowerTypes "ArtifactPower"
 
-        ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultArtifactPower
         ---@field public Type MiniLootMessageFormatSimpleParserResultArtifactPowerTypes
         ---@field public Link string The artifact item link.
@@ -1808,7 +1813,6 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultTransmogrificationTypes "Transmogrification"|"TransmogrificationLoss"
 
-        ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultTransmogrification
         ---@field public Type MiniLootMessageFormatSimpleParserResultTransmogrificationTypes
         ---@field public Link string
@@ -1865,7 +1869,6 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultIgnoreTypes "Ignore"|"IgnoreMoney"
 
-        ---@see MiniLootMessageFormatSimpleParserResult
         ---@class MiniLootMessageFormatSimpleParserResultIgnore
         ---@field public Type MiniLootMessageFormatSimpleParserResultIgnoreTypes
         ---@field public Value? number
@@ -1964,11 +1967,11 @@ end
 
 ---@param messageFormat MiniLootMessageFormat
 ---@param matches string[]
----@return MiniLootMessageFormatSimpleParserResult?
+---@return MiniLootMessageFormatSimpleParserResults?
 local function ProcessMatchedToResult(messageFormat, matches)
     local tokens = messageFormat.tokens
     local numTokens = #tokens
-    local result ---@type MiniLootMessageFormatSimpleParserResult?
+    local result ---@type MiniLootMessageFormatSimpleParserResults?
     if messageFormat.result then
         result = TableCopy(messageFormat.result)
     end
@@ -2004,7 +2007,7 @@ end
 ---@param isSubtitle? boolean
 ---@param hideSenderInLetterbox? boolean
 ---@param supressRaidIcons? boolean
----@return MiniLootMessageFormatSimpleParserResult?, MiniLootMessage
+---@return MiniLootMessageFormatSimpleParserResults?, MiniLootMessage
 local function ProcessChatMessage(event, text, playerName, languageName, channelName, playerName2, specialFlags, zoneChannelID, channelIndex, channelBaseName, languageID, lineID, guid, bnSenderID, isMobile, isSubtitle, hideSenderInLetterbox, supressRaidIcons)
     for _, message in ipairs(MessagesCollection) do
         if TableContains(message.events, event) then
@@ -2027,7 +2030,7 @@ local function ProcessChatMessage(event, text, playerName, languageName, channel
     return ---@diagnostic disable-line: missing-return-value
 end
 
----@param result MiniLootMessageFormatSimpleParserResult
+---@param result MiniLootMessageFormatSimpleParserResults
 ---@param args any[]
 ---@param isMoney boolean
 ---@return boolean success
@@ -2060,11 +2063,11 @@ end
 
 ---@param message MiniLootMessage
 ---@param test any[]
----@return MiniLootMessageFormatSimpleParserResult? successResult, MiniLootMessageFormatSimpleParserResult[]? closeResults
+---@return MiniLootMessageFormatSimpleParserResults? successResult, MiniLootMessageFormatSimpleParserResults[]? closeResults
 local function RunAndEvaluateTest(message, test)
     local isMoney = message.group == MiniLootMessageGroup.Money
-    local successResult ---@type MiniLootMessageFormatSimpleParserResult?
-    local closeResults ---@type MiniLootMessageFormatSimpleParserResult[]?
+    local successResult ---@type MiniLootMessageFormatSimpleParserResults?
+    local closeResults ---@type MiniLootMessageFormatSimpleParserResults[]?
     local closeIndex ---@type number?
     local args = TableCopy(test) ---@type any[]
     local text = table.remove(args, 1) ---@type string
