@@ -1,6 +1,6 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
-local db = ns.Settings.db
+local db = setmetatable({}, { __index = function(self, key) return ns.Settings.db[key] end })
 
 ---@generic T
 ---@param tbl T[]
