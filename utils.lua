@@ -1,5 +1,6 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
+---@type MiniLootNSSettingsOptions
 local db = setmetatable({}, { __index = function(self, key) return ns.Settings.db[key] end })
 
 ---@generic T
@@ -621,9 +622,9 @@ local function GetLootIcon(link, hyperlink, simple, customColor, mawPowerUnit)
         local tierAtlas, tierAtlasName, tier, tierAtlasSuffix = GetAtlasTierInfo(text)
         if tier then
             if db.ItemTierAsText then
-                appendText = format(":Q%s", tier)
+                appendText = format("Q%s", tier)
             else
-                appendText = format(":%s", tierAtlas)
+                appendText = format("|A:%s:0:0|a", tierAtlasName)
             end
         end
     end
