@@ -2,6 +2,7 @@ local ns = select(2, ...) ---@class MiniLootNS
 
 local MiniLootMessageGroup = ns.Messages.MiniLootMessageGroup
 local TableCopy = ns.Utils.TableCopy
+local GetTimerunningSeasonID = ns.Utils.GetTimerunningSeasonID
 
 ---@enum MiniLootChatFrame
 local MiniLootChatFrame = {
@@ -37,7 +38,7 @@ local DefaultOptions = {
     ShortenFactionNames = true, --- enable to reduce the length of faction names
     ShortenFactionNamesLength = 10, --- specify the length before reduction activates
     IconTrim = 8, --- the px we want to trim from the texture icons
-    IconSize = 0, --- the px size we want the texture icon to be shown at
+    IconSize = 12, --- the px size we want the texture icon to be shown at
     ItemCount = false, --- enable to add item count behind icons
     ItemCountBank = true, --- enable to also include items in the bank
     ItemCountUses = true, --- enable to count uses/charges as "one item"
@@ -203,8 +204,8 @@ local function CanUseRemixDB(db, key)
     if key == "EnableRemixMode" or db.EnableRemixMode == false then
         return false
     end
-    local timerunningSeasonID = PlayerGetTimerunningSeasonID and PlayerGetTimerunningSeasonID()
-    return timerunningSeasonID and timerunningSeasonID > 0
+    local seasonID = GetTimerunningSeasonID()
+    return not not seasonID
 end
 
 ---@type MiniLootNSSettingsOptions

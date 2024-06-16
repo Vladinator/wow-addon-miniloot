@@ -323,6 +323,12 @@ local function FormatNumber(number)
     return FormatLargeNumber(number)
 end
 
+---@return number? seasonID
+local function GetTimerunningSeasonID()
+    local seasonID = PlayerGetTimerunningSeasonID and PlayerGetTimerunningSeasonID()
+    return seasonID and seasonID > 0 and seasonID or nil
+end
+
 ---@class MiniLootSimpleHexColors
 local SimpleHexColors = {
     FactionPurple = "9696FF",
@@ -846,6 +852,7 @@ ns.Utils = {
     ConvertToMoneyString = ConvertToMoneyString,
     ValuesAreSameish = ValuesAreSameish,
     FormatNumber = FormatNumber,
+    GetTimerunningSeasonID = GetTimerunningSeasonID,
     ColorByDelta = ColorByDelta,
     SumByKey = SumByKey,
     SumByKeyPretty = SumByKeyPretty,

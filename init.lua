@@ -167,7 +167,7 @@ function frame:OnEvent(event, ...)
             self.isLoaded = true
             self:UpdateState()
             HookSetItemRef()
-            SetupUI()
+            self.Panel = SetupUI(self)
         end
     end
     if not self.isLoaded then
@@ -184,6 +184,13 @@ function frame:OnEvent(event, ...)
     if result and message then
         output:Add({ result = result, message = message })
     end
+end
+
+---@param key string
+---@param value any
+---@param oldValue any
+function frame:OnSettingsChanged(key, value, oldValue)
+    frame:UpdateState()
 end
 
 function frame:Enable()
@@ -211,7 +218,7 @@ function frame:UpdateState()
         self:Disable()
     end
     for _, chatFrame in ipairs(GetChatFrames()) do
-        if db.EnableTooltips then
+        if db.Enabled and db.EnableTooltips then
             EnableHyperlinks(chatFrame)
         else
             DisableHyperlinks(chatFrame)
