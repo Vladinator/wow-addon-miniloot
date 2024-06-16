@@ -545,6 +545,22 @@ local function GetAtlasTierInfo(text)
     return tierAtlas, tierAtlasName, tier, tierAtlasSuffix
 end
 
+---@param atlas string
+---@param fileWidth number
+---@param fileHeight number
+---@param width? number
+---@param height? number
+---@param offsetX? number
+---@param offsetY? number
+---@return string?
+local function CreateTextureMarkupFromAtlas(atlas, fileWidth, fileHeight, width, height, offsetX, offsetY)
+    local info = C_Texture.GetAtlasInfo(atlas)
+    if not info then
+        return
+    end
+    return CreateTextureMarkup(info.file, fileWidth, fileHeight, width or 0, height or 0, info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord, offsetX or 0, offsetY or 0)
+end
+
 local NonEquippableSlots = {
     [""] = true,
     ["INVTYPE_NON_EQUIP"] = true,
@@ -622,9 +638,9 @@ local function GetLootIcon(link, hyperlink, simple, customColor, mawPowerUnit)
         local tierAtlas, tierAtlasName, tier, tierAtlasSuffix = GetAtlasTierInfo(text)
         if tier then
             if db.ItemTierAsText then
-                appendText = format("Q%s", tier)
+                appendText = tier
             else
-                appendText = format("|A:%s:0:0|a", tierAtlasName)
+                appendText = CreateTextureMarkupFromAtlas(tierAtlasName, 2048, 1024)
             end
         end
     end

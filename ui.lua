@@ -380,7 +380,6 @@ end
 local function SetupUI()
     local panel = GetInterfacePanel()
     AddInterfacePanel(panel)
-    _G.T = panel -- DEBUG
 end
 
 ---@class MiniLootNSUI
