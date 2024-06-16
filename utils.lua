@@ -540,6 +540,7 @@ local function GetAtlasTierInfo(text)
         return ---@diagnostic disable-line: missing-return-value
     end
     local tierAtlas, tierAtlasName, tier, tierAtlasSuffix = text:match(AtlasMarkupPattern)
+    -- TODO: db.IconSize
     return tierAtlas, tierAtlasName, tier, tierAtlasSuffix
 end
 
@@ -619,7 +620,11 @@ local function GetLootIcon(link, hyperlink, simple, customColor, mawPowerUnit)
     if db.ItemTier then
         local tierAtlas, tierAtlasName, tier, tierAtlasSuffix = GetAtlasTierInfo(text)
         if tier then
-            appendText = format(":Q%s", tier)
+            if db.ItemTierAsText then
+                appendText = format(":Q%s", tier)
+            else
+                appendText = format(":%s", tierAtlas)
+            end
         end
     end
     if db.ItemLevel then
