@@ -19,7 +19,11 @@ local EnableHyperlinks = ns.Tooltip.EnableHyperlinks
 local DisableHyperlinks = ns.Tooltip.DisableHyperlinks
 local SetupUI = ns.UI.SetupUI
 
----@class MiniLootChatFramePolyfill : MessageFrame
+---@class ScrollingMessageFramePolyfill : MessageFrame, ScrollingMessageFrame
+---@field public SetMaxLines fun(self: ScrollingMessageFramePolyfill, count: number)
+---@field public SetInsertMode fun(self: ScrollingMessageFramePolyfill, mode: number)
+
+---@class MiniLootChatFramePolyfill : ScrollingMessageFramePolyfill
 
 ---@alias MiniLootNSEventCallback fun(self: MiniLootNSEventFrame, event: WowEvent, ...: any)
 

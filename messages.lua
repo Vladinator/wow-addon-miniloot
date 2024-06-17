@@ -428,7 +428,7 @@ local function FinalizeMessages()
         local runTests = ns.DebugRunTests and not message.skipTests
         local tests = message.tests
 
-        if runTests and not tests then
+        if runTests or not tests then
 
             local index = 0
             tests = {}
@@ -2030,6 +2030,45 @@ local function ProcessChatMessage(event, text, playerName, languageName, channel
     return ---@diagnostic disable-line: missing-return-value
 end
 
+---@param message MiniLootMessage
+---@param includeResult? boolean
+---@return string text, MiniLootMessageFormatSimpleParserResults? result
+local function GenerateChatMessage(message, includeResult)
+    local testIndex = random(1, #message.tests)
+    local test = message.tests[testIndex]
+    if not includeResult then
+        return test[1]
+    end
+    local args = TableCopy(test) ---@type any[]
+    local text = table.remove(args, 1) ---@type string
+    local eventIndex = random(1, #message.events)
+    local event = message.events[eventIndex]
+    local result = ProcessChatMessage(event, text)
+    return text, result
+end
+
+---@param includeResult? boolean
+---@param predicate (fun(message: MiniLootMessage): boolean?)?
+---@return fun(): string, MiniLootMessageFormatSimpleParserResults?
+local function CreateChatMessageGenerator(includeResult, predicate)
+    local count = #MessagesCollection
+    local index = 0
+    return function()
+        index = index + 1
+        if index > count then
+            index = 1
+        end
+        for i = index, count do
+            local message = MessagesCollection[i]
+            if not predicate or predicate(message) then
+                index = i
+                return GenerateChatMessage(message, includeResult)
+            end
+        end
+        return GenerateChatMessage(MessagesCollection[index], includeResult)
+    end
+end
+
 ---@param result MiniLootMessageFormatSimpleParserResults
 ---@param args any[]
 ---@param isMoney boolean
@@ -2127,4 +2166,5 @@ ns.Messages = {
     MiniLootMessageGroup = MiniLootMessageGroup,
     MessagesCollection = MessagesCollection,
     ProcessChatMessage = ProcessChatMessage,
+    CreateChatMessageGenerator = CreateChatMessageGenerator,
 }

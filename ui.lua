@@ -5,6 +5,7 @@ local addOnName = ... ---@type string
 local L = ns.Locale
 local db = ns.Settings.db
 local GetTimerunningSeasonID = ns.Utils.GetTimerunningSeasonID
+local CreateChatMessageGenerator = ns.Messages.CreateChatMessageGenerator
 
 ---@generic T
 ---@alias MiniLootInterfacePanelWidgetOnLoad fun(self: T, panel: MiniLootInterfacePanel, ...: any)
@@ -204,18 +205,6 @@ local Options = {
         Label = L.PANEL_OPTION_ITEM_TIER_AS_TEXT,
         Tooltip = L.PANEL_OPTION_ITEM_TIER_AS_TEXT_TOOLTIP,
     },
-    -- {
-    --     Type = WidgetType.ChatFrame,
-    --     Label = L.PANEL_CHAT_PREVIEW_ORIGINAL,
-    --     Tooltip = L.PANEL_CHAT_PREVIEW_ORIGINAL_TOOLTIP,
-    --     Height = 200,
-    -- },
-    -- {
-    --     Type = WidgetType.ChatFrame,
-    --     Label = L.PANEL_CHAT_PREVIEW_MINILOOT,
-    --     Tooltip = L.PANEL_CHAT_PREVIEW_MINILOOT_TOOLTIP,
-    --     Height = 200,
-    -- },
 }
 
 local DefaultOptionHeight = 24
@@ -609,10 +598,30 @@ do
     ---@type MiniLootInterfacePanelWidgetOnLoad
     function MiniLootInterfacePanelWidgetChatFrame:OnLoad(panel, ...)
         MiniLootInterfacePanelWidget.OnLoad(self, panel)
+        self.Label:Hide()
+        self.Background:SetVertexColor(1, 1, 1)
+        self.Background:SetColorTexture(1, 1, 1, 0.05)
         local element = self.Element ---@class MiniLootInterfacePanelWidgetChatFrameElement
-        element.Background = element:CreateTexture(nil, "BACKGROUND")
-        element.Background:SetAllPoints()
-        element.Background:SetColorTexture(0, 1, 0)
+        element:ClearAllPoints()
+        element:SetAllPoints(self)
+        element:SetClipsChildren(true)
+        element:SetFading(true)
+        element:SetFontObject("GameFontWhite")
+        element:SetJustifyH("LEFT")
+        element:SetMaxLines(32)
+        element:SetInsertMode(SCROLLING_MESSAGE_FRAME_INSERT_MODE_BOTTOM)
+        element.Generator = CreateChatMessageGenerator(false)
+        local elapsed = 0
+        local function OnUpdate(_, e)
+            elapsed = elapsed + e
+            if elapsed < 1 then
+                return
+            end
+            elapsed = 0
+            local text, result = element.Generator()
+            element:AddMessage(text, 1, 1, 1)
+        end
+        element:HookScript("OnUpdate", OnUpdate)
     end
 
     ---@type MiniLootInterfacePanelWidgetCreateWidget
@@ -620,7 +629,7 @@ do
         local widget = CreateFrame("Frame", nil, panel) ---@class MiniLootInterfacePanelWidgetChatFrame
         Mixin(widget, self)
         widget.Type = WidgetType.ChatFrame
-        widget.Element = CreateFrame("MessageFrame", nil, widget) ---@class MiniLootInterfacePanelWidgetChatFrameElement : MiniLootChatFramePolyfill
+        widget.Element = CreateFrame("ScrollingMessageFrame", nil, widget) ---@class MiniLootInterfacePanelWidgetChatFrameElement : MiniLootChatFramePolyfill
         widget:OnLoad(panel, ...)
         return widget
     end
@@ -793,6 +802,14 @@ local function CreateInterfacePanel(eventFrame)
     scrollView:SetPanExtent(100)
     scrollContent:SetHeight(Panel.minHeight + GetOptionsEstimatedHeight())
     ScrollUtil.InitScrollBoxWithScrollBar(scrollBox, scrollBar, scrollView)
+    -- Panel.ChatFrame1 = MiniLootInterfacePanelWidgetChatFrame:CreateWidget(Panel)
+    -- Panel.ChatFrame1:ClearAllPoints()
+    -- Panel.ChatFrame1:SetPoint("TOPRIGHT", scrollBar, "TOPLEFT", -Panel.offsetX, -56)
+    -- Panel.ChatFrame1:SetSize(200, 150)
+    -- Panel.ChatFrame2 = MiniLootInterfacePanelWidgetChatFrame:CreateWidget(Panel)
+    -- Panel.ChatFrame2:ClearAllPoints()
+    -- Panel.ChatFrame2:SetPoint("TOPRIGHT", Panel.ChatFrame1, "BOTTOMRIGHT", 0, -Panel.offsetX)
+    -- Panel.ChatFrame2:SetSize(200, 150)
     local function poolReleaseWidget(_, obj)
         obj:ReleaseWidget()
     end
