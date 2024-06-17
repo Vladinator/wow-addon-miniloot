@@ -165,11 +165,11 @@ local function GetLootIconCountFormatted(link, count, canCountBags, isMawPower)
     if bagCount == 0 and db.ItemCountCurrency then
         bagCount = GetCurrencyCount(link)
     end
-    if count > 1 and bagCount > 0 then
+    if count > 1 and bagCount > 1 then
         return format(Formats.SxSCC, iconLink, FormatNumber(count), SimpleHexColors.DarkGray, FormatNumber(bagCount))
     elseif count > 1 then
         return format(Formats.SxS, iconLink, FormatNumber(count))
-    elseif bagCount > 0 then
+    elseif bagCount > 1 then
         return format(Formats.SCC, iconLink, SimpleHexColors.DarkGray, FormatNumber(bagCount))
     end
     return format(Formats.S, iconLink)
