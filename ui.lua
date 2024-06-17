@@ -22,7 +22,8 @@ local WidgetType = {
 }
 
 ---@class MiniLootInterfacePanelOptionDropDown
----@field public Name string
+---@field public Value string|number|boolean
+---@field public Label? string
 
 ---@class MiniLootInterfacePanelOptionNumber
 ---@field public Min? number
@@ -36,6 +37,7 @@ local WidgetType = {
 ---@field public KeyDependant? string
 ---@field public Indent? number
 ---@field public Height? number
+---@field public CanShow? fun(): boolean|number?
 ---@field public DropDown? MiniLootInterfacePanelOptionDropDown[]
 ---@field public Number? MiniLootInterfacePanelOptionNumber
 
@@ -44,6 +46,7 @@ local TIMERUNNING_MARKUP = CreateAtlasMarkup("timerunning-glues-icon-small", 9, 
 ---@type MiniLootInterfacePanelOption[]
 local Options = {
     {
+        CanShow = GetTimerunningSeasonID,
         Type = WidgetType.CheckBox,
         Key = "EnableRemixMode",
         Label = format("%s %s", TIMERUNNING_MARKUP, L.PANEL_OPTION_ENABLE_REMIX_MODE),
@@ -69,15 +72,15 @@ local Options = {
         Label = L.PANEL_OPTION_CHATFRAME,
         Tooltip = L.PANEL_OPTION_CHATFRAME_TOOLTIP,
         DropDown = {
-            { Name = "ChatFrame1" },
-            { Name = "ChatFrame2" },
-            { Name = "ChatFrame3" },
-            { Name = "ChatFrame4" },
-            { Name = "ChatFrame5" },
-            { Name = "ChatFrame6" },
-            { Name = "ChatFrame7" },
-            { Name = "ChatFrame8" },
-            { Name = "ChatFrame9" },
+            { Value = "ChatFrame1" },
+            { Value = "ChatFrame2" },
+            { Value = "ChatFrame3" },
+            { Value = "ChatFrame4" },
+            { Value = "ChatFrame5" },
+            { Value = "ChatFrame6" },
+            { Value = "ChatFrame7" },
+            { Value = "ChatFrame8" },
+            { Value = "ChatFrame9" },
         },
     },
     {
@@ -238,7 +241,23 @@ local UIColor = {
 ---@field public Option MiniLootInterfacePanelOption
 ---@field public Type MiniLootInterfacePanelWidgetType
 ---@field public OnLoad MiniLootInterfacePanelWidgetOnLoad
----@field public Element? Region
+---@field public Element? SettingsControlPolyfill
+
+---@class SettingsControlPolyfill : Frame
+---@field public HoverBackground Texture
+---@field public Init fun(self: any, initializer: any)
+---@field public SetTooltipFunc fun(self: any, callback: fun()?)
+---@field public SetEnabled? fun(self: any, state: boolean?)
+
+---@class SettingsControlDropDownOptionPolyfill
+---@field public label string
+---@field public text string
+---@field public value any
+---@field public tooltip? string
+---@field public disabled? boolean
+---@field public warning? boolean
+---@field public recommended? boolean
+---@field public onEnter? fun()
 
 ---@class MiniLootInterfacePanelWidget
 local MiniLootInterfacePanelWidget = {}
@@ -279,6 +298,13 @@ do
 
     function MiniLootInterfacePanelWidget:ReleaseWidget()
         self:Hide()
+        local element = self.Element
+        if not element then
+            return
+        end
+        if element.SetTooltipFunc then
+            element:SetTooltipFunc()
+        end
     end
 
     function MiniLootInterfacePanelWidget:GetValue()
@@ -352,8 +378,19 @@ do
         end
         self.Label:SetAlpha(self:CanEdit() and 1 or 0.5)
         local element = self.Element
-        if element then
-            element:SetHeight(height)
+        if not element then
+            self:Show()
+            return
+        end
+        element:SetHeight(height)
+        if element.SetTooltipFunc then
+            local tooltip = option.Tooltip
+            if tooltip and tooltip ~= "" then
+                element:SetTooltipFunc(function() Settings.InitTooltip(option.Label, tooltip) end)
+            end
+        end
+        if element.SetEnabled then
+            element:SetEnabled(self:CanEdit())
         end
         self:Show()
     end
@@ -398,9 +435,7 @@ local MiniLootInterfacePanelWidgetCheckBox = Mixin({}, MiniLootInterfacePanelWid
 
 do
 
-    ---@class MiniLootInterfacePanelWidgetCheckBoxElement : CheckButton
-    ---@field public HoverBackground Texture
-    ---@field public SetTooltipFunc fun(self: MiniLootInterfacePanelWidgetCheckBoxElement, callback: fun()?)
+    ---@class MiniLootInterfacePanelWidgetCheckBoxElement : CheckButton, SettingsControlPolyfill
 
     ---@type MiniLootInterfacePanelWidgetOnLoad
     function MiniLootInterfacePanelWidgetCheckBox:OnLoad(panel, ...)
@@ -412,22 +447,10 @@ do
         element:HookScript("OnClick", function() self:SaveValue(not not element:GetChecked()) self.Panel:Refresh() end)
     end
 
-    function MiniLootInterfacePanelWidgetCheckBox:ReleaseWidget()
-        MiniLootInterfacePanelWidget.ReleaseWidget(self)
-        local element = self.Element
-        element:SetTooltipFunc()
-    end
-
     function MiniLootInterfacePanelWidgetCheckBox:Refresh()
         MiniLootInterfacePanelWidget.Refresh(self)
-        local option = self.Option
-        local tooltip = option.Tooltip
         local element = self.Element
         element:SetWidth(element:GetHeight())
-        if tooltip and tooltip ~= "" then
-            element:SetTooltipFunc(function() Settings.InitTooltip(option.Label, tooltip) end)
-        end
-        element:SetEnabled(self:CanEdit())
         element:SetChecked(self:GetValue())
     end
 
@@ -448,10 +471,58 @@ local MiniLootInterfacePanelWidgetDropDown = Mixin({}, MiniLootInterfacePanelWid
 
 do
 
+    ---@class MiniLootInterfacePanelWidgetDropDownElement : Frame, SettingsControlPolyfill
+    ---@field public Control SettingsControlPolyfill
+    ---@field public Tooltip SettingsControlPolyfill
+    ---@field public data? any
+    ---@field public GetElementData? fun(): any
+
     ---@type MiniLootInterfacePanelWidgetOnLoad
     function MiniLootInterfacePanelWidgetDropDown:OnLoad(panel, ...)
         MiniLootInterfacePanelWidget.OnLoad(self, panel)
-        -- local element = self.Element ---@class MiniLootInterfacePanelWidgetDropDownElement
+        local element = self.Element ---@class MiniLootInterfacePanelWidgetDropDownElement
+        element:SetPoint("TOPLEFT", self.Label, "TOPRIGHT", -214, -6)
+        element.Tooltip.HoverBackground:SetAllPoints(self.Background)
+        element.Tooltip.HoverBackground:SetAlpha(0)
+    end
+
+    function MiniLootInterfacePanelWidgetDropDown:Refresh()
+        MiniLootInterfacePanelWidget.Refresh(self)
+        local element = self.Element
+        local option = self.Option
+        local initializer
+        if option.DropDown and not element.data then
+            local options = {} ---@type SettingsControlDropDownOptionPolyfill[]
+            for i, data in ipairs(option.DropDown) do
+                local text = data.Label or data.Value
+                local value = data.Value or data.Label
+                text = text == nil and "" or tostring(text)
+                options[i] = {
+                    label = text,
+                    text = text,
+                    value = value,
+                }
+            end
+            local function getOptions()
+                return options
+            end
+            local function getValue()
+                return self:GetValue()
+            end
+            local function setValue(value)
+                self:SaveValue(value)
+            end
+            local key = option.Key
+            local variableTbl = { [key] = getValue() } ---@type table<string, string>
+            local defaultValue = ns.Settings.DefaultOptions[key]
+            local setting = CreateAndInitFromMixin(ProxySettingMixin, "", key, variableTbl, type(defaultValue), defaultValue, getValue, setValue)
+            initializer = Settings.CreateDropdownInitializer(setting, getOptions)
+            element.GetElementData = function() return initializer end
+        end
+        if initializer then
+            element:Init(initializer)
+        end
+        element.Control:SetEnabled(self:CanEdit())
     end
 
     ---@type MiniLootInterfacePanelWidgetCreateWidget
@@ -459,7 +530,7 @@ do
         local widget = CreateFrame("Frame", nil, panel) ---@class MiniLootInterfacePanelWidgetDropDown
         Mixin(widget, self)
         widget.Type = WidgetType.DropDown
-        -- widget.Element = CreateFrame("Frame", nil, widget, "SettingsDropDownTemplate") ---@class MiniLootInterfacePanelWidgetDropDownElement
+        widget.Element = CreateFrame("Frame", nil, widget, "SettingsDropDownControlTemplate") ---@class MiniLootInterfacePanelWidgetDropDownElement
         widget:OnLoad(panel, ...)
         return widget
     end
@@ -471,10 +542,39 @@ local MiniLootInterfacePanelWidgetNumber = Mixin({}, MiniLootInterfacePanelWidge
 
 do
 
+    ---@class MiniLootInterfacePanelWidgetNumberElement : EditBox
+    ---@field public Left Texture
+    ---@field public Middle Texture
+    ---@field public Right Texture
+
     ---@type MiniLootInterfacePanelWidgetOnLoad
     function MiniLootInterfacePanelWidgetNumber:OnLoad(panel, ...)
         MiniLootInterfacePanelWidget.OnLoad(self, panel)
-        -- local element = self.Element ---@class MiniLootInterfacePanelWidgetNumberElement
+        local element = self.Element ---@class MiniLootInterfacePanelWidgetNumberElement
+        element:SetPoint("TOPLEFT", self.Label, "TOPRIGHT", 8, 0)
+        element:ClearPoint("BOTTOMRIGHT")
+        element:SetWidth(48)
+        element:SetAutoFocus(false)
+        element:SetNumeric(true)
+        element:SetNumericFullRange(true)
+        element:SetMaxLetters(6)
+        function element.StartEditing()
+            element.Left:Show()
+            element.Middle:Show()
+            element.Right:Show()
+        end
+        function element.StopEditing()
+            element.Left:Hide()
+            element.Middle:Hide()
+            element.Right:Hide()
+            C_Timer.After(0.05, function() self:Refresh() end)
+        end
+        element:StopEditing()
+        element:HookScript("OnEnable", function() element:SetTextColor(1, 1, 1, 1) end)
+        element:HookScript("OnDisable", function() element:SetTextColor(1, 1, 1, 0.5) end)
+        element:HookScript("OnEditFocusGained", element.StartEditing)
+        element:HookScript("OnEditFocusLost", element.StopEditing)
+        element:HookScript("OnEnterPressed", function() self:SaveValue(element:GetNumber()) end)
     end
 
     ---@type MiniLootInterfacePanelWidgetCreateWidget
@@ -482,9 +582,20 @@ do
         local widget = CreateFrame("Frame", nil, panel) ---@class MiniLootInterfacePanelWidgetNumber
         Mixin(widget, self)
         widget.Type = WidgetType.Number
-        -- widget.Element = CreateFrame("EditBox", nil, widget, "SettingsEditBoxTemplate") ---@class MiniLootInterfacePanelWidgetNumberElement
+        widget.Element = CreateFrame("EditBox", nil, widget, "NumericInputBoxTemplate") ---@class MiniLootInterfacePanelWidgetNumberElement
         widget:OnLoad(panel, ...)
         return widget
+    end
+
+    ---@return number
+    function MiniLootInterfacePanelWidgetNumber:GetValue()
+        return MiniLootInterfacePanelWidget.GetValue(self) ---@diagnostic disable-line: return-type-mismatch
+    end
+
+    function MiniLootInterfacePanelWidgetNumber:Refresh()
+        MiniLootInterfacePanelWidget.Refresh(self)
+        local element = self.Element
+        element:SetNumber(self:GetValue())
     end
 
 end
@@ -615,9 +726,8 @@ local function PanelRefresh(self)
     local widgetHeight = DefaultOptionHeight -- maxHeight/20
     local totalHeight = self.minHeight
     for _, option in ipairs(Panel.Options) do
-        local isRemixOption = option.Key == "EnableRemixMode"
-        local showOption = not isRemixOption or GetTimerunningSeasonID()
-        if showOption then
+        local canShow = option.CanShow
+        if not canShow or canShow() then
             local pool = GetPanelPool(self, option.Type)
             if pool then
                 widget = pool:Acquire()

@@ -6,7 +6,6 @@ local GetTimerunningSeasonID = ns.Utils.GetTimerunningSeasonID
 
 ---@enum MiniLootChatFrame
 local MiniLootChatFrame = {
-    DEFAULT_CHAT_FRAME = "DEFAULT_CHAT_FRAME",
     ChatFrame1 = "ChatFrame1",
     ChatFrame2 = "ChatFrame2",
     ChatFrame3 = "ChatFrame3",
@@ -31,7 +30,7 @@ local DefaultOptions = {
     Enabled = true, --- actively monitor loot messages and apply transformations
     EnableTooltips = true, --- show tooltips above chat frame when hovering links
     EnableRemixMode = true, --- enable separate profile with settings when on a remix character
-    ChatFrame = MiniLootChatFrame.DEFAULT_CHAT_FRAME, --- the default output chat frame
+    ChatFrame = MiniLootChatFrame.ChatFrame1, --- the default output chat frame
     Debounce = 2, --- gather loot messages and when it settles this many seconds later we print the summary
     DebounceInCombat = true, --- if debounce should wait until combat ends before counting down
     ShortenPlayerNames = true, --- enable to remove the realm name

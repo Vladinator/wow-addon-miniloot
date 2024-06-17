@@ -32,6 +32,7 @@
         "LARGE_NUMBER_SEPERATOR",
         "LinkUtil",
         "LOOT",
+        "ProxySettingMixin",
         "ScrollUtil",
         "Settings",
         "SILVER_AMOUNT",
