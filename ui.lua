@@ -4,6 +4,7 @@ local addOnName = ... ---@type string
 
 local L = ns.Locale
 local db = ns.Settings.db
+local ProjectVariant = ns.Utils.ProjectVariant
 local GetTimerunningSeasonID = ns.Utils.GetTimerunningSeasonID
 local CreateChatMessageGenerator = ns.Messages.CreateChatMessageGenerator
 
@@ -548,23 +549,54 @@ do
         element:SetNumeric(true)
         element:SetNumericFullRange(true)
         element:SetMaxLetters(6)
-        function element.StartEditing()
+        function element.OnEnable()
+            element:SetTextColor(1, 1, 1, 1)
+        end
+        function element.OnDisable()
+            element:SetTextColor(1, 1, 1, 0.5)
+        end
+        function element.OnEditFocusGained()
             element.Left:Show()
             element.Middle:Show()
             element.Right:Show()
         end
-        function element.StopEditing()
+        function element.OnEditFocusLost()
             element.Left:Hide()
             element.Middle:Hide()
             element.Right:Hide()
             C_Timer.After(0.05, function() self:Refresh() end)
         end
-        element:StopEditing()
-        element:HookScript("OnEnable", function() element:SetTextColor(1, 1, 1, 1) end)
-        element:HookScript("OnDisable", function() element:SetTextColor(1, 1, 1, 0.5) end)
-        element:HookScript("OnEditFocusGained", element.StartEditing)
-        element:HookScript("OnEditFocusLost", element.StopEditing)
-        element:HookScript("OnEnterPressed", function() self:SaveValue(element:GetNumber()) end)
+        function element.OnEnterPressed()
+            self:SaveValue(element:GetNumber())
+            element:ClearFocus()
+        end
+        function element.OnEnter()
+            local option = self.Option
+            local tooltip = option.Tooltip
+            if not tooltip or tooltip == "" then
+                return
+            end
+            GameTooltip:SetOwner(element, "ANCHOR_TOPLEFT", 18, 0)
+            GameTooltip:AddLine(option.Label, 1, 1, 1, false)
+            GameTooltip:AddLine(tooltip)
+            GameTooltip:Show()
+        end
+        function element.OnLeave()
+            local option = self.Option
+            local tooltip = option.Tooltip
+            if not tooltip or tooltip == "" then
+                return
+            end
+            GameTooltip:Hide()
+        end
+        element:OnEditFocusLost()
+        element:HookScript("OnEnable", element.OnEnable)
+        element:HookScript("OnDisable", element.OnDisable)
+        element:HookScript("OnEditFocusGained", element.OnEditFocusGained)
+        element:HookScript("OnEditFocusLost", element.OnEditFocusLost)
+        element:HookScript("OnEnterPressed", element.OnEnterPressed)
+        element:HookScript("OnEnter", element.OnEnter)
+        element:HookScript("OnLeave", element.OnLeave)
     end
 
     ---@type MiniLootInterfacePanelWidgetCreateWidget
@@ -572,7 +604,7 @@ do
         local widget = CreateFrame("Frame", nil, panel) ---@class MiniLootInterfacePanelWidgetNumber
         Mixin(widget, self)
         widget.Type = WidgetType.Number
-        widget.Element = CreateFrame("EditBox", nil, widget, "NumericInputBoxTemplate") ---@class MiniLootInterfacePanelWidgetNumberElement
+        widget.Element = CreateFrame("EditBox", nil, widget, ProjectVariant.EditBoxNumberTemplate) ---@class MiniLootInterfacePanelWidgetNumberElement
         widget:OnLoad(panel, ...)
         return widget
     end

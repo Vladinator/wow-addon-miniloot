@@ -3,6 +3,43 @@ local ns = select(2, ...) ---@class MiniLootNS
 ---@type MiniLootNSSettingsOptions
 local db = setmetatable({}, { __index = function(self, key) return ns.Settings.db[key] end })
 
+---@class MiniLootProjectVariant
+---@field public EditBoxNumberTemplate? string
+
+---@type table<number, MiniLootProjectVariant>|MiniLootProjectVariant
+local ProjectVariant = {
+    [0] = {
+        EditBoxNumberTemplate = "NumericInputBoxTemplate",
+    },
+    [WOW_PROJECT_CLASSIC] = {
+        EditBoxNumberTemplate = "InputBoxTemplate",
+    },
+}
+
+do
+
+    local DefaultProjectVariantMetatable = {
+        __index = function(self, key)
+            return ProjectVariant[0][key]
+        end,
+    }
+
+    for i = 1, 100 do
+        local project = ProjectVariant[i]
+        if project then
+            setmetatable(project, DefaultProjectVariantMetatable)
+        end
+    end
+
+    setmetatable(ProjectVariant, {
+        __index = function(self, key)
+            local project = ProjectVariant[WOW_PROJECT_ID] or ProjectVariant[0]
+            return project[key]
+        end,
+    })
+
+end
+
 ---@generic T
 ---@param tbl T[]
 ---@param shallow? boolean
@@ -833,6 +870,7 @@ end
 
 ---@class MiniLootNSUtils
 ns.Utils = {
+    ProjectVariant = ProjectVariant,
     SimpleHexColors = SimpleHexColors,
     TableCopy = TableCopy,
     TableContains = TableContains,

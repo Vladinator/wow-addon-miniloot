@@ -72,7 +72,7 @@ end
 ---@class MiniLootNSSettingsOptions
 local DefaultRemixOptions = TableCopy(DefaultOptions)
 
-do
+if WOW_PROJECT_ID == WOW_PROJECT_MAINLINE then
 
     ---@type MiniLootFilterRule
     local ItemIsQuest = {
