@@ -34,6 +34,14 @@ local ProjectVariant = {
     },
 }
 
+if select(4, GetBuildInfo()) < 110000 then -- `pre-11.0`
+    local ProjectVariantMainline = ProjectVariant[0]
+    ProjectVariantMainline.DropDownTemplate = ProjectVariant[WOW_PROJECT_CLASSIC].DropDownTemplate
+    ProjectVariantMainline.DropDownTemplateOnLoad = ProjectVariant[WOW_PROJECT_CLASSIC].DropDownTemplateOnLoad
+    ProjectVariantMainline.DropDownTemplateCreateInitializer = ProjectVariant[WOW_PROJECT_CLASSIC].DropDownTemplateCreateInitializer
+    ProjectVariantMainline.DropDownTemplateOnInitialized = ProjectVariant[WOW_PROJECT_CLASSIC].DropDownTemplateOnInitialized
+end
+
 do
 
     local DefaultProjectVariant = ProjectVariant[0]
