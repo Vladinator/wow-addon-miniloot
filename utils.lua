@@ -36,9 +36,11 @@ local ProjectVariant = {
 
 do
 
+    local DefaultProjectVariant = ProjectVariant[0]
+
     local DefaultProjectVariantMetatable = {
         __index = function(self, key)
-            return ProjectVariant[0][key]
+            return DefaultProjectVariant[key]
         end,
     }
 
@@ -51,7 +53,7 @@ do
 
     setmetatable(ProjectVariant, {
         __index = function(self, key)
-            local project = ProjectVariant[WOW_PROJECT_ID] or ProjectVariant[0]
+            local project = rawget(self, WOW_PROJECT_ID) or DefaultProjectVariant
             return project[key]
         end,
     })
