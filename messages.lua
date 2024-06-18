@@ -28,6 +28,7 @@ local MiniLootMessageGroup = {
     LootRollYouResult = "LootRollYouResult",
     LootRollResult = "LootRollResult",
     LootRollInfo = "LootRollInfo",
+    ItemChanged = "ItemChanged",
     AnimaPower = "AnimaPower",
     ArtifactPower = "ArtifactPower",
     Transmogrification = "Transmogrification",
@@ -161,6 +162,7 @@ local Tokens = {
 ---|MiniLootMessageFormatSimpleParserResultMoneyTypes
 ---|MiniLootMessageFormatSimpleParserResultLootTypes
 ---|MiniLootMessageFormatSimpleParserResultLootRollTypes
+---|MiniLootMessageFormatSimpleParserResultItemChangedTypes
 ---|MiniLootMessageFormatSimpleParserResultAnimaPowerTypes
 ---|MiniLootMessageFormatSimpleParserResultArtifactPowerTypes
 ---|MiniLootMessageFormatSimpleParserResultTransmogrificationTypes
@@ -176,6 +178,7 @@ local Tokens = {
 ---|MiniLootMessageFormatSimpleParserResultMoneyKeys
 ---|MiniLootMessageFormatSimpleParserResultLootKeys
 ---|MiniLootMessageFormatSimpleParserResultLootRollKeys
+---|MiniLootMessageFormatSimpleParserResultItemChangedKeys
 ---|MiniLootMessageFormatSimpleParserResultAnimaPowerKeys
 ---|MiniLootMessageFormatSimpleParserResultArtifactPowerKeys
 ---|MiniLootMessageFormatSimpleParserResultTransmogrificationKeys
@@ -192,6 +195,7 @@ local Tokens = {
 ---|MiniLootMessageFormatSimpleParserResultMoney
 ---|MiniLootMessageFormatSimpleParserResultLoot
 ---|MiniLootMessageFormatSimpleParserResultLootRoll
+---|MiniLootMessageFormatSimpleParserResultItemChanged
 ---|MiniLootMessageFormatSimpleParserResultAnimaPower
 ---|MiniLootMessageFormatSimpleParserResultArtifactPower
 ---|MiniLootMessageFormatSimpleParserResultTransmogrification
@@ -1715,6 +1719,76 @@ do
                         },
                         result = {
                             Type = "IneligibleResult",
+                        },
+                    },
+                },
+            }
+        )
+
+    end
+
+    -- Item Changed
+    do
+
+        ---@alias MiniLootMessageFormatSimpleParserResultItemChangedKeys "Link"|"LinkExtra"
+
+        ---@alias MiniLootMessageFormatSimpleParserResultItemChangedTypes "ItemChanged"|"YouItemChanged"
+
+        ---@class MiniLootMessageFormatSimpleParserResultItemChanged
+        ---@field public Type MiniLootMessageFormatSimpleParserResultItemChangedTypes
+        ---@field public Name? string The player name changing their item.
+        ---@field public Link string The original item link.
+        ---@field public LinkExtra string The new item link.
+
+        ---@class MiniLootMessageFormatSimpleParserResultItemChangedArgs : MiniLootMessageFormatSimpleParserResultItemChanged
+        ---@field public Link? string
+        ---@field public LinkExtra? string
+
+        ---@class MiniLootMessageFormatItemChanged : MiniLootMessageFormat
+        ---@field public result? MiniLootMessageFormatSimpleParserResultItemChangedArgs
+
+        AppendMessages(
+            {
+                group = MiniLootMessageGroup.ItemChanged,
+                events = {
+                    "CHAT_MSG_LOOT",
+                },
+                ---@type MiniLootMessageFormatSimpleParserResultItemChangedArgs
+                result = {
+                    Type = "ItemChanged",
+                },
+            },
+            {
+                ---@type MiniLootMessageFormatItemChanged[]
+                formats = {
+                    {
+                        formats = {
+                            "CHANGED_OWN_ITEM",
+                        },
+                        tokens = {
+                            Tokens.Link,
+                            Tokens.LinkExtra,
+                        },
+                        result = {
+                            Type = "YouItemChanged",
+                        },
+                    },
+                },
+            },
+            {
+                ---@type MiniLootMessageFormatItemChanged[]
+                formats = {
+                    {
+                        formats = {
+                            "CHANGED_ITEM",
+                        },
+                        tokens = {
+                            Tokens.NameTarget,
+                            Tokens.Link,
+                            Tokens.LinkExtra,
+                        },
+                        result = {
+                            Type = "ItemChanged",
                         },
                     },
                 },

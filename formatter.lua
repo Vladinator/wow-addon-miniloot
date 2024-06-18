@@ -254,6 +254,11 @@ local function TableGroupFormat_NameValue(results)
     )
 end
 
+---@class MiniLootMessageFormatPseudoResult_NameLinkLink
+---@field public Name? string
+---@field public Link string
+---@field public LinkExtra string
+
 ---@alias LootGroupHandler fun(key: MiniLootMessageFormatSimpleParserResultLootRollTypes, results: MiniLootMessageFormatSimpleParserResultLootRoll[]): string|string[]?
 
 local LootHistoryText = format("[%s]", LOOT)
@@ -382,6 +387,20 @@ end
 ---@param results MiniLootMessageFormatSimpleParserResultHonor[]
 Formatters[MiniLootMessageGroup.Honor] = function(results)
     return format(Formats.ScS, HONOR, SumByKeyPretty(results, "Value"))
+end
+
+---@param results MiniLootMessageFormatSimpleParserResultItemChanged[]
+Formatters[MiniLootMessageGroup.ItemChanged] = function(results)
+    return TableGroupFormatOuter(
+        results,
+        "Name",
+        ---@param groupResults MiniLootMessageFormatPseudoResult_NameLinkLink[]
+        function(groupKey, groupResults)
+            local name = ConvertNameToUnitNameFormatted(groupKey)
+            local links = TableMap(groupResults, function(result) return format("%s 👉▶️➡️ %s", GetLootIconFormatted(result.Link), GetLootIconFormatted(result.LinkExtra)) end)
+            return format(Formats.ScS, name, table.concat(links, " "))
+        end
+    )
 end
 
 ---@param results MiniLootMessageFormatSimpleParserResultLoot[]

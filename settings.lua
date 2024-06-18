@@ -56,11 +56,25 @@ local DefaultOptions = {
 
 do
 
+    ---@type table<MiniLootMessageGroup, number>
+    local DefaultDebounceGroups = {
+        [MiniLootMessageGroup.LootRoll] = 0,
+        [MiniLootMessageGroup.LootRollDecide] = 0,
+        [MiniLootMessageGroup.LootRollInfo] = 0,
+        [MiniLootMessageGroup.LootRollResult] = 0,
+        [MiniLootMessageGroup.LootRollRolled] = 0,
+        [MiniLootMessageGroup.LootRollYouDecide] = 0,
+        [MiniLootMessageGroup.LootRollYouResult] = 0,
+        [MiniLootMessageGroup.ItemChanged] = 0,
+        [MiniLootMessageGroup.Transmogrification] = 0,
+    }
+
     for k, _ in pairs(MiniLootMessageGroup) do
         DefaultOptions.EnabledGroups[k] = nil
         DefaultOptions.IgnoredGroups[k] = nil
-        if k:find("^LootRoll") then
-            DefaultOptions.DebounceGroups[k] = 0
+        local debounceGroupsValue = DefaultDebounceGroups[k]
+        if debounceGroupsValue then
+            DefaultOptions.DebounceGroups[k] = debounceGroupsValue
         end
         DefaultOptions.Filters = {}
     end
