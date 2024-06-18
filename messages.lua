@@ -323,6 +323,35 @@ local function CreateMessageTests(messageFormat)
     return tests
 end
 
+local MessageMetaTableTests = {
+    ---@param self MiniLootMessage
+    __index = function(self, key)
+        if key ~= "tests" then
+            return
+        end
+        if self.skipTests then
+            return
+        end
+        if self.group == MiniLootMessageGroup.Ignore then
+            return
+        end
+        local messageFormats = self.formats
+        local numMessageFormats = #messageFormats
+        local index = 0
+        local tests = {}
+        for messageFormatIndex = 1, numMessageFormats do
+            local messageFormat = messageFormats[messageFormatIndex]
+            local messageFormatTests = CreateMessageTests(messageFormat)
+            for messageFormatTestIndex = 1, #messageFormatTests do
+                index = index + 1
+                tests[index] = messageFormatTests[messageFormatTestIndex]
+            end
+        end
+        rawset(self, key, tests)
+        return tests
+    end,
+}
+
 local function FinalizeMessages()
     local numMessages = #MessagesCollection
 
@@ -425,28 +454,7 @@ local function FinalizeMessages()
 
         end
 
-        local runTests = ns.DebugRunTests and not message.skipTests
-        local tests = message.tests
-
-        if runTests or not tests then
-
-            local index = 0
-            tests = {}
-            message.tests = tests
-
-            for messageFormatIndex = 1, numMessageFormats do
-
-                local messageFormat = messageFormats[messageFormatIndex]
-                local messageFormatTests = CreateMessageTests(messageFormat)
-
-                for messageFormatTestIndex = 1, #messageFormatTests do
-                    index = index + 1
-                    tests[index] = messageFormatTests[messageFormatTestIndex]
-                end
-
-            end
-
-        end
+        setmetatable(message, MessageMetaTableTests)
 
     end
 end
@@ -2148,12 +2156,12 @@ local function RunAndEvaluateTests(message)
 end
 
 local function RunMessageTests()
+    if not ns.DebugRunTests then
+        return
+    end
     for _, message in ipairs(MessagesCollection) do
         if not message.skipTests then
-            local tests = message.tests
-            if tests then
-                RunAndEvaluateTests(message)
-            end
+            RunAndEvaluateTests(message)
         end
     end
 end
