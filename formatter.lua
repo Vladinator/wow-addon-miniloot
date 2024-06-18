@@ -263,6 +263,11 @@ end
 
 local LootHistoryText = format("[%s]", LOOT)
 
+local RightArrowMarkup = "|A:perks-forwardarrow:8:8:2:0|a"
+local DotSeparatorMarkup = "|A:perks-radio-dot:8:8:0:-2|a"
+local RightArrowMarkupSpaced = format(" %s ", RightArrowMarkup)
+local DotSeparatorMarkupSpaced = format(" %s ", DotSeparatorMarkup)
+
 ---@param id number
 ---@param text? string
 local function GetLootHistoryLink(id, text)
@@ -397,8 +402,10 @@ Formatters[MiniLootMessageGroup.ItemChanged] = function(results)
         ---@param groupResults MiniLootMessageFormatPseudoResult_NameLinkLink[]
         function(groupKey, groupResults)
             local name = ConvertNameToUnitNameFormatted(groupKey)
-            local links = TableMap(groupResults, function(result) return format("%s 👉▶️➡️ %s", GetLootIconFormatted(result.Link), GetLootIconFormatted(result.LinkExtra)) end)
-            return format(Formats.ScS, name, table.concat(links, " "))
+            local links = TableMap(groupResults, function(result)
+                return format("%s%s%s", GetLootIconFormatted(result.Link), RightArrowMarkupSpaced, GetLootIconFormatted(result.LinkExtra))
+            end)
+            return format(Formats.ScS, name, table.concat(links, DotSeparatorMarkupSpaced))
         end
     )
 end
