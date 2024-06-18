@@ -402,10 +402,10 @@ Formatters[MiniLootMessageGroup.ItemChanged] = function(results)
         ---@param groupResults MiniLootMessageFormatPseudoResult_NameLinkLink[]
         function(groupKey, groupResults)
             local name = ConvertNameToUnitNameFormatted(groupKey)
-            local links = TableMap(groupResults, function(result)
-                return format("%s%s%s", GetLootIconFormatted(result.Link), RightArrowMarkupSpaced, GetLootIconFormatted(result.LinkExtra))
+            return TableMap(groupResults, function(result)
+                local suffix = format("%s%s%s", GetLootIconFormatted(result.Link), RightArrowMarkupSpaced, GetLootIconFormatted(result.LinkExtra))
+                return format(Formats.ScS, name, suffix)
             end)
-            return format(Formats.ScS, name, table.concat(links, DotSeparatorMarkupSpaced))
         end
     )
 end
