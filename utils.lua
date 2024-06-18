@@ -5,14 +5,32 @@ local db = setmetatable({}, { __index = function(self, key) return ns.Settings.d
 
 ---@class MiniLootProjectVariant
 ---@field public EditBoxNumberTemplate? string
+---@field public DropDownTemplate? string
+---@field public DropDownTemplateOnLoad? fun(self: MiniLootInterfacePanelWidgetDropDown)
+---@field public DropDownTemplateCreateInitializer? fun(settings: any, options: fun(): SettingsControlDropDownOptionPolyfill[])
+---@field public DropDownTemplateOnInitialized? fun(self: MiniLootInterfacePanelWidgetDropDown)
 
 ---@type table<number, MiniLootProjectVariant>|MiniLootProjectVariant
 local ProjectVariant = {
     [0] = {
         EditBoxNumberTemplate = "NumericInputBoxTemplate",
+        DropDownTemplate = "SettingsDropDownControlTemplate",
+        DropDownTemplateCreateInitializer = Settings.CreateDropdownInitializer,
     },
     [WOW_PROJECT_CLASSIC] = {
         EditBoxNumberTemplate = "InputBoxTemplate",
+        DropDownTemplate = "AutoLootDropDownControlTemplate",
+        DropDownTemplateOnLoad = function(self)
+            local element = self.Element
+            element.Text:SetAlpha(0)
+            element.Tooltip:SetAllPoints(self.Label)
+        end,
+        DropDownTemplateCreateInitializer = Settings.CreateDropDownInitializer,
+        DropDownTemplateOnInitialized = function(self)
+            local element = self.Element
+            element.autoLootSetting = nil
+            self:Refresh()
+        end,
     },
 }
 

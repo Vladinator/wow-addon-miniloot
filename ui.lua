@@ -67,25 +67,24 @@ local Options = {
         Label = L.PANEL_OPTION_ENABLE_TOOLTIPS,
         Tooltip = L.PANEL_OPTION_ENABLE_TOOLTIPS_TOOLTIP,
     },
-    -- TODO: 10.2.7 needs work (works on 11 just fine)
-    -- {
-    --     Type = WidgetType.DropDown,
-    --     Key = "ChatFrame",
-    --     KeyDependant = "Enabled",
-    --     Label = L.PANEL_OPTION_CHATFRAME,
-    --     Tooltip = L.PANEL_OPTION_CHATFRAME_TOOLTIP,
-    --     DropDown = {
-    --         { Value = "ChatFrame1" },
-    --         { Value = "ChatFrame2" },
-    --         { Value = "ChatFrame3" },
-    --         { Value = "ChatFrame4" },
-    --         { Value = "ChatFrame5" },
-    --         { Value = "ChatFrame6" },
-    --         { Value = "ChatFrame7" },
-    --         { Value = "ChatFrame8" },
-    --         { Value = "ChatFrame9" },
-    --     },
-    -- },
+    {
+        Type = WidgetType.DropDown,
+        Key = "ChatFrame",
+        KeyDependant = "Enabled",
+        Label = L.PANEL_OPTION_CHATFRAME,
+        Tooltip = L.PANEL_OPTION_CHATFRAME_TOOLTIP,
+        DropDown = {
+            { Value = "ChatFrame1" },
+            { Value = "ChatFrame2" },
+            { Value = "ChatFrame3" },
+            { Value = "ChatFrame4" },
+            { Value = "ChatFrame5" },
+            { Value = "ChatFrame6" },
+            { Value = "ChatFrame7" },
+            { Value = "ChatFrame8" },
+            { Value = "ChatFrame9" },
+        },
+    },
     {
         Type = WidgetType.Number,
         Key = "Debounce",
@@ -239,6 +238,7 @@ local UIColor = {
 ---@field public Init fun(self: any, initializer: any)
 ---@field public SetTooltipFunc fun(self: any, callback: fun()?)
 ---@field public SetEnabled? fun(self: any, state: boolean?)
+---@field public SetEnabled_? fun(self: any, state: boolean?) `pre-11.0`
 
 ---@class SettingsControlDropDownOptionPolyfill
 ---@field public label string
@@ -463,10 +463,13 @@ local MiniLootInterfacePanelWidgetDropDown = Mixin({}, MiniLootInterfacePanelWid
 do
 
     ---@class MiniLootInterfacePanelWidgetDropDownElement : Frame, SettingsControlPolyfill
-    ---@field public Control SettingsControlPolyfill
+    ---@field public Control? SettingsControlPolyfill `11.0`
+    ---@field public DropDown? SettingsControlPolyfill `pre-11.0`
     ---@field public Tooltip SettingsControlPolyfill
+    ---@field public Text SettingsControlPolyfill
     ---@field public data? any
     ---@field public GetElementData? fun(): any
+    ---@field public autoLootSetting? any `pre-11.0`
 
     ---@type MiniLootInterfacePanelWidgetOnLoad
     function MiniLootInterfacePanelWidgetDropDown:OnLoad(panel, ...)
@@ -475,6 +478,10 @@ do
         element:SetPoint("TOPLEFT", self.Label, "TOPRIGHT", -214, -6)
         element.Tooltip.HoverBackground:SetAllPoints(self.Background)
         element.Tooltip.HoverBackground:SetAlpha(0)
+        local onLoad = ProjectVariant.DropDownTemplateOnLoad
+        if onLoad then
+            onLoad(self)
+        end
     end
 
     function MiniLootInterfacePanelWidgetDropDown:Refresh()
@@ -507,13 +514,21 @@ do
             local variableTbl = { [key] = getValue() } ---@type table<string, string>
             local defaultValue = ns.Settings.DefaultOptions[key]
             local setting = CreateAndInitFromMixin(ProxySettingMixin, "", key, variableTbl, type(defaultValue), defaultValue, getValue, setValue)
-            initializer = Settings.CreateDropdownInitializer(setting, getOptions)
+            initializer = ProjectVariant.DropDownTemplateCreateInitializer(setting, getOptions)
             element.GetElementData = function() return initializer end
         end
         if initializer then
             element:Init(initializer)
+            local onInitialized = ProjectVariant.DropDownTemplateOnInitialized
+            if onInitialized then
+                onInitialized(self)
+            end
         end
-        element.Control:SetEnabled(self:CanEdit())
+        local control = element.Control or element.DropDown
+        local setEnabled = control and (control.SetEnabled or control.SetEnabled_)
+        if setEnabled then
+            setEnabled(control, self:CanEdit())
+        end
     end
 
     ---@type MiniLootInterfacePanelWidgetCreateWidget
@@ -521,7 +536,7 @@ do
         local widget = CreateFrame("Frame", nil, panel) ---@class MiniLootInterfacePanelWidgetDropDown
         Mixin(widget, self)
         widget.Type = WidgetType.DropDown
-        widget.Element = CreateFrame("Frame", nil, widget, "SettingsDropDownControlTemplate") ---@class MiniLootInterfacePanelWidgetDropDownElement
+        widget.Element = CreateFrame("Frame", nil, widget, ProjectVariant.DropDownTemplate) ---@class MiniLootInterfacePanelWidgetDropDownElement
         widget:OnLoad(panel, ...)
         return widget
     end
