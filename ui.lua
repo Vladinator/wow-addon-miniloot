@@ -4,6 +4,7 @@ local addOnName = ... ---@type string
 
 local L = ns.Locale
 local db = ns.Settings.db
+local ResetSavedVariables = ns.Settings.ResetSavedVariables
 local ProjectVariant = ns.Utils.ProjectVariant
 local GetTimerunningSeasonID = ns.Utils.GetTimerunningSeasonID
 local CreateChatMessageGenerator = ns.Messages.CreateChatMessageGenerator
@@ -205,6 +206,11 @@ local Options = {
         Label = L.PANEL_OPTION_ITEM_TIER_AS_TEXT,
         Tooltip = L.PANEL_OPTION_ITEM_TIER_AS_TEXT_TOOLTIP,
     },
+    -- TODO: EnabledGroups
+    -- TODO: IgnoredGroups
+    -- TODO: DebounceGroups
+    -- TODO: EnabledTooltips
+    -- TODO: Filters
 }
 
 local DefaultOptionHeight = 24
@@ -900,6 +906,10 @@ end
 ---@param eventFrame MiniLootNSEventFrame
 local function SetupUI(eventFrame)
     local panel = GetInterfacePanel(eventFrame)
+    panel.OnDefault = function()
+        ResetSavedVariables()
+        eventFrame:UpdateState(true)
+    end
     AddInterfacePanel(panel)
     return panel
 end

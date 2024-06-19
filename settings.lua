@@ -223,6 +223,11 @@ local flexDbProxy = setmetatable({}, {
     end,
 })
 
+local function ResetSavedVariables()
+    table.wipe(_G.MiniLootDB2)
+    table.wipe(_G.MiniLootRemixDB2)
+end
+
 local function GetChatFrame()
     local chatName = flexDbProxy.ChatFrame
     local chatFrame = _G[chatName] ---@type MiniLootChatFramePolyfill
@@ -233,5 +238,6 @@ end
 ns.Settings = {
     db = flexDbProxy,
     DefaultOptions = DefaultOptions,
+    ResetSavedVariables = ResetSavedVariables,
     GetChatFrame = GetChatFrame,
 }

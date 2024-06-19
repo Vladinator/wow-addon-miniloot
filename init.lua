@@ -33,7 +33,7 @@ local SetupUI = ns.UI.SetupUI
 
 ---@class MiniLootNSEventFrame : Frame
 ---@field public isLoaded boolean
----@field public isEnabled boolean
+---@field public isEnabled? boolean
 ---@field public OnChatEvent MiniLootNSEventChatEventCallback
 
 ---@class MiniLootNSEventFrame
@@ -207,7 +207,7 @@ function frame:Enable()
 end
 
 function frame:Disable()
-    if not self.isEnabled then
+    if self.isEnabled == false then
         return
     end
     self.isEnabled = false
@@ -215,7 +215,11 @@ function frame:Disable()
     UnregisterChatEvents(OnChatEvent)
 end
 
-function frame:UpdateState()
+---@param forceUpdate? boolean
+function frame:UpdateState(forceUpdate)
+    if forceUpdate then
+        self.isEnabled = nil
+    end
     if db.Enabled then
         self:Enable()
     else
