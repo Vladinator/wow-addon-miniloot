@@ -1,6 +1,7 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
 local MiniLootMessageGroup = ns.Messages.MiniLootMessageGroup
+local MessagesCollection = ns.Messages.MessagesCollection
 local TableCopy = ns.Utils.TableCopy
 local GetTimerunningSeasonID = ns.Utils.GetTimerunningSeasonID
 
@@ -56,30 +57,12 @@ local DefaultOptions = {
 
 do
 
-    ---@type table<MiniLootMessageGroup, number>
-    local DefaultDebounceGroups = {
-        [MiniLootMessageGroup.LootRoll] = 0,
-        [MiniLootMessageGroup.LootRollDecide] = 0,
-        [MiniLootMessageGroup.LootRollInfo] = 0,
-        [MiniLootMessageGroup.LootRollResult] = 0,
-        [MiniLootMessageGroup.LootRollRolled] = 0,
-        [MiniLootMessageGroup.LootRollYouDecide] = 0,
-        [MiniLootMessageGroup.LootRollYouResult] = 0,
-        [MiniLootMessageGroup.ItemChanged] = 0,
-        [MiniLootMessageGroup.Transmogrification] = 0,
-    }
-
-    for k, _ in pairs(MiniLootMessageGroup) do
-        DefaultOptions.EnabledGroups[k] = nil
-        DefaultOptions.IgnoredGroups[k] = nil
-        local debounceGroupsValue = DefaultDebounceGroups[k]
-        if debounceGroupsValue then
-            DefaultOptions.DebounceGroups[k] = debounceGroupsValue
+    for _, message in ipairs(MessagesCollection) do
+        local defaultDebounce = message.defaultDebounce
+        if defaultDebounce then
+            DefaultOptions.DebounceGroups[message.group] = defaultDebounce
         end
-        DefaultOptions.Filters = {}
     end
-
-    DefaultOptions.DebounceGroups[MiniLootMessageGroup.Transmogrification] = 0
 
 end
 

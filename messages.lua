@@ -235,6 +235,7 @@ local Tokens = {
 ---@field public parser? MiniLootMessageFormatSimpleParser
 ---@field public tests? any[]
 ---@field public skipTests? boolean
+---@field public defaultDebounce? number
 
 ---@class MiniLootMessagePartial : MiniLootMessage
 ---@field public group? MiniLootMessageGroup
@@ -1366,6 +1367,7 @@ do
                 result = {
                     Type = "FallbackRoll",
                 },
+                defaultDebounce = 0,
             },
             {
                 group = MiniLootMessageGroup.LootRollInfo,
@@ -1915,6 +1917,7 @@ do
                 result = {
                     Type = "Transmogrification",
                 },
+                defaultDebounce = 0,
             },
             {
                 ---@type MiniLootMessageFormatTransmogrification[]
