@@ -204,7 +204,7 @@ local Tokens = {
 ---@class MiniLootMessageFormatSimpleParserResultFallback
 ---@field public Type MiniLootMessageFormatSimpleParserResultType
 
----@alias MiniLootMessageFormatSimpleParser fun(results: MiniLootMessageFormatTokenResult[]): MiniLootMessageFormatSimpleParserResults|false?
+---@alias MiniLootMessageFormatSimpleParser fun(result: MiniLootMessageFormatSimpleParserResults): MiniLootMessageFormatSimpleParserResults|false?
 
 ---@alias MiniLootMessageFormatSimpleMap fun(result: MiniLootMessageFormatSimpleParserResults): MiniLootMessageFormatSimpleParserResults|false?
 
@@ -464,34 +464,6 @@ local function FinalizeMessages()
     end
 end
 
----@type MiniLootMessageFormatSimpleParser
-local function SimpleParser(results)
-    if not results or not results[1] then
-        return
-    end
-    local temp = {}
-    for _, item in ipairs(results) do
-        temp[item.field] = item.value
-    end
-    return temp
-end
-
----@type MiniLootMessageFormatSimpleParserMap
-local function SimpleParserMap(results, map)
-    local temp = SimpleParser(results)
-    if not temp then
-        return
-    end
-    if temp == false then
-        return
-    end
-    local temp2 = map(temp)
-    if temp2 ~= nil then
-        return temp2
-    end
-    return temp
-end
-
 do
 
     -- Reputation
@@ -561,6 +533,7 @@ do
                     },
                     {
                         formats = {
+                            "FACTION_STANDING_INCREASED_ACCOUNT_WIDE",
                             "FACTION_STANDING_INCREASED",
                         },
                         tokens = {
@@ -570,6 +543,7 @@ do
                     },
                     {
                         formats = {
+                            "FACTION_STANDING_INCREASED_GENERIC_ACCOUNT_WIDE",
                             "FACTION_STANDING_INCREASED_GENERIC",
                         },
                         tokens = {
@@ -578,6 +552,7 @@ do
                     },
                     {
                         formats = {
+                            "FACTION_STANDING_DECREASED_ACCOUNT_WIDE",
                             "FACTION_STANDING_DECREASED",
                         },
                         tokens = {
@@ -590,6 +565,7 @@ do
                     },
                     {
                         formats = {
+                            "FACTION_STANDING_DECREASED_GENERIC_ACCOUNT_WIDE",
                             "FACTION_STANDING_DECREASED_GENERIC",
                         },
                         tokens = {
@@ -1808,9 +1784,11 @@ do
 
         ---@class MiniLootMessageFormatSimpleParserResultAnimaPower
         ---@field public Type MiniLootMessageFormatSimpleParserResultAnimaPowerTypes
+        ---@field public Name string? The person gaining the power.
         ---@field public Link string The anima power link.
 
         ---@class MiniLootMessageFormatSimpleParserResultAnimaPowerArgs : MiniLootMessageFormatSimpleParserResultAnimaPower
+        ---@field public Name? string
         ---@field public Link? string
 
         ---@class MiniLootMessageFormatAnimaPower : MiniLootMessageFormat
@@ -1834,6 +1812,19 @@ do
                             "GAIN_MAW_POWER_SELF",
                         },
                         tokens = {
+                            Tokens.Link,
+                        },
+                    },
+                },
+            },
+            {
+                formats = {
+                    {
+                        formats = {
+                            "GAIN_MAW_POWER",
+                        },
+                        tokens = {
+                            Tokens.NameTarget,
                             Tokens.Link,
                         },
                     },
@@ -1878,6 +1869,7 @@ do
                     {
                         formats = {
                             "ARTIFACT_XP_GAIN",
+                            "AZERITE_XP_GAIN",
                         },
                         tokens = {
                             Tokens.Link,
@@ -1950,18 +1942,34 @@ do
     -- Ignore
     do
 
-        ---@alias MiniLootMessageFormatSimpleParserResultIgnoreKeys "Value"
+        ---@alias MiniLootMessageFormatSimpleParserResultIgnoreKeys "Value"|"Link"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultIgnoreTypes "Ignore"|"IgnoreMoney"
+        ---@alias MiniLootMessageFormatSimpleParserResultIgnoreTypes "Ignore"|"IgnoreExperience"|"IgnoreMoney"|"IgnoreArtifactPower"
 
         ---@class MiniLootMessageFormatSimpleParserResultIgnore
         ---@field public Type MiniLootMessageFormatSimpleParserResultIgnoreTypes
         ---@field public Value? number
+        ---@field public Link? string
 
         ---@class MiniLootMessageFormatSimpleParserResultIgnoreArgs : MiniLootMessageFormatSimpleParserResultIgnore
 
         ---@class MiniLootMessageFormatIgnore : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultIgnoreArgs
+
+        ---@type MiniLootMessageFormatSimpleParser
+        ---@param result MiniLootMessageFormatSimpleParserResultIgnore
+        local function CustomItemParser(result)
+            if not result.Link then
+                return
+            end
+            local currencyInfo = C_CurrencyInfo.GetCurrencyInfoFromLink(result.Link)
+            if not currencyInfo then
+                return
+            end
+            if currencyInfo.quantity == 0 and currencyInfo.maxQuantity == 0 then
+                result.Type = "IgnoreArtifactPower"
+            end
+        end
 
         AppendMessages(
             {
@@ -1979,10 +1987,32 @@ do
                 formats = {
                     {
                         formats = {
+                            "LOOT_ITEM_PUSHED_SELF_MULTIPLE",
+                        },
+                        tokens = {
+                            Tokens.Link,
+                            Tokens.ValueNumber,
+                        },
+                        parser = CustomItemParser,
+                    },
+                    {
+                        formats = {
+                            "LOOT_ITEM_PUSHED_SELF",
+                        },
+                        tokens = {
+                            Tokens.Link,
+                        },
+                        parser = CustomItemParser,
+                    },
+                    {
+                        formats = {
                             "ERR_QUEST_REWARD_EXP_I",
                         },
                         tokens = {
                             Tokens.ValueNumber,
+                        },
+                        result = {
+                            Type = "IgnoreExperience",
                         },
                     },
                     {
@@ -2069,6 +2099,17 @@ local function ProcessMatchedToResult(messageFormat, matches)
                 result = { Type = "Fallback" }
             end
             result[key] = value
+        end
+    end
+    local parser = messageFormat.parser
+    if parser and result then
+        local parserResult = parser(result)
+        if parserResult ~= nil then
+            if parserResult == false then
+                result = nil
+            else
+                result = parserResult
+            end
         end
     end
     return result
