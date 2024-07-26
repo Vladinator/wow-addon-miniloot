@@ -19,6 +19,8 @@ local EnableHyperlinks = ns.Tooltip.EnableHyperlinks
 local DisableHyperlinks = ns.Tooltip.DisableHyperlinks
 local SetupUI = ns.UI.SetupUI
 
+---@class ScrollingMessageFrame
+
 ---@class ScrollingMessageFramePolyfill : MessageFrame, ScrollingMessageFrame
 ---@field public SetMaxLines fun(self: ScrollingMessageFramePolyfill, count: number)
 ---@field public SetInsertMode fun(self: ScrollingMessageFramePolyfill, mode: number)

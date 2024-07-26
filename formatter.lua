@@ -192,6 +192,8 @@ local function SumResultsTotalsByKeyFormatted(prefix, results, key)
     return GetLootIconCountFormatted(prefix, total, canCountBags)
 end
 
+local WarbandMarkup = "|A:warbands-icon:0:0|a"
+
 ---@param name string
 ---@param results MiniLootMessageFormatSimpleParserResults[]
 local function SumReputationTotalsByKeyFormatted(name, results)
@@ -200,6 +202,10 @@ local function SumReputationTotalsByKeyFormatted(name, results)
         return
     end
     local total = SumByKeyPretty(results, "Value")
+    local isWarband = firstResult.Type == "ReputationWarband" or firstResult.Type == "ReputationLossWarband"
+    if isWarband then
+        name = format("%s%s", WarbandMarkup, name)
+    end
     return format(Formats.ScSS, YOU, name, total)
 end
 

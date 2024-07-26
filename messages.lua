@@ -471,7 +471,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultReputationKeys "Name"|"Value"|"Bonus"|"BonusExtra"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultReputationTypes "Reputation"|"ReputationLoss"
+        ---@alias MiniLootMessageFormatSimpleParserResultReputationTypes "Reputation"|"ReputationLoss"|"ReputationWarband"|"ReputationLossWarband"
 
         ---@class MiniLootMessageFormatSimpleParserResultReputation
         ---@field public Type MiniLootMessageFormatSimpleParserResultReputationTypes
@@ -534,6 +534,17 @@ do
                     {
                         formats = {
                             "FACTION_STANDING_INCREASED_ACCOUNT_WIDE",
+                        },
+                        tokens = {
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                        },
+                        result = {
+                            Type = "ReputationWarband",
+                        },
+                    },
+                    {
+                        formats = {
                             "FACTION_STANDING_INCREASED",
                         },
                         tokens = {
@@ -544,6 +555,16 @@ do
                     {
                         formats = {
                             "FACTION_STANDING_INCREASED_GENERIC_ACCOUNT_WIDE",
+                        },
+                        tokens = {
+                            Tokens.NameString,
+                        },
+                        result = {
+                            Type = "ReputationWarband",
+                        },
+                    },
+                    {
+                        formats = {
                             "FACTION_STANDING_INCREASED_GENERIC",
                         },
                         tokens = {
@@ -553,6 +574,17 @@ do
                     {
                         formats = {
                             "FACTION_STANDING_DECREASED_ACCOUNT_WIDE",
+                        },
+                        tokens = {
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                        },
+                        result = {
+                            Type = "ReputationLossWarband",
+                        },
+                    },
+                    {
+                        formats = {
                             "FACTION_STANDING_DECREASED",
                         },
                         tokens = {
@@ -560,19 +592,29 @@ do
                             Tokens.ValueNumber,
                         },
                         result = {
-                            Type = "ReputationLoss"
+                            Type = "ReputationLoss",
                         },
                     },
                     {
                         formats = {
                             "FACTION_STANDING_DECREASED_GENERIC_ACCOUNT_WIDE",
+                        },
+                        tokens = {
+                            Tokens.NameString,
+                        },
+                        result = {
+                            Type = "ReputationLossWarband",
+                        },
+                    },
+                    {
+                        formats = {
                             "FACTION_STANDING_DECREASED_GENERIC",
                         },
                         tokens = {
                             Tokens.NameString,
                         },
                         result = {
-                            Type = "ReputationLoss"
+                            Type = "ReputationLoss",
                         },
                     },
                 },
