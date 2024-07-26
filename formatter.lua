@@ -201,11 +201,11 @@ local function SumReputationTotalsByKeyFormatted(name, results)
     if not firstResult then
         return
     end
-    local total = SumByKeyPretty(results, "Value")
     local isWarband = firstResult.Type == "ReputationWarband" or firstResult.Type == "ReputationLossWarband"
     if isWarband then
         name = format("%s%s", WarbandMarkup, name)
     end
+    local total = SumByKeyPretty(results, "Value")
     return format(Formats.ScSS, YOU, name, total)
 end
 
@@ -374,7 +374,7 @@ local Formatters = {}
 
 ---@param results MiniLootMessageFormatSimpleParserResultAnimaPower[]
 Formatters[MiniLootMessageGroup.AnimaPower] = function(results)
-    TableGroupFormatOuter(
+    return TableGroupFormatOuter(
         results,
         "Name",
         ---@param groupResults MiniLootMessageFormatPseudoResult_NameLinkValue[]
@@ -467,7 +467,7 @@ end
 
 ---@param results MiniLootMessageFormatSimpleParserResultReputation[]
 Formatters[MiniLootMessageGroup.Reputation] = function(results)
-    TableGroupFormatOuter(
+    return TableGroupFormatOuter(
         results,
         "Name",
         ---@param groupResults MiniLootMessageFormatSimpleParserResultReputation[]
