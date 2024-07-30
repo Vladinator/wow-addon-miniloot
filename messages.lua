@@ -300,10 +300,10 @@ local function CreateMessageTests(messageFormat)
                 args[argIndex] = random(1, 99)
             elseif token.type == MiniLootMessageFormatTokenType.String then
                 argIndex = argIndex + 1
-                args[argIndex] = "MiniLootIsAwesome"
+                args[argIndex] = "SampleText"
             elseif token.type == MiniLootMessageFormatTokenType.Target then
                 argIndex = argIndex + 1
-                args[argIndex] = "Vladinator-TarrenMill"
+                args[argIndex] = "SampleName-SampleRealm"
             end
         end
         if args[1] ~= nil then
@@ -2200,8 +2200,12 @@ end
 
 ---@param message MiniLootMessage
 ---@param includeResult? boolean
----@return string text, MiniLootMessageFormatSimpleParserResults? result
+---@return string? text, MiniLootMessageFormatSimpleParserResults? result
 local function GenerateChatMessage(message, includeResult)
+    local tests = message.tests
+    if not tests then
+        return
+    end
     local testIndex = random(1, #message.tests)
     local test = message.tests[testIndex]
     if not includeResult then
@@ -2217,7 +2221,7 @@ end
 
 ---@param includeResult? boolean
 ---@param predicate (fun(message: MiniLootMessage): boolean?)?
----@return fun(): string, MiniLootMessageFormatSimpleParserResults?
+---@return fun(): MiniLootMessage?, string?, MiniLootMessageFormatSimpleParserResults?
 local function CreateChatMessageGenerator(includeResult, predicate)
     local count = #MessagesCollection
     local index = 0
@@ -2230,10 +2234,11 @@ local function CreateChatMessageGenerator(includeResult, predicate)
             local message = MessagesCollection[i]
             if not predicate or predicate(message) then
                 index = i
-                return GenerateChatMessage(message, includeResult)
+                return message, GenerateChatMessage(message, includeResult)
             end
         end
-        return GenerateChatMessage(MessagesCollection[index], includeResult)
+        local message = MessagesCollection[index]
+        return message, GenerateChatMessage(message, includeResult)
     end
 end
 

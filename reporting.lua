@@ -12,14 +12,14 @@ local ProcessChatEvent
 
 ---@type table<WowEvent, MiniLootNSEventCallbackResult>
 local EventHandlers = {
-    QUEST_TURNED_IN = function(frame, _, ...)
-        ---@type _, number, number?
-        local _, xp, money = ...
+    QUEST_TURNED_IN = function(event, ...)
+        ---@type number?, number?
+        local xp, money = ...
         if xp and xp > 0 then
-            return ProcessChatEvent(frame, "CHAT_MSG_COMBAT_XP_GAIN", format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED, xp))
+            return ProcessChatEvent("CHAT_MSG_COMBAT_XP_GAIN", format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED, xp))
         end
         if money and money > 0 then
-            return ProcessChatEvent(frame, "CHAT_MSG_MONEY", format(YOU_LOOT_MONEY, C_CurrencyInfo.GetCoinText(money)))
+            return ProcessChatEvent("CHAT_MSG_MONEY", format(YOU_LOOT_MONEY, C_CurrencyInfo.GetCoinText(money)))
         end
     end,
 }
@@ -79,7 +79,7 @@ local function UnregisterChatEvents(onChatEvent)
 end
 
 ---@type MiniLootNSEventCallbackResult
-function ProcessChatEvent(frame, event, ...)
+function ProcessChatEvent(event, ...)
     local result, message = ProcessChatMessage(event, ...)
     if not result then
         return

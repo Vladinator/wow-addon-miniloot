@@ -7,7 +7,10 @@ local db = ns.Settings.db
 local ResetSavedVariables = ns.Settings.ResetSavedVariables
 local ProjectVariant = ns.Utils.ProjectVariant
 local GetTimerunningSeasonID = ns.Utils.GetTimerunningSeasonID
+local IsChatFrame = ns.Utils.IsChatFrame
 local CreateChatMessageGenerator = ns.Messages.CreateChatMessageGenerator
+local CreateOutputHandler = ns.Output.CreateOutputHandler
+local ProcessChatEvent = ns.Reporting.ProcessChatEvent
 
 ---@generic T
 ---@alias MiniLootInterfacePanelWidgetOnLoad fun(self: T, panel: MiniLootInterfacePanel, ...: any)
@@ -24,9 +27,12 @@ local WidgetType = {
     ChatFrame = "ChatFrame",
 }
 
+---@alias MiniLootInterfacePanelOptionDropDownIsEnabled fun(self: MiniLootInterfacePanelOptionDropDown): boolean?
+
 ---@class MiniLootInterfacePanelOptionDropDown
 ---@field public Value string|number|boolean
 ---@field public Label? string
+---@field public IsEnabled? MiniLootInterfacePanelOptionDropDownIsEnabled
 
 ---@class MiniLootInterfacePanelOptionNumber
 ---@field public Min? number
@@ -45,6 +51,27 @@ local WidgetType = {
 ---@field public Number? MiniLootInterfacePanelOptionNumber
 
 local TIMERUNNING_MARKUP = CreateAtlasMarkup("timerunning-glues-icon-small", 9, 12)
+
+---@type MiniLootInterfacePanelOptionDropDownIsEnabled
+local function IsChatFrameEnabled(option)
+    local frame = _G[option.Value] ---@type MiniLootChatFramePolyfill?
+    if not frame or not IsChatFrame(frame) then
+        return
+    end
+    local tabName = format("%sTab", option.Value)
+    local chatTab = _G[tabName] ---@type Frame?
+    if not chatTab or not chatTab:IsShown() then
+        return
+    end
+    return true
+end
+
+---@param chatName string
+---@return string
+local function GetChatFrameName(chatName)
+    local frame = _G[chatName] ---@type MiniLootChatFramePolyfill
+    return frame.name
+end
 
 ---@type MiniLootInterfacePanelOption[]
 local Options = {
@@ -75,15 +102,15 @@ local Options = {
         Label = L.PANEL_OPTION_CHATFRAME,
         Tooltip = L.PANEL_OPTION_CHATFRAME_TOOLTIP,
         DropDown = {
-            { Value = "ChatFrame1" },
-            { Value = "ChatFrame2" },
-            { Value = "ChatFrame3" },
-            { Value = "ChatFrame4" },
-            { Value = "ChatFrame5" },
-            { Value = "ChatFrame6" },
-            { Value = "ChatFrame7" },
-            { Value = "ChatFrame8" },
-            { Value = "ChatFrame9" },
+            { Value = "ChatFrame1", IsEnabled = IsChatFrameEnabled },
+            { Value = "ChatFrame2", IsEnabled = IsChatFrameEnabled },
+            { Value = "ChatFrame3", IsEnabled = IsChatFrameEnabled },
+            { Value = "ChatFrame4", IsEnabled = IsChatFrameEnabled },
+            { Value = "ChatFrame5", IsEnabled = IsChatFrameEnabled },
+            { Value = "ChatFrame6", IsEnabled = IsChatFrameEnabled },
+            { Value = "ChatFrame7", IsEnabled = IsChatFrameEnabled },
+            { Value = "ChatFrame8", IsEnabled = IsChatFrameEnabled },
+            { Value = "ChatFrame9", IsEnabled = IsChatFrameEnabled },
         },
     },
     {
@@ -507,14 +534,32 @@ do
                     value = value,
                 }
             end
-            local function getOptions()
-                return options
-            end
+            local validOptions = {} ---@type SettingsControlDropDownOptionPolyfill[]
             local function getValue()
                 return self:GetValue()
             end
             local function setValue(value)
                 self:SaveValue(value)
+            end
+            local function getOptions()
+                local currentValue = getValue()
+                table.wipe(validOptions)
+                local index = 0
+                for i, dropdownOption in ipairs(options) do
+                    local data = option.DropDown[i]
+                    local disabled ---@type boolean?
+                    local isEnabled = data.IsEnabled
+                    if isEnabled then
+                        disabled = not isEnabled(data)
+                    end
+                    dropdownOption.disabled = disabled
+                    if not dropdownOption.disabled or dropdownOption.value == currentValue then
+                        dropdownOption.label = format("%s (%s)", dropdownOption.text, GetChatFrameName(dropdownOption.value))
+                        index = index + 1
+                        validOptions[index] = dropdownOption
+                    end
+                end
+                return validOptions
             end
             local key = option.Key
             local variableTbl = { [key] = getValue() } ---@type table<string, string>
@@ -651,7 +696,6 @@ do
     ---@type MiniLootInterfacePanelWidgetOnLoad
     function MiniLootInterfacePanelWidgetChatFrame:OnLoad(panel, ...)
         MiniLootInterfacePanelWidget.OnLoad(self, panel)
-        self.Label:Hide()
         self.Background:SetVertexColor(1, 1, 1)
         self.Background:SetColorTexture(1, 1, 1, 0.05)
         local element = self.Element ---@class MiniLootInterfacePanelWidgetChatFrameElement
@@ -663,18 +707,44 @@ do
         element:SetJustifyH("LEFT")
         element:SetMaxLines(32)
         element:SetInsertMode(SCROLLING_MESSAGE_FRAME_INSERT_MODE_BOTTOM)
-        element.Generator = CreateChatMessageGenerator(false)
+        local output = CreateOutputHandler(element)
+        local generator = CreateChatMessageGenerator(false)
+        ---@param previewMessage MiniLootMessage
+        ---@param previewText string
+        local function addPreviewMessage(previewMessage, previewText)
+            local event = previewMessage.events[1]
+            local result, message, hideChatIgnoreResult = ProcessChatEvent(event, previewText)
+            if result and message and not hideChatIgnoreResult then
+                output:Add({ result = result, message = message })
+                output:Flush()
+            end
+        end
         local elapsed = 0
+        local tries = 0
         local function OnUpdate(_, e)
             elapsed = elapsed + e
             if elapsed < 1 then
                 return
             end
             elapsed = 0
-            local text, result = element.Generator()
-            element:AddMessage(text, 1, 1, 1)
+            tries = 0
+            local message ---@type MiniLootMessage?
+            local text ---@type string?
+            while not message or not text or tries < 3 do
+                message, text = generator()
+                if not message or not text then
+                    tries = tries + 1
+                else
+                    break
+                end
+            end
+            if message and text then
+                addPreviewMessage(message, text)
+            end
         end
         element:HookScript("OnUpdate", OnUpdate)
+        self.Label:ClearAllPoints()
+        self.Label:SetPoint("BOTTOMLEFT", element, "TOPLEFT", 0, 4)
     end
 
     ---@type MiniLootInterfacePanelWidgetCreateWidget
@@ -855,14 +925,11 @@ local function CreateInterfacePanel(eventFrame)
     scrollView:SetPanExtent(100)
     scrollContent:SetHeight(Panel.minHeight + GetOptionsEstimatedHeight())
     ScrollUtil.InitScrollBoxWithScrollBar(scrollBox, scrollBar, scrollView)
-    -- Panel.ChatFrame1 = MiniLootInterfacePanelWidgetChatFrame:CreateWidget(Panel)
-    -- Panel.ChatFrame1:ClearAllPoints()
-    -- Panel.ChatFrame1:SetPoint("TOPRIGHT", scrollBar, "TOPLEFT", -Panel.offsetX, -56)
-    -- Panel.ChatFrame1:SetSize(200, 150)
-    -- Panel.ChatFrame2 = MiniLootInterfacePanelWidgetChatFrame:CreateWidget(Panel)
-    -- Panel.ChatFrame2:ClearAllPoints()
-    -- Panel.ChatFrame2:SetPoint("TOPRIGHT", Panel.ChatFrame1, "BOTTOMRIGHT", 0, -Panel.offsetX)
-    -- Panel.ChatFrame2:SetSize(200, 150)
+    Panel.PreviewChatFrame = MiniLootInterfacePanelWidgetChatFrame:CreateWidget(Panel)
+    Panel.PreviewChatFrame.Label:SetText(L.PANEL_CHAT_PREVIEW)
+    Panel.PreviewChatFrame:ClearAllPoints()
+    Panel.PreviewChatFrame:SetPoint("BOTTOMRIGHT", scrollBar, "BOTTOMLEFT", -16, 8)
+    Panel.PreviewChatFrame:SetSize(300, 150)
     local function poolReleaseWidget(_, obj)
         obj:ReleaseWidget()
     end

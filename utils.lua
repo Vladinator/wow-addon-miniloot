@@ -738,6 +738,14 @@ local function GetChatFrames()
     return chatFrames
 end
 
+---@param chatFrame MiniLootChatFramePolyfill
+local function IsChatFrame(chatFrame)
+    return chatFrame and type(chatFrame) == "table" and
+        chatFrame.IsShown and type(chatFrame.IsShown) == "function" and
+        chatFrame.AddMessage and type(chatFrame.AddMessage) == "function" and
+        true or false
+end
+
 local HexColorPattern = "|c[fF][fF]([0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])"
 
 local HexColorToQuality = {
@@ -935,6 +943,7 @@ ns.Utils = {
     GetChatLootIcon = GetChatLootIcon,
     GetLootIcon = GetLootIcon,
     GetChatFrames = GetChatFrames,
+    IsChatFrame = IsChatFrame,
     GetLinkQuality = GetLinkQuality,
     IsQuestItem = IsQuestItem,
     GetHyperlinkTooltipLines = GetHyperlinkTooltipLines,

@@ -22,14 +22,13 @@ local SetupUI = ns.UI.SetupUI
 ---@class ScrollingMessageFrame
 
 ---@class ScrollingMessageFramePolyfill : MessageFrame, ScrollingMessageFrame
+---@field public name string @The name of the chat frame as shown on its tab.
 ---@field public SetMaxLines fun(self: ScrollingMessageFramePolyfill, count: number)
 ---@field public SetInsertMode fun(self: ScrollingMessageFramePolyfill, mode: number)
 
 ---@class MiniLootChatFramePolyfill : ScrollingMessageFramePolyfill
 
----@alias MiniLootNSEventCallback fun(self: MiniLootNSEventFrame, event: WowEvent, ...: any)
-
----@alias MiniLootNSEventCallbackResult fun(self: MiniLootNSEventFrame, event: WowEvent, ...: any): result: MiniLootMessageFormatSimpleParserResults?, message: MiniLootMessage?, hideChatIgnoreResult: boolean?
+---@alias MiniLootNSEventCallbackResult fun(event: WowEvent, ...: any): result: MiniLootMessageFormatSimpleParserResults?, message: MiniLootMessage?, hideChatIgnoreResult: boolean?
 
 ---@alias MiniLootNSEventChatEventCallback fun(chatFrame: MiniLootChatFramePolyfill, event: WowEvent, ...: any): filter: boolean?, ...
 
@@ -41,14 +40,14 @@ local SetupUI = ns.UI.SetupUI
 ---@class MiniLootNSEventFrame
 local frame = CreateFrame("Frame")
 
-local output = CreateOutputHandler(frame)
+local output = CreateOutputHandler()
 
 ---@type MiniLootNSEventChatEventCallback
 local function OnChatEvent(chatFrame, event, ...)
     if chatFrame ~= GetChatFrame() then
         return false, ...
     end
-    local result, message, hideChatIgnoreResult = ProcessChatEvent(frame, event, ...)
+    local result, message, hideChatIgnoreResult = ProcessChatEvent(event, ...)
     if hideChatIgnoreResult then
         return true
     end
@@ -183,7 +182,7 @@ function frame:OnEvent(event, ...)
     if not eventHandler then
         return
     end
-    local result, message, hideChatIgnoreResult = eventHandler(self, event, ...)
+    local result, message, hideChatIgnoreResult = eventHandler(event, ...)
     if hideChatIgnoreResult then
         return
     end

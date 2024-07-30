@@ -101,9 +101,9 @@ end
 ---@class MiniLootNSOutputHandler
 local MiniLootNSOutputHandler = {}
 
----@param frame MiniLootNSEventFrame
-function MiniLootNSOutputHandler:OnLoad(frame)
-    self.frame = frame
+---@param chatFrame? MiniLootChatFramePolyfill
+function MiniLootNSOutputHandler:OnLoad(chatFrame)
+    self.chatFrame = chatFrame
     self.buffer = CreateBuffer()
     self.lastAdd = 0
     self.lastOutput = 0
@@ -145,7 +145,7 @@ function MiniLootNSOutputHandler:Flush(flushGroup)
     if buffer:IsEmpty() then
         return
     end
-    local chatFrame = GetChatFrame()
+    local chatFrame = self.chatFrame or GetChatFrame()
     local lines = {} ---@type string[]
     local groups = buffer:GroupResults()
     for _, group in ipairs(groups) do
@@ -189,16 +189,16 @@ function MiniLootNSOutputHandler:Add(item)
     self:OnAdd()
 end
 
----@param frame MiniLootNSEventFrame
-function MiniLootNSOutputHandler:New(frame)
+---@param chatFrame? MiniLootChatFramePolyfill
+function MiniLootNSOutputHandler:New(chatFrame)
     local handler = TableCopy(MiniLootNSOutputHandler) ---@type MiniLootNSOutputHandler
-    handler:OnLoad(frame)
+    handler:OnLoad(chatFrame)
     return handler
 end
 
----@param frame MiniLootNSEventFrame
-local function CreateOutputHandler(frame)
-    return MiniLootNSOutputHandler:New(frame)
+---@param chatFrame? MiniLootChatFramePolyfill
+local function CreateOutputHandler(chatFrame)
+    return MiniLootNSOutputHandler:New(chatFrame)
 end
 
 ---@class MiniLootNSOutput

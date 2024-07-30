@@ -53,10 +53,7 @@ L.PANEL_OPTION_ITEM_TIER = "Add Tier Indicator"
 L.PANEL_OPTION_ITEM_TIER_TOOLTIP = "|cffFFFFFFEnabled:|r Add crafting tier indicator after the icon.\n|cffFFFFFFDisabled:|r No crafting tier indicator will added behind the icon."
 L.PANEL_OPTION_ITEM_TIER_AS_TEXT = "Show as text"
 L.PANEL_OPTION_ITEM_TIER_AS_TEXT_TOOLTIP = "|cffFFFFFFEnabled:|r The indicator is shown as text.\n|cffFFFFFFDisabled:|r The indicator is shown as stars."
--- L.PANEL_CHAT_PREVIEW_ORIGINAL = "Original Chat Frame"
--- L.PANEL_CHAT_PREVIEW_ORIGINAL_TOOLTIP = ""
--- L.PANEL_CHAT_PREVIEW_MINILOOT = "MiniLoot Chat Frame"
--- L.PANEL_CHAT_PREVIEW_MINILOOT_TOOLTIP = ""
+L.PANEL_CHAT_PREVIEW = "Chat Preview"
 
 if locale == "deDE" then
 
