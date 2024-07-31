@@ -177,13 +177,14 @@ end
 ---@param prefix string
 ---@param results MiniLootMessageFormatSimpleParserResults[]
 ---@param key string
-local function SumResultsTotalsByKeyFormatted(prefix, results, key)
+---@param skipIfValueZero? boolean
+local function SumResultsTotalsByKeyFormatted(prefix, results, key, skipIfValueZero)
     local firstResult = results[1]
     if not firstResult then
         return
     end
     local total = SumByKey(results, key)
-    if total == 0 then
+    if skipIfValueZero and total == 0 then
         return
     end
     local resultType = firstResult.Type
@@ -251,13 +252,14 @@ end
 
 ---@generic T
 ---@param results T[]
-local function TableGroupFormat_NameValue(results)
+---@param skipIfValueZero? boolean
+local function TableGroupFormat_NameValue(results, skipIfValueZero)
     return TableGroupFormatOuter(
         results,
         "Name",
         ---@param groupResults MiniLootMessageFormatPseudoResult_NameValue[]
         function(groupKey, groupResults)
-            return SumResultsTotalsByKeyFormatted(groupKey, groupResults, "Value")
+            return SumResultsTotalsByKeyFormatted(groupKey, groupResults, "Value", skipIfValueZero)
         end
     )
 end
