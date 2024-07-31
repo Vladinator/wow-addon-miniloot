@@ -183,6 +183,9 @@ local function SumResultsTotalsByKeyFormatted(prefix, results, key)
         return
     end
     local total = SumByKey(results, key)
+    if total == 0 then
+        return
+    end
     local resultType = firstResult.Type
     if resultType == "Money" then
         local money = ConvertToMoneyString(total)
