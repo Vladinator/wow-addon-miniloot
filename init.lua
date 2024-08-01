@@ -170,9 +170,9 @@ function frame:OnEvent(event, ...)
         local name = ...
         if name == addOnName then
             self.isLoaded = true
+            self.Panel = SetupUI(self)
             self:UpdateState()
             HookSetItemRef()
-            self.Panel = SetupUI(self)
         end
     end
     if not self.isLoaded then
@@ -226,11 +226,15 @@ function frame:UpdateState(forceUpdate)
     else
         self:Disable()
     end
+    ---@diagnostic disable-next-line: assign-type-mismatch
+    -- local previewChatFrame = self.Panel.PreviewChatFrame ---@type MiniLootChatFramePolyfill
     for _, chatFrame in ipairs(GetChatFrames()) do
         if db.Enabled and db.EnableTooltips then
             EnableHyperlinks(chatFrame)
+            -- EnableHyperlinks(previewChatFrame)
         else
             DisableHyperlinks(chatFrame)
+            -- DisableHyperlinks(previewChatFrame)
         end
     end
 end

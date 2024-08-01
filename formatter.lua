@@ -133,11 +133,10 @@ end
 ---@param name string
 ---@return string
 local function ConvertNameToFactionNameFormatted(name)
-    local shortName = name
     if db.ShortenFactionNames then
-        shortName = GetShortFactionName(name, db.ShortenFactionNamesLength)
+        return GetShortFactionName(name, db.ShortenFactionNamesLength)
     end
-    return shortName
+    return GetShortFactionName(name)
 end
 
 ---@param link string
