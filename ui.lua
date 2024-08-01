@@ -25,6 +25,10 @@ local WidgetType = {
     DropDown = "DropDown",
     Number = "Number",
     ChatFrame = "ChatFrame",
+    GroupCheckBox = "GroupCheckBox",
+    GroupNumber = "GroupNumber",
+    TooltipCheckBox = "TooltipCheckBox",
+    Filters = "Filters",
 }
 
 ---@alias MiniLootInterfacePanelOptionDropDownIsEnabled fun(self: MiniLootInterfacePanelOptionDropDown): boolean?
@@ -233,11 +237,11 @@ local Options = {
         Label = L.PANEL_OPTION_ITEM_TIER_AS_TEXT,
         Tooltip = L.PANEL_OPTION_ITEM_TIER_AS_TEXT_TOOLTIP,
     },
-    -- TODO: EnabledGroups
-    -- TODO: IgnoredGroups
-    -- TODO: DebounceGroups
-    -- TODO: EnabledTooltips
-    -- TODO: Filters
+    -- TODO: db.EnabledGroups (table<MiniLootMessageGroup, boolean?>) GroupCheckBox
+    -- TODO: db.IgnoredGroups (table<MiniLootMessageGroup, boolean?>) GroupCheckBox
+    -- TODO: db.DebounceGroups (table<MiniLootMessageGroup, number?>) GroupNumber
+    -- TODO: db.EnabledTooltips (table<MiniLootTooltipHandlerType, boolean?>) TooltipCheckBox
+    -- TODO: db.Filters (MiniLootFilterRuleGroup[]|MiniLootFilterRule[]) Filters
 }
 
 local DefaultOptionHeight = 24
