@@ -358,7 +358,7 @@ end
 
 ---@param money number
 local function ConvertToMoneyString(money)
-    return GetMoneyString(money) -- C_CurrencyInfo.GetCoinTextureString
+    return GetMoneyString(money, true) -- C_CurrencyInfo.GetCoinTextureString
 end
 
 ---@param val1 any
