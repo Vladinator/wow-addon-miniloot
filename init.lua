@@ -121,7 +121,7 @@ local HookSetItemRef do
         if linkType == "garrfollower" then
             local num1, num2 = tonumberall(arg1, arg2)
             local realLink = C_Garrison.GetFollowerLinkByID(num1)
-            local _, _, _, quality = C_Item.GetItemQualityColor(num2)
+            local _, _, _, quality = C_Item.GetItemQualityColor(num2 - 2)
             text = FixHyperlink(link, text, realLink, quality)
         elseif linkType == "currency" then
             local num1, num2 = tonumberall(arg1, arg2)
