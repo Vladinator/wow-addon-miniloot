@@ -409,7 +409,7 @@ end
 
 ---@param results MiniLootMessageFormatSimpleParserResultFollowerExperience[]
 Formatters[MiniLootMessageGroup.FollowerExperience] = function(results)
-    return TableGroupFormat_NameValue(results)
+    return TableGroupFormat_NameValue(results, true)
 end
 
 ---@param results MiniLootMessageFormatSimpleParserResultHonor[]
