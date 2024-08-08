@@ -8,6 +8,8 @@ local ResetSavedVariables = ns.Settings.ResetSavedVariables
 local ProjectVariant = ns.Utils.ProjectVariant
 local GetTimerunningSeasonID = ns.Utils.GetTimerunningSeasonID
 local IsChatFrame = ns.Utils.IsChatFrame
+local HandlerTypes = ns.Tooltip.HandlerTypes
+local MiniLootMessageGroup = ns.Messages.MiniLootMessageGroup
 local CreateChatMessageGenerator = ns.Messages.CreateChatMessageGenerator
 local CreateOutputHandler = ns.Output.CreateOutputHandler
 local ProcessChatEvent = ns.Reporting.ProcessChatEvent
@@ -53,6 +55,7 @@ local WidgetType = {
 ---@field public CanShow? fun(): boolean|number?
 ---@field public DropDown? MiniLootInterfacePanelOptionDropDown[]
 ---@field public Number? MiniLootInterfacePanelOptionNumber
+---@field public Keys? table<string, string>
 
 local TIMERUNNING_MARKUP = CreateAtlasMarkup("timerunning-glues-icon-small", 9, 12)
 
@@ -237,11 +240,40 @@ local Options = {
         Label = L.PANEL_OPTION_ITEM_TIER_AS_TEXT,
         Tooltip = L.PANEL_OPTION_ITEM_TIER_AS_TEXT_TOOLTIP,
     },
-    -- TODO: db.EnabledGroups (table<MiniLootMessageGroup, boolean?>) GroupCheckBox
-    -- TODO: db.IgnoredGroups (table<MiniLootMessageGroup, boolean?>) GroupCheckBox
-    -- TODO: db.DebounceGroups (table<MiniLootMessageGroup, number?>) GroupNumber
-    -- TODO: db.EnabledTooltips (table<MiniLootTooltipHandlerType, boolean?>) TooltipCheckBox
-    -- TODO: db.Filters (MiniLootFilterRuleGroup[]|MiniLootFilterRule[]) Filters
+    {
+        Type = WidgetType.GroupCheckBox,
+        Key = "EnabledGroups",
+        KeyDependant = "Enabled",
+        Label = L.PANEL_OPTION_ENABLED_GROUPS,
+        Keys = MiniLootMessageGroup,
+    },
+    {
+        Type = WidgetType.GroupCheckBox,
+        Key = "IgnoredGroups",
+        KeyDependant = "Enabled",
+        Label = L.PANEL_OPTION_IGNORED_GROUPS,
+        Keys = MiniLootMessageGroup,
+    },
+    {
+        Type = WidgetType.GroupNumber,
+        Key = "DebounceGroups",
+        KeyDependant = "Enabled",
+        Label = L.PANEL_OPTION_DEBOUNCE_GROUPS,
+        Keys = MiniLootMessageGroup,
+    },
+    {
+        Type = WidgetType.TooltipCheckBox,
+        Key = "EnabledTooltips",
+        KeyDependant = "Enabled",
+        Label = L.PANEL_OPTION_ENABLED_TOOLTIPS,
+        Keys = HandlerTypes,
+    },
+    {
+        Type = WidgetType.Filters,
+        Key = "Filters",
+        KeyDependant = "Enabled",
+        Label = L.PANEL_OPTION_FILTERS,
+    },
 }
 
 local DefaultOptionHeight = 24
@@ -763,6 +795,94 @@ do
 
 end
 
+---@class MiniLootInterfacePanelWidgetGroupCheckBox : MiniLootInterfacePanelWidget
+local MiniLootInterfacePanelWidgetGroupCheckBox = Mixin({}, MiniLootInterfacePanelWidget)
+
+do
+
+    ---@type MiniLootInterfacePanelWidgetOnLoad
+    function MiniLootInterfacePanelWidgetGroupCheckBox:OnLoad(panel, ...)
+        MiniLootInterfacePanelWidget.OnLoad(self, panel)
+    end
+
+    ---@type MiniLootInterfacePanelWidgetCreateWidget
+    function MiniLootInterfacePanelWidgetGroupCheckBox:CreateWidget(panel, ...)
+        local widget = CreateFrame("Frame", nil, panel) ---@class MiniLootInterfacePanelWidgetGroupCheckBox
+        Mixin(widget, self)
+        widget.Type = WidgetType.GroupCheckBox
+        widget.Element = CreateFrame("Frame", nil, widget) ---@class MiniLootInterfacePanelWidgetGroupCheckBoxElement : Frame
+        widget:OnLoad(panel, ...)
+        return widget
+    end
+
+end
+
+---@class MiniLootInterfacePanelWidgetGroupNumber : MiniLootInterfacePanelWidget
+local MiniLootInterfacePanelWidgetGroupNumber = Mixin({}, MiniLootInterfacePanelWidget)
+
+do
+
+    ---@type MiniLootInterfacePanelWidgetOnLoad
+    function MiniLootInterfacePanelWidgetGroupNumber:OnLoad(panel, ...)
+        MiniLootInterfacePanelWidget.OnLoad(self, panel)
+    end
+
+    ---@type MiniLootInterfacePanelWidgetCreateWidget
+    function MiniLootInterfacePanelWidgetGroupNumber:CreateWidget(panel, ...)
+        local widget = CreateFrame("Frame", nil, panel) ---@class MiniLootInterfacePanelWidgetGroupNumber
+        Mixin(widget, self)
+        widget.Type = WidgetType.GroupNumber
+        widget.Element = CreateFrame("Frame", nil, widget) ---@class MiniLootInterfacePanelWidgetGroupNumberElement : Frame
+        widget:OnLoad(panel, ...)
+        return widget
+    end
+
+end
+
+---@class MiniLootInterfacePanelWidgetTooltipCheckBox : MiniLootInterfacePanelWidget
+local MiniLootInterfacePanelWidgetTooltipCheckBox = Mixin({}, MiniLootInterfacePanelWidget)
+
+do
+
+    ---@type MiniLootInterfacePanelWidgetOnLoad
+    function MiniLootInterfacePanelWidgetTooltipCheckBox:OnLoad(panel, ...)
+        MiniLootInterfacePanelWidget.OnLoad(self, panel)
+    end
+
+    ---@type MiniLootInterfacePanelWidgetCreateWidget
+    function MiniLootInterfacePanelWidgetTooltipCheckBox:CreateWidget(panel, ...)
+        local widget = CreateFrame("Frame", nil, panel) ---@class MiniLootInterfacePanelWidgetTooltipCheckBox
+        Mixin(widget, self)
+        widget.Type = WidgetType.TooltipCheckBox
+        widget.Element = CreateFrame("Frame", nil, widget) ---@class MiniLootInterfacePanelWidgetTooltipCheckBoxElement : Frame
+        widget:OnLoad(panel, ...)
+        return widget
+    end
+
+end
+
+---@class MiniLootInterfacePanelWidgetFilters : MiniLootInterfacePanelWidget
+local MiniLootInterfacePanelWidgetFilters = Mixin({}, MiniLootInterfacePanelWidget)
+
+do
+
+    ---@type MiniLootInterfacePanelWidgetOnLoad
+    function MiniLootInterfacePanelWidgetFilters:OnLoad(panel, ...)
+        MiniLootInterfacePanelWidget.OnLoad(self, panel)
+    end
+
+    ---@type MiniLootInterfacePanelWidgetCreateWidget
+    function MiniLootInterfacePanelWidgetFilters:CreateWidget(panel, ...)
+        local widget = CreateFrame("Frame", nil, panel) ---@class MiniLootInterfacePanelWidgetFilters
+        Mixin(widget, self)
+        widget.Type = WidgetType.Filters
+        widget.Element = CreateFrame("Frame", nil, widget) ---@class MiniLootInterfacePanelWidgetFiltersElement : Frame
+        widget:OnLoad(panel, ...)
+        return widget
+    end
+
+end
+
 ---@class MiniLootInterfacePanelWidgetMap
 ---@field public Type MiniLootInterfacePanelWidgetType
 ---@field public Widget MiniLootInterfacePanelWidget
@@ -788,6 +908,22 @@ local WidgetMap = {
     {
         Type = WidgetType.ChatFrame,
         Widget = MiniLootInterfacePanelWidgetChatFrame,
+    },
+    {
+        Type = WidgetType.GroupCheckBox,
+        Widget = MiniLootInterfacePanelWidgetGroupCheckBox,
+    },
+    {
+        Type = WidgetType.GroupNumber,
+        Widget = MiniLootInterfacePanelWidgetGroupNumber,
+    },
+    {
+        Type = WidgetType.TooltipCheckBox,
+        Widget = MiniLootInterfacePanelWidgetTooltipCheckBox,
+    },
+    {
+        Type = WidgetType.Filters,
+        Widget = MiniLootInterfacePanelWidgetFilters,
     },
 }
 
