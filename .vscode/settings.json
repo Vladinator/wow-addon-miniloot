@@ -1,4 +1,19 @@
 {
+    "Lua.runtime.version": "Lua 5.1",
+    "Lua.runtime.builtin": {
+        "basic": "disable",
+        "debug": "disable",
+        "io": "disable",
+        "math": "disable",
+        "os": "disable",
+        "package": "disable",
+        "string": "disable",
+        "table": "disable",
+        "utf8": "disable"
+    },
+    "Lua.workspace.library": [
+        "$USERPROFILE\\.vscode\\extensions\\ketho.wow-api-0.15.7\\Annotations"
+    ],
     "Lua.diagnostics.globals": [
         "ACTION_SWING",
         "BattlePetTooltip",
@@ -9,6 +24,7 @@
         "COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED",
         "COPPER_AMOUNT",
         "COPPER_PER_GOLD",
+        "COPPER_PER_SILVER",
         "CreateObjectPool",
         "CreateScrollBoxLinearView",
         "DEATH_RECAP_UNAVAILABLE",
@@ -24,7 +40,6 @@
         "FloatingPetBattleAbilityTooltip",
         "GOLD_AMOUNT",
         "HONOR",
-        "InterfaceOptions_AddCategory",
         "InterfaceOptionsFramePanelContainer",
         "ITEM_STARTS_QUEST",
         "ITEM_UNIQUE",
@@ -33,6 +48,7 @@
         "LinkUtil",
         "LOOT",
         "ProxySettingMixin",
+        "SCROLLING_MESSAGE_FRAME_INSERT_MODE_BOTTOM",
         "ScrollUtil",
         "Settings",
         "SILVER_AMOUNT",

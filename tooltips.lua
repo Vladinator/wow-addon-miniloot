@@ -2,6 +2,15 @@ local ns = select(2, ...) ---@class MiniLootNS
 
 local db = ns.Settings.db
 
+---@diagnostic disable-next-line: deprecated
+local GetSpellInfo = GetSpellInfo or function(spell)
+    local info = C_Spell.GetSpellInfo(spell)
+    if not info then
+        return
+    end
+    return info.name, "", info.iconID, info.castTime, info.minRange, info.maxRange, info.spellID, info.originalIconID
+end
+
 ---@param tooltip GameTooltip
 ---@param chatFrame MiniLootChatFramePolyfill
 ---@param anchor? TooltipAnchor

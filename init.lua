@@ -61,7 +61,7 @@ end
 ---@type fun()
 local HookSetItemRef do
 
-    ---@alias SetItemRefPolyfill fun(link: string, text: string, button: MouseButton, chatFrame: MiniLootChatFramePolyfill, ...: any)
+    ---@alias SetItemRefPolyfill fun(link: string, text: string, button: MouseAction, chatFrame: MiniLootChatFramePolyfill, ...: any)
 
     ---@param ... any
     local function tonumberall(...)

@@ -109,7 +109,7 @@ function MiniLootNSOutputHandler:OnLoad(chatFrame)
     self.lastOutput = 0
     self.prevInCombat = nil ---@type boolean?
     self.inCombat = nil ---@type boolean?
-    self.timer = nil ---@type cbObject?
+    self.timer = nil ---@type FunctionContainer?
     self.timerOnTick = function()
         if not db.DebounceInCombat then
             self.prevInCombat = self.inCombat
