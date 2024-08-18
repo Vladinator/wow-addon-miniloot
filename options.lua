@@ -923,7 +923,13 @@ do
 		end
 
 		loaded = CreatePanel(ns.util:categories())
-		InterfaceOptions_AddCategory(loaded)
+
+		if InterfaceOptions_AddCategory then
+			InterfaceOptions_AddCategory(loaded)
+		else
+			local category, layout = Settings.RegisterCanvasLayoutCategory(loaded, loaded.name)
+			Settings.RegisterAddOnCategory(category)
+		end
 
 		for i = 1, #optionGroups do
 			local optionGroup = optionGroups[i]

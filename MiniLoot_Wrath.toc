@@ -3,7 +3,7 @@
 ## Title: MiniLoot
 ## Notes: Reduces chat related spam by a whole deal!
 ## Author: Vladinator
-## Version: 3.4.2.230919
+## Version: 3.4.2.240818
 ## SavedVariables: MiniLootDB
 ## X-Curse-Project-ID: 43440
 ## X-WoWI-ID: 19598
