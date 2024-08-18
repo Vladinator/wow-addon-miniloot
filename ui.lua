@@ -7,12 +7,17 @@ local db = ns.Settings.db
 local ResetSavedVariables = ns.Settings.ResetSavedVariables
 local ProjectVariant = ns.Utils.ProjectVariant
 local GetTimerunningSeasonID = ns.Utils.GetTimerunningSeasonID
+local TableKeys = ns.Utils.TableKeys
+local TableSort = ns.Utils.TableSort
 local IsChatFrame = ns.Utils.IsChatFrame
 local HandlerTypes = ns.Tooltip.HandlerTypes
 local MiniLootMessageGroup = ns.Messages.MiniLootMessageGroup
 local CreateChatMessageGenerator = ns.Messages.CreateChatMessageGenerator
 local CreateOutputHandler = ns.Output.CreateOutputHandler
 local ProcessChatEvent = ns.Reporting.ProcessChatEvent
+
+local HandlerTypesAsKeys = TableSort(TableKeys(HandlerTypes)) ---@type string[]
+local MiniLootMessageGroupAsKeys = TableSort(TableKeys(MiniLootMessageGroup)) ---@type string[]
 
 ---@generic T
 ---@alias MiniLootInterfacePanelWidgetOnLoad fun(self: T, panel: MiniLootInterfacePanel, ...: any)
@@ -55,7 +60,7 @@ local WidgetType = {
 ---@field public CanShow? fun(): boolean|number?
 ---@field public DropDown? MiniLootInterfacePanelOptionDropDown[]
 ---@field public Number? MiniLootInterfacePanelOptionNumber
----@field public Keys? table<string, string>
+---@field public Keys? string[]
 
 local TIMERUNNING_MARKUP = CreateAtlasMarkup("timerunning-glues-icon-small", 9, 12)
 
@@ -79,6 +84,9 @@ local function GetChatFrameName(chatName)
     local frame = _G[chatName] ---@type MiniLootChatFramePolyfill
     return frame.name
 end
+
+local DefaultOptionHeight = 24
+local DefaultOptionPadding = 8
 
 ---@type MiniLootInterfacePanelOption[]
 local Options = {
@@ -245,28 +253,32 @@ local Options = {
         Key = "EnabledGroups",
         KeyDependant = "Enabled",
         Label = L.PANEL_OPTION_ENABLED_GROUPS,
-        Keys = MiniLootMessageGroup,
+        Keys = MiniLootMessageGroupAsKeys,
+        Height = #MiniLootMessageGroupAsKeys * DefaultOptionHeight,
     },
     {
         Type = WidgetType.GroupCheckBox,
         Key = "IgnoredGroups",
         KeyDependant = "Enabled",
         Label = L.PANEL_OPTION_IGNORED_GROUPS,
-        Keys = MiniLootMessageGroup,
+        Keys = MiniLootMessageGroupAsKeys,
+        Height = #MiniLootMessageGroupAsKeys * DefaultOptionHeight,
     },
     {
         Type = WidgetType.GroupNumber,
         Key = "DebounceGroups",
         KeyDependant = "Enabled",
         Label = L.PANEL_OPTION_DEBOUNCE_GROUPS,
-        Keys = MiniLootMessageGroup,
+        Keys = MiniLootMessageGroupAsKeys,
+        Height = #MiniLootMessageGroupAsKeys * DefaultOptionHeight,
     },
     {
         Type = WidgetType.TooltipCheckBox,
         Key = "EnabledTooltips",
         KeyDependant = "Enabled",
         Label = L.PANEL_OPTION_ENABLED_TOOLTIPS,
-        Keys = HandlerTypes,
+        Keys = HandlerTypesAsKeys,
+        Height = #HandlerTypesAsKeys * DefaultOptionHeight,
     },
     {
         Type = WidgetType.Filters,
@@ -275,9 +287,6 @@ local Options = {
         Label = L.PANEL_OPTION_FILTERS,
     },
 }
-
-local DefaultOptionHeight = 24
-local DefaultOptionPadding = 8
 
 local function GetOptionsEstimatedHeight()
     local total = 0
@@ -462,7 +471,7 @@ do
         self.defaultHeight = defaultHeight or self.defaultHeight
     end
 
-    ---@return number? defaultWidth, number? defaultHeight
+    ---@return number defaultWidth, number defaultHeight
     function MiniLootInterfacePanelWidget:GetDefaultSize()
         return self.defaultWidth, self.defaultHeight
     end
@@ -477,6 +486,12 @@ do
     ---@return number width, number height
     function MiniLootInterfacePanelWidget:GetPreferredSize()
         return self.width or self.defaultWidth or 0, self.height or self.defaultHeight or 0
+    end
+
+    function MiniLootInterfacePanelWidget:IsSizeDirty()
+        local currentWidth, currentHeight = self:GetSize()
+        local width, height = self:GetPreferredSize()
+        return currentWidth ~= width or currentHeight ~= height
     end
 
     ---@param option MiniLootInterfacePanelOption
@@ -803,6 +818,9 @@ do
     ---@type MiniLootInterfacePanelWidgetOnLoad
     function MiniLootInterfacePanelWidgetGroupCheckBox:OnLoad(panel, ...)
         MiniLootInterfacePanelWidget.OnLoad(self, panel)
+        ---@class MiniLootInterfacePanelWidgetGroupCheckBoxElement
+        local element = self.Element
+        element.Buttons = element.Buttons or {} ---@type MiniLootInterfacePanelWidgetGroupCheckBoxButton[]
     end
 
     ---@type MiniLootInterfacePanelWidgetCreateWidget
@@ -813,6 +831,74 @@ do
         widget.Element = CreateFrame("Frame", nil, widget) ---@class MiniLootInterfacePanelWidgetGroupCheckBoxElement : Frame
         widget:OnLoad(panel, ...)
         return widget
+    end
+
+    ---@param key string
+    ---@return boolean?
+    function MiniLootInterfacePanelWidgetGroupCheckBox:GetValue(key)
+        local value = MiniLootInterfacePanelWidget.GetValue(self) ---@type table<string, boolean?>|nil
+        if not value then
+            return
+        end
+        return value[key]
+    end
+
+    ---@param key string
+    ---@param newValue boolean?
+    function MiniLootInterfacePanelWidgetGroupCheckBox:SaveValue(key, newValue)
+        local value = MiniLootInterfacePanelWidget.GetValue(self) ---@type table<string, boolean?>|nil
+        if not value then
+            return
+        end
+        if newValue then
+            value[key] = nil
+        else
+            value[key] = false
+        end
+    end
+
+    function MiniLootInterfacePanelWidgetGroupCheckBox:Refresh()
+        MiniLootInterfacePanelWidget.Refresh(self)
+        local element = self.Element ---@type MiniLootInterfacePanelWidgetGroupCheckBoxElement
+        local buttons = element.Buttons
+        local option = self.Option
+        local keys = option.Keys ---@type string[]
+        local count = #keys
+        local _, defaultHeight = self:GetDefaultSize()
+        local panel = self.Panel
+        ---@param button MiniLootInterfacePanelWidgetGroupCheckBoxButton
+        local function OnClick(button)
+            local key = button.key
+            self:SaveValue(key, button:GetChecked())
+        end
+        for i = 1, count do
+            local key = keys[i]
+            local button = buttons[i] ---@type MiniLootInterfacePanelWidgetGroupCheckBoxButton
+            if not button then
+                local prevButton = buttons[i - 1]
+                button = CreateFrame("CheckButton", nil, element, "UICheckButtonTemplate") ---@class MiniLootInterfacePanelWidgetGroupCheckBoxButton : CheckButton
+                buttons[i] = button
+                button.key = key
+                button:SetSize(defaultHeight, defaultHeight)
+                button.Label = button:CreateFontString(nil, "ARTWORK", "GameFontHighlightLeft")
+                button.Label:SetPoint("TOPLEFT", button, "TOPRIGHT", 0, 0)
+                button.Label:SetPoint("BOTTOMLEFT", button, "BOTTOMRIGHT", 0, 0)
+                button.Label:SetWidth(panel.labelWidth)
+                button.Label:SetText(key)
+                button:HookScript("OnClick", OnClick)
+                if prevButton then
+                    button:SetPoint("TOPLEFT", prevButton, "BOTTOMLEFT", 0, 0)
+                else
+                    button:SetPoint("TOPLEFT", element, "TOPLEFT", 0, 0)
+                end
+            end
+            local checked = self:GetValue(key)
+            if checked == nil then
+                button:SetChecked(true)
+            else
+                button:SetChecked(checked)
+            end
+        end
     end
 
 end

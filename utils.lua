@@ -196,6 +196,19 @@ local function TableValues(tbl, onlyUnique)
     return values
 end
 
+---@generic T
+---@param tbl T[]
+---@param sortType? "Ascending"|"Descending"
+---@return T[] sorted
+local function TableSort(tbl, sortType)
+    if not sortType or sortType == "Ascending" then
+        table.sort(tbl, function(a, b) return strcmputf8i(tostringall(a, b)) < 0 end)
+    else
+        table.sort(tbl, function(a, b) return strcmputf8i(tostringall(a, b)) > 0 end)
+    end
+    return tbl
+end
+
 ---@generic T, R
 ---@param tbl T[]
 ---@param func fun(v: T, k: number, tbl: T[]): R
@@ -916,6 +929,7 @@ ns.Utils = {
     TableIsArray = TableIsArray,
     TableKeys = TableKeys,
     TableValues = TableValues,
+    TableSort = TableSort,
     TableMap = TableMap,
     TableReduce = TableReduce,
     TableSwap = TableSwap,
