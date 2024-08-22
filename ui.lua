@@ -613,9 +613,8 @@ do
                 return validOptions
             end
             local key = option.Key
-            local variableTbl = { [key] = getValue() } ---@type table<string, string>
             local defaultValue = ns.Settings.DefaultOptions[key]
-            local setting = CreateAndInitFromMixin(ProxySettingMixin, "", key, variableTbl, type(defaultValue), defaultValue, getValue, setValue)
+            local setting = CreateAndInitFromMixin(ProxySettingMixin, key, key, type(defaultValue), defaultValue, getValue, setValue)
             initializer = ProjectVariant.DropDownTemplateCreateInitializer(setting, getOptions)
             element.GetElementData = function() return initializer end
         end
