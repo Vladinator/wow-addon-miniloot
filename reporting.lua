@@ -13,8 +13,8 @@ local ProcessChatEvent
 ---@type table<WowEvent, MiniLootNSEventCallbackResult>
 local EventHandlers = {
     QUEST_TURNED_IN = function(event, ...)
-        ---@type number?, number?
-        local xp, money = ...
+        ---@type number?, number?, number?
+        local questID, xp, money = ...
         if xp and xp > 0 then
             return ProcessChatEvent("CHAT_MSG_COMBAT_XP_GAIN", format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED, xp))
         end
