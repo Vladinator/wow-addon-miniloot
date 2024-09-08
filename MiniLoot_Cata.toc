@@ -1,12 +1,14 @@
-## Interface: 30402
+## Interface: 40400
 ## IconTexture: 2056011
 ## Title: MiniLoot
 ## Notes: Reduces chat related spam by a whole deal!
 ## Author: Vladinator
-## Version: 3.4.2.240818
+## Version: 4.4.0.240908
 ## SavedVariables: MiniLootDB
 ## X-Curse-Project-ID: 43440
 ## X-WoWI-ID: 19598
+## X-Wago-ID: 0mKOQQNx
+## X-AddonProvider: github
 locale.lua
 config.lua
 events.lua
