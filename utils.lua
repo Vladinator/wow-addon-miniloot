@@ -428,6 +428,19 @@ local function ColorByDelta(text, delta)
     return format("|cff%s%s|r", color, text)
 end
 
+---@param value number
+---@param delta number
+---@param skipColor? boolean
+---@return string
+local function FormatNumberGainLoss(value, delta, skipColor)
+    local text = FormatNumber(value)
+    text = format("%s%s", value < 0 and "-" or "", text)
+    if not skipColor then
+        text = ColorByDelta(text, delta)
+    end
+    return text
+end
+
 ---@param results MiniLootMessageFormatSimpleParserResults[]
 ---@param key string
 ---@return number total
@@ -452,11 +465,7 @@ end
 ---@return string prettyTotal, number total
 local function SumByKeyPretty(results, key, skipColor)
     local total = SumByKey(results, key)
-    local text = FormatNumber(total)
-    text = format("%s%s", total < 0 and "-" or "", text)
-    if not skipColor then
-        text = ColorByDelta(text, total)
-    end
+    local text = FormatNumberGainLoss(total, total, skipColor)
     return text, total
 end
 
@@ -942,6 +951,7 @@ ns.Utils = {
     FormatNumber = FormatNumber,
     GetTimerunningSeasonID = GetTimerunningSeasonID,
     ColorByDelta = ColorByDelta,
+    FormatNumberGainLoss = FormatNumberGainLoss,
     SumByKey = SumByKey,
     SumByKeyPretty = SumByKeyPretty,
     GetUnitName = GetUnitName,

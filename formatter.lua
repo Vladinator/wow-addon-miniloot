@@ -7,6 +7,7 @@ local TableCombine = ns.Utils.TableCombine
 local TableMap = ns.Utils.TableMap
 local SumByKey = ns.Utils.SumByKey
 local SumByKeyPretty = ns.Utils.SumByKeyPretty
+local FormatNumberGainLoss = ns.Utils.FormatNumberGainLoss
 local ConvertToMoneyString = ns.Utils.ConvertToMoneyString
 local FormatNumber = ns.Utils.FormatNumber
 local GetLootIcon = ns.Utils.GetLootIcon
@@ -173,6 +174,8 @@ local function GetLootIconCountFormatted(link, count, canCountBags, mawPowerUnit
     return format(Formats.S, iconLink)
 end
 
+local FollowerMarkup = CreateTextureMarkup(1033590, 64, 64, 0, 0, 0, 1, 0, 1, 1, 0)
+
 ---@param prefix string
 ---@param results MiniLootMessageFormatSimpleParserResults[]
 ---@param key string
@@ -190,6 +193,9 @@ local function SumResultsTotalsByKeyFormatted(prefix, results, key, skipIfValueZ
     if resultType == "Money" then
         local money = ConvertToMoneyString(total)
         return format(Formats.ScS, prefix, money)
+    elseif resultType == "FollowerExperience" then
+        local xp = FormatNumberGainLoss(total, total)
+        return format("%s %s %s", FollowerMarkup, prefix, xp)
     end
     local canCountBags = not firstResult.Name or firstResult.Name == ""
     return GetLootIconCountFormatted(prefix, total, canCountBags)

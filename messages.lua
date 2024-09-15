@@ -1034,6 +1034,37 @@ do
             }
         )
 
+        -- TODO: globalstrings doesn't contain this particular format
+        -- this hack won't work for all locales so this will be an issue
+        _G.MINILOOT_DELVE_EXPERIENCE_GAIN_POLYFILL = "%s has gained %d experience."
+
+        AppendMessages(
+            {
+                group = MiniLootMessageGroup.FollowerExperience,
+                events = {
+                    "CHAT_MSG_COMBAT_FACTION_CHANGE",
+                },
+                ---@type MiniLootMessageFormatSimpleParserResultFollowerExperienceArgs
+                result = {
+                    Type = "FollowerExperience",
+                },
+            },
+            {
+                ---@type MiniLootMessageFormatFollowerExperience[]
+                formats = {
+                    {
+                        formats = {
+                            "MINILOOT_DELVE_EXPERIENCE_GAIN_POLYFILL",
+                        },
+                        tokens = {
+                            Tokens.NameString,
+                            Tokens.ValueNumber,
+                        },
+                    },
+                },
+            }
+        )
+
     end
 
     -- Currency
