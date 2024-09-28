@@ -584,13 +584,15 @@ local function GetUnitMawPowerInfo(unit, query, fallback)
         end
         local spellTexture = aura.icon
         local spellID = aura.spellId
-        local spellLink = C_Spell.GetMawPowerLinkBySpellID(spellID)
-        if query == spellID or query == spellLink then
-            return spellTexture, spellID, spellLink
-        end
-        local _, spellName = spellLink:match(LinkMarkupPattern)
-        if query == spellName then
-            return spellTexture, spellID, spellLink
+        local spellLink = C_Spell.GetMawPowerLinkBySpellID(spellID) ---@type string?
+        if spellLink then
+            if query == spellID or query == spellLink then
+                return spellTexture, spellID, spellLink
+            end
+            local _, spellName = spellLink:match(LinkMarkupPattern)
+            if query == spellName then
+                return spellTexture, spellID, spellLink
+            end
         end
     end
     return ---@diagnostic disable-line: missing-return-value
