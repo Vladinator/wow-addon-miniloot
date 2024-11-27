@@ -895,6 +895,12 @@ local function GetCurrencyLink(link, amount)
     return C_CurrencyInfo.GetCurrencyLink(id, amount)
 end
 
+-- older flavors don't have currencies so if this API is missing we replace our functions to return nothing
+if not C_CurrencyInfo.GetCurrencyIDFromLink or not C_CurrencyInfo.GetCurrencyInfo or not C_CurrencyInfo.GetCurrencyLink then
+    GetCurrencyInfo = function() end
+    GetCurrencyLink = function() end
+end
+
 ---@param link number|string
 ---@return number count, number maxCount, number weeklyRemainingCount
 local function GetCurrencyCount(link)
