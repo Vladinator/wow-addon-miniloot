@@ -178,22 +178,6 @@ end
 ---@class MiniLootNSSettings
 ---@field public db MiniLootNSSettingsOptions
 
----@type MiniLootNSSettingsOptions
-local dbProxy = setmetatable({}, {
-    __index = function(self, key)
-        local db = ProcessSavedVariables()
-        return db[key]
-    end,
-})
-
----@type MiniLootNSSettingsOptions
-local remixDbProxy = setmetatable({}, {
-    __index = function(self, key)
-        local _, remixDb = ProcessSavedVariables()
-        return remixDb[key]
-    end,
-})
-
 ---@param db MiniLootNSSettingsOptions
 ---@param key string
 local function CanUseRemixDB(db, key)

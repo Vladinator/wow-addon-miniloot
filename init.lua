@@ -12,9 +12,6 @@ local RegisterChatEvents = ns.Reporting.RegisterChatEvents
 local UnregisterChatEvents = ns.Reporting.UnregisterChatEvents
 local CreateOutputHandler = ns.Output.CreateOutputHandler
 local GetChatFrames = ns.Utils.GetChatFrames
-local GetCurrencyLink = ns.Utils.GetCurrencyLink
-local GetUnitMawPowerInfo = ns.Utils.GetUnitMawPowerInfo
-local GetHyperlinkTooltipLines = ns.Utils.GetHyperlinkTooltipLines
 local EnableHyperlinks = ns.Tooltip.EnableHyperlinks
 local DisableHyperlinks = ns.Tooltip.DisableHyperlinks
 local SetupUI = ns.UI.SetupUI
@@ -58,111 +55,6 @@ local function OnChatEvent(chatFrame, event, ...)
     return false, ...
 end
 
----@type fun()
-local HookSetItemRef do
-
-    ---@alias SetItemRefPolyfill fun(link: string, text: string, button: MouseAction, chatFrame: MiniLootChatFramePolyfill, ...: any)
-
-    ---@param ... any
-    local function tonumberall(...)
-        local temp = {...} ---@type number[]
-        for i = 1, #temp do
-            local v = temp[i]
-            local t = type(v)
-            if t ~= "number" then
-                temp[i] = tonumber(v)
-            end
-        end
-        return unpack(temp)
-    end
-
-    local QualityColorPattern = "|cff([a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9][a-fA-F0-9])|H"
-    local LinkNamePattern = "|h(.-)|h"
-
-    ---@param link string
-    ---@param oldText? string
-    ---@param newText? string
-    ---@param quality? string `ffRRGGBB` or `RRGGBB`
-    ---@return string fixedLink
-    local function FixHyperlink(link, oldText, newText, quality)
-        oldText = oldText or newText or ""
-        newText = newText or oldText or ""
-        local color = quality or oldText:match(QualityColorPattern) or newText:match(QualityColorPattern)
-        local colorPrefix = color:len() == 6 and "ff" or ""
-        local text = newText:match(LinkNamePattern) or oldText:match(LinkNamePattern)
-        return format("|c%s%s|H%s|h%s|h|r", colorPrefix, color, link, text)
-    end
-
-    ---@param link string
-    ---@return string? link
-    local function GetHyperlinkByLink(link)
-        for i = Enum.BagIndex.Backpack, Constants.InventoryConstants.NumBagSlots do
-            local count = C_Container.GetContainerNumSlots(i)
-            for j = 1, count do
-                local itemLink = C_Container.GetContainerItemLink(i, j)
-                if itemLink and itemLink:find(link, nil, true) then
-                    return itemLink
-                end
-            end
-        end
-    end
-
-    local origSetItemRef ---@type SetItemRefPolyfill
-
-    ---@type SetItemRefPolyfill
-    local function customSetItemRef(link, text, button, chatFrame, ...)
-        if not IsModifiedClick("CHATLINK") then
-            return origSetItemRef(link, text, button, chatFrame, ...)
-        end
-        ---@type string, string
-        local linkType, linkData = LinkUtil.SplitLinkData(link)
-        ---@type string, string
-        local arg1, arg2 = strsplit(":", linkData)
-        if linkType == "garrfollower" then
-            local num1, num2 = tonumberall(arg1, arg2)
-            local realLink = C_Garrison.GetFollowerLinkByID(num1)
-            local _, _, _, quality = C_Item.GetItemQualityColor(num2 - 2)
-            text = FixHyperlink(link, text, realLink, quality)
-        elseif linkType == "currency" then
-            local num1, num2 = tonumberall(arg1, arg2)
-            local realLink = GetCurrencyLink(num1, num2)
-            if realLink then
-                text = FixHyperlink(link, text, realLink)
-            end
-        elseif linkType == "battlepet" then
-            local realLink = GetHyperlinkByLink(link)
-            if realLink then
-                text = FixHyperlink(link, text, realLink)
-            end
-        elseif linkType == "azessence" then
-            link = text
-        elseif linkType == "mawpower" then
-            local _, _, realLink = GetUnitMawPowerInfo("player", link, true)
-            if not realLink then
-                local lines = GetHyperlinkTooltipLines(link)
-                if lines and lines[1] then
-                    local firstLine = lines[1]
-                    realLink = format("|cff71d5ff|H%s|h[%s]|h|r", link, firstLine.leftText)
-                end
-            end
-            if not realLink then
-                return
-            end
-            text = FixHyperlink(link, text, realLink)
-        end
-        return origSetItemRef(link, text, button, chatFrame, ...)
-    end
-
-    function HookSetItemRef()
-        if origSetItemRef then
-            return
-        end
-        origSetItemRef = SetItemRef
-        SetItemRef = customSetItemRef
-    end
-
-end
-
 ---@param event WowEvent
 ---@param ... any
 function frame:OnEvent(event, ...)
@@ -172,7 +64,7 @@ function frame:OnEvent(event, ...)
             self.isLoaded = true
             self.Panel = SetupUI(self)
             self:UpdateState()
-            HookSetItemRef()
+            ns.Links:Init()
         end
     end
     if not self.isLoaded then

@@ -11,6 +11,7 @@
 ## X-AddonProvider: github
 debug.lua
 locale.lua
+links.lua
 utils.lua
 filters.lua
 messages.lua

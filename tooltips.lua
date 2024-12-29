@@ -403,6 +403,7 @@ local function OnHyperlinkEnter(chatFrame, linkData, link)
         showingHandler:Hide()
         showingHandler = nil
     end
+    link, linkData = ns.Links.Unwrap(link, linkData)
     for _, handler in ipairs(TooltipHandlers) do
         if db.EnabledTooltips[handler.Type] ~= false and (not handler.IsEnabled or handler:IsEnabled()) then
             local matched = false

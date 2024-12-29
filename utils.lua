@@ -745,7 +745,11 @@ local function GetLootIcon(link, hyperlink, simple, customColor, mawPowerUnit)
             appendText = format("%s:%s", appendText or "", itemLevel)
         end
     end
-    return GetChatLootIcon(color, data, texture, hyperlink, simple, customColor, appendText)
+    local temp = GetChatLootIcon(color, data, texture, hyperlink, simple, customColor, appendText)
+    if hyperlink then
+        temp = ns.Links.Wrap(temp, link)
+    end
+    return temp
 end
 
 local function GetChatFrames()
@@ -972,7 +976,6 @@ ns.Utils = {
     GetLinkTexture = GetLinkTexture,
     GetItemLevelAndEquipSlot = GetItemLevelAndEquipSlot,
     GetChatIconMarkup = GetChatIconMarkup,
-    GetChatLootIcon = GetChatLootIcon,
     GetLootIcon = GetLootIcon,
     GetChatFrames = GetChatFrames,
     IsChatFrame = IsChatFrame,

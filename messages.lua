@@ -1921,6 +1921,7 @@ do
 
         ---@class MiniLootMessageFormatSimpleParserResultArtifactPowerArgs : MiniLootMessageFormatSimpleParserResultArtifactPower
         ---@field public Link? string
+        ---@field public Value? number
 
         ---@class MiniLootMessageFormatArtifactPower : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultArtifactPowerArgs
