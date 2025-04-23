@@ -563,7 +563,8 @@ local function GetShortFactionName(name, maxLength)
     return format("|cff%s%s|r", SimpleHexColors.FactionPurple, name)
 end
 
-local LinkMarkupPattern = "|c[fF][fF]([0-9a-fA-F]+)|H(.-)|h%[(.-)%]|h|r"
+local LinkMarkupPattern1 = "|c[fF][fF]([0-9a-fA-F]+)|H(.-)|h%[(.-)%]|h|r"
+local LinkMarkupPattern2 = "|cnIQ(%d+):|H(.-)|h%[(.-)%]|h|r"
 local AtlasMarkupPattern = "(|A:(.-[Tt][Ii][Ee][Rr](%d+)):(.-)|a)"
 
 ---@param unit UnitToken
@@ -589,7 +590,11 @@ local function GetUnitMawPowerInfo(unit, query, fallback)
             if query == spellID or query == spellLink then
                 return spellTexture, spellID, spellLink
             end
-            local _, spellName = spellLink:match(LinkMarkupPattern)
+            local _, spellName = spellLink:match(LinkMarkupPattern1)
+            if query == spellName then
+                return spellTexture, spellID, spellLink
+            end
+            _, spellName = spellLink:match(LinkMarkupPattern2)
             if query == spellName then
                 return spellTexture, spellID, spellLink
             end
@@ -723,7 +728,12 @@ end
 ---@param mawPowerUnit? UnitToken
 ---@return string itemLink
 local function GetLootIcon(link, hyperlink, simple, customColor, mawPowerUnit)
-    local color, data, text = link:match(LinkMarkupPattern) ---@type string?, string?, string?
+    local color, data, text = link:match(LinkMarkupPattern1) ---@type string?, string?, string?
+    if not color then
+        color, data, text = link:match(LinkMarkupPattern2) ---@type string?, string?, string?
+        color = C_ColorOverrides.GetColorForQuality(color) ---@type ColorMixin
+        color = color:GenerateHexColor():sub(3)
+    end
     local texture = GetLinkTexture(link, data, text, mawPowerUnit)
     if not texture then
         return link
@@ -774,6 +784,7 @@ local function IsChatFrame(chatFrame)
         true or false
 end
 
+local QualityColorPattern = "|cnIQ(%d+):"
 local HexColorPattern = "|c[fF][fF]([0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F])"
 
 local HexColorToQuality = {
@@ -790,6 +801,10 @@ local HexColorToQuality = {
 ---@param link string
 ---@return number? qualityID
 local function GetLinkQuality(link)
+    local id = link:match(QualityColorPattern)
+    if id then
+        return tonumber(id)
+    end
     local hex = link:match(HexColorPattern)
     if not hex then
         return

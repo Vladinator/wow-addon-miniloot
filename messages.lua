@@ -2108,7 +2108,7 @@ do
 
 end
 
-local ProcessTokensLinkPattern = "^%s*|h"
+-- local ProcessTokensLinkPattern = "^%s*|h"
 
 ---@param token MiniLootMessageFormatToken
 ---@param match? string
