@@ -2108,7 +2108,8 @@ do
 
 end
 
--- local ProcessTokensLinkPattern = "^%s*|h"
+local ProcessTokensLinkPattern1 = "(|c[^|]-|H[^|]-|h[^|]-|h|r)"
+local ProcessTokensLinkPattern2 = "(|H[^|]-|h[^|]-|h)"
 
 ---@param token MiniLootMessageFormatToken
 ---@param match? string
@@ -2132,17 +2133,24 @@ local function ProcessTokens(token, match)
             value = match
         end
 
-        -- if value then
-        --     if tokenType == MiniLootMessageFormatTokenType.Link then
-        --         if not value:find(ProcessTokensLinkPattern) then
-        --             value = nil
-        --         end
-        --     elseif tokenType == MiniLootMessageFormatTokenType.Target then
-        --         if not UnitExists(value) then
-        --             value = nil
-        --         end
-        --     end
-        -- end
+        if value then
+            if tokenType == MiniLootMessageFormatTokenType.Link then
+                local temp ---@type string?
+                if not temp then
+                    temp = value:match(ProcessTokensLinkPattern1) ---@type string?
+                end
+                if not temp then
+                    temp = value:match(ProcessTokensLinkPattern2) ---@type string?
+                end
+                if temp then
+                    value = temp
+                end
+            -- elseif tokenType == MiniLootMessageFormatTokenType.Target then
+            --     if not UnitExists(value) then
+            --         value = nil
+            --     end
+            end
+        end
 
         return token.field, value or token.fallbackValue
 

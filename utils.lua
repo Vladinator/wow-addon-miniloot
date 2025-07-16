@@ -34,7 +34,7 @@ local ProjectVariant = {
     },
 }
 
-if select(4, GetBuildInfo()) < 110000 then -- `pre-11.0`
+if select(4, GetBuildInfo()) < 50000 then -- `pre-5.0`
     local ProjectVariantMainline = ProjectVariant[0]
     ProjectVariantMainline.DropDownTemplate = ProjectVariant[WOW_PROJECT_CLASSIC].DropDownTemplate
     ProjectVariantMainline.DropDownTemplateOnLoad = ProjectVariant[WOW_PROJECT_CLASSIC].DropDownTemplateOnLoad
@@ -443,14 +443,18 @@ end
 
 ---@param results MiniLootMessageFormatSimpleParserResults[]
 ---@param key string
+---@param skipNilValues? boolean
 ---@return number total
-local function SumByKey(results, key)
+local function SumByKey(results, key, skipNilValues)
+    local includeNil = skipNilValues ~= true
     return TableReduce(
         results,
         ---@param acc number
         function(acc, val)
             local v = val[key]
-            if type(v) == "number" then
+            if includeNil and v == nil then
+                return acc + 1
+            elseif type(v) == "number" then
                 return acc + v
             end
             return acc
@@ -731,6 +735,7 @@ local function GetLootIcon(link, hyperlink, simple, customColor, mawPowerUnit)
     local color, data, text = link:match(LinkMarkupPattern1) ---@type string?, string?, string?
     if not color then
         color, data, text = link:match(LinkMarkupPattern2) ---@type string?, string?, string?
+        ---@diagnostic disable-next-line: cast-local-type, param-type-mismatch
         color = C_ColorOverrides.GetColorForQuality(color) ---@type ColorMixin
         color = color:GenerateHexColor():sub(3)
     end

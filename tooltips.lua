@@ -2,7 +2,7 @@ local ns = select(2, ...) ---@class MiniLootNS
 
 local db = ns.Settings.db
 
----@diagnostic disable-next-line: deprecated
+---@diagnostic disable-next-line: undefined-global
 local GetSpellInfo = GetSpellInfo or function(spell)
     local info = C_Spell.GetSpellInfo(spell)
     if not info then
@@ -227,6 +227,7 @@ local TooltipHandlers = {
             return FloatingGarrisonMissionTooltip and FloatingGarrisonMission_Toggle and true
         end,
         Show = function(self, chatFrame, linkData, link)
+            ---@type _, string|number?
             local _, garrMissionID = strsplit(":", linkData)
             garrMissionID = tonumber(garrMissionID)
             if garrMissionID then
@@ -245,7 +246,12 @@ local TooltipHandlers = {
             return DeathRecap_GetEvents and true
         end,
         Show = function(self, chatFrame, linkData, link)
+            ---@type _, string|number?
             local _, id = strsplit(":", linkData)
+            id = tonumber(id)
+            if not id then
+                return
+            end
             local events = DeathRecap_GetEvents(id) ---@type DeathRecapEventPolyfill[]
             if not events or not events[1] then
                 AnchorTooltip(GameTooltip, chatFrame)
