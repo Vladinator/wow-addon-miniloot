@@ -1034,9 +1034,32 @@ do
             }
         )
 
-        -- TODO: globalstrings doesn't contain this particular format
-        -- this hack won't work for all locales so this will be an issue
-        _G.MINILOOT_DELVE_EXPERIENCE_GAIN_POLYFILL = "%s has gained %d experience."
+        -- TODO: globalstrings doesn't contain this particular string, so the solution is to provide
+        -- the translations with hack, until, hopefully, one day, the string is added to the globalstrings table
+        local Locale = GetLocale()
+        local FollowerExperience = "%s has gained %d experience."
+        if Locale == "deDE" then
+            FollowerExperience = "%s hat %d Erfahrung erhalten."
+        elseif Locale == "esES" then
+            FollowerExperience = "%s ha obtenido %d p. de experiencia."
+        elseif Locale == "esMX" then
+            FollowerExperience = "%s ha obtenido %d puntos de experiencia."
+        elseif Locale == "frFR" then
+            FollowerExperience = "%s a obtenu %d points d’expérience."
+        elseif Locale == "itIT" then
+            FollowerExperience = "%s ha ottenuto %d punti esperienza."
+        elseif Locale == "koKR" then
+            FollowerExperience = "%s|1이;가; %d 경험을 획득했습니다."
+        elseif Locale == "ptBR" then
+            FollowerExperience = "%s ganhou %d pontos de experiência."
+        elseif Locale == "ruRU" then
+            FollowerExperience = "%s получает %d ед. опыта."
+        elseif Locale == "zhCN" then
+            FollowerExperience = "%s获得了%d点经验值。"
+        elseif Locale == "zhTW" then
+            FollowerExperience = "%s獲得%d點經驗值。"
+        end
+        _G.MINILOOT_DELVE_EXPERIENCE_GAIN_POLYFILL = FollowerExperience
 
         AppendMessages(
             {
