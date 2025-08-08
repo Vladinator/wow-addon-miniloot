@@ -176,6 +176,8 @@ end
 
 local FollowerMarkup = CreateTextureMarkup(1033590, 64, 64, 0, 0, 0, 1, 0, 1, 1, 0)
 
+local WarbandMarkup = "|A:warbands-icon:0:0|a"
+
 ---@param prefix string
 ---@param results MiniLootMessageFormatSimpleParserResults[]
 ---@param key string
@@ -198,10 +200,12 @@ local function SumResultsTotalsByKeyFormatted(prefix, results, key, skipIfValueZ
         return format("%s %s %s", FollowerMarkup, prefix, xp)
     end
     local canCountBags = not firstResult.Name or firstResult.Name == ""
-    return GetLootIconCountFormatted(prefix, total, canCountBags)
+    local link = GetLootIconCountFormatted(prefix, total, canCountBags)
+    if resultType == "CurrencyWarband" or resultType == "CurrencyWarbandOverflow" then
+        link = format("%s%s", WarbandMarkup, link)
+    end
+    return link
 end
-
-local WarbandMarkup = "|A:warbands-icon:0:0|a"
 
 ---@param name string
 ---@param results MiniLootMessageFormatSimpleParserResults[]

@@ -1072,7 +1072,7 @@ do
 
         ---@alias MiniLootMessageFormatSimpleParserResultCurrencyKeys "Link"|"Value"
 
-        ---@alias MiniLootMessageFormatSimpleParserResultCurrencyTypes "Currency"
+        ---@alias MiniLootMessageFormatSimpleParserResultCurrencyTypes "Currency"|"CurrencyWarband"|"CurrencyWarbandOverflow"
 
         ---@class MiniLootMessageFormatSimpleParserResultCurrency
         ---@field public Type MiniLootMessageFormatSimpleParserResultCurrencyTypes
@@ -1099,6 +1099,32 @@ do
             {
                 ---@type MiniLootMessageFormatCurrency[]
                 formats = {
+                    {
+                        formats = {
+                            "ACCOUNT_CURRENCY_GAINED_MULTIPLE_OVERFLOW",
+                        },
+                        tokens = {
+                            Tokens.Link,
+                            Tokens.ValueNumber,
+                            Tokens.ValueString,
+                        },
+                        result = {
+                            Type = "CurrencyWarbandOverflow",
+                        },
+                    },
+                    {
+                        formats = {
+                            "ACCOUNT_CURRENCY_GAINED_MULTIPLE_BONUS",
+                            "ACCOUNT_CURRENCY_GAINED_MULTIPLE",
+                        },
+                        tokens = {
+                            Tokens.Link,
+                            Tokens.ValueNumber,
+                        },
+                        result = {
+                            Type = "CurrencyWarband",
+                        },
+                    },
                     {
                         formats = {
                             "CURRENCY_GAINED_MULTIPLE_BONUS",
