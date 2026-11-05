@@ -1,9 +1,9 @@
-## Interface: 120001
+## Interface: 11509, 16001, 20506, 30405, 40402, 50504, 120105, 120107
 ## IconTexture: 2056011
 ## Title: MiniLoot
 ## Notes: Reduces chat related spam by a whole deal!
 ## Author: Vladinator
-## Version: 12.0.1.260322
+## Version: 12.1.5.261105
 ## SavedVariables: MiniLootDB, MiniLootDB2, MiniLootRemixDB2
 ## X-Curse-Project-ID: 43440
 ## X-WoWI-ID: 19598

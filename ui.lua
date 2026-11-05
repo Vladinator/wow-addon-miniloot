@@ -377,7 +377,9 @@ do
         end
     end
 
-    function MiniLootInterfacePanelWidget:GetValue()
+    ---@param ... any
+    ---@return any
+    function MiniLootInterfacePanelWidget:GetValue(...)
         local option = self.Option
         if not option.Key then
             return
@@ -615,10 +617,12 @@ do
                 return validOptions
             end
             local key = option.Key
-            local defaultValue = ns.Settings.DefaultOptions[key]
-            local setting = CreateAndInitFromMixin(ProxySettingMixin, "", key, type(defaultValue), defaultValue, getValue, setValue)
-            initializer = ProjectVariant.DropDownTemplateCreateInitializer(setting, getOptions)
-            element.GetElementData = function() return initializer end
+            if key and ProjectVariant.DropDownTemplateCreateInitializer then
+                local defaultValue = ns.Settings.DefaultOptions[key]
+                local setting = CreateAndInitFromMixin(ProxySettingMixin, "", key, type(defaultValue), defaultValue, getValue, setValue)
+                initializer = ProjectVariant.DropDownTemplateCreateInitializer(setting, getOptions)
+                element.GetElementData = function() return initializer end
+            end
         end
         if initializer then
             element:Init(initializer)

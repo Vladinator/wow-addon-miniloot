@@ -255,7 +255,7 @@ local TooltipHandlers = {
             local events = DeathRecap_GetEvents(id) ---@type DeathRecapEventPolyfill[]
             if not events or not events[1] then
                 AnchorTooltip(GameTooltip, chatFrame)
-				GameTooltip:SetText(DEATH_RECAP_UNAVAILABLE)
+				GameTooltip:SetText(DEATH_RECAP_UNAVAILABLE, 1, 1, 1)
 				GameTooltip:Show()
                 return
             end
@@ -373,7 +373,7 @@ local TooltipHandlers = {
             end
             local text = table.concat(lines, "\n")
             AnchorTooltip(GameTooltip, chatFrame)
-            GameTooltip:SetText(text)
+            GameTooltip:SetText(text, 1, 1, 1)
             GameTooltip:Show()
         end,
     },
@@ -406,7 +406,9 @@ local showingHandler ---@type MiniLootTooltipHandler?
 ---@param link string
 local function OnHyperlinkEnter(chatFrame, linkData, link)
     if showingHandler then
-        showingHandler:Hide()
+        if showingHandler.Hide then
+            showingHandler:Hide()
+        end
         showingHandler = nil
     end
     link, linkData = ns.Links.Unwrap(link, linkData)
