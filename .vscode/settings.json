@@ -48,11 +48,13 @@
         "GOLD_AMOUNT",
         "HONOR",
         "InterfaceOptionsFramePanelContainer",
+        "ITEM_QUALITY_COLORS",
         "ITEM_STARTS_QUEST",
         "ITEM_UNIQUE",
         "ITEM_UNIQUE_EQUIPPABLE",
         "LARGE_NUMBER_SEPERATOR",
         "LOOT",
+        "NO",
         "NUM_CHAT_WINDOWS",
         "ProxySettingMixin",
         "SCROLLING_MESSAGE_FRAME_INSERT_MODE_BOTTOM",
@@ -66,11 +68,11 @@
         "TEXT_MODE_A_STRING_RESULT_OVERKILLING",
         "TEXT_MODE_A_STRING_RESULT_RESIST",
         "TRANSMOGRIFY_TOOLTIP_APPEARANCE_UNKNOWN",
+        "WOW_PROJECT_CAMELOT",
+        "WOW_PROJECT_MISTS_CLASSIC",
         "XP",
-        "YOU",
-        "YOU_LOOT_MONEY",
         "YES",
-        "NO",
-        "ITEM_QUALITY_COLORS"
+        "YOU",
+        "YOU_LOOT_MONEY"
     ]
 }

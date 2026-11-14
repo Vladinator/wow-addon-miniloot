@@ -19,14 +19,14 @@ end
 ---@field public DropDownTemplateCreateInitializer? fun(settings: any, options: fun(): SettingsControlDropDownOptionPolyfill[])
 ---@field public DropDownTemplateOnInitialized? fun(self: MiniLootInterfacePanelWidgetDropDown)
 
----@type table<number, MiniLootProjectVariant>|MiniLootProjectVariant
+---@type table<number, MiniLootProjectVariant|number>|MiniLootProjectVariant
 local ProjectVariant = {
     [0] = {
         EditBoxNumberTemplate = "NumericInputBoxTemplate",
         DropDownTemplate = "SettingsDropDownControlTemplate",
         DropDownTemplateCreateInitializer = Settings.CreateDropdownInitializer,
     },
-    [WOW_PROJECT_CLASSIC] = {
+    [WOW_PROJECT_CLASSIC or -1] = {
         EditBoxNumberTemplate = "InputBoxTemplate",
         DropDownTemplate = "AutoLootDropDownControlTemplate",
         DropDownTemplateOnLoad = function(self)
@@ -41,15 +41,13 @@ local ProjectVariant = {
             self:Refresh()
         end,
     },
+    [WOW_PROJECT_BURNING_CRUSADE_CLASSIC or -1] = WOW_PROJECT_CLASSIC or -1,
+    [WOW_PROJECT_WRATH_CLASSIC or -1] = WOW_PROJECT_CLASSIC or -1,
+    [WOW_PROJECT_CATACLYSM_CLASSIC or -1] = WOW_PROJECT_CLASSIC or -1,
+    [WOW_PROJECT_MISTS_CLASSIC or -1] = 0,
+    [WOW_PROJECT_CAMELOT or -1] = 0,
+    [WOW_PROJECT_MAINLINE or -1] = 0,
 }
-
-if select(4, GetBuildInfo()) < 50000 then -- `pre-5.0`
-    local ProjectVariantMainline = ProjectVariant[0]
-    ProjectVariantMainline.DropDownTemplate = ProjectVariant[WOW_PROJECT_CLASSIC].DropDownTemplate
-    ProjectVariantMainline.DropDownTemplateOnLoad = ProjectVariant[WOW_PROJECT_CLASSIC].DropDownTemplateOnLoad
-    ProjectVariantMainline.DropDownTemplateCreateInitializer = ProjectVariant[WOW_PROJECT_CLASSIC].DropDownTemplateCreateInitializer
-    ProjectVariantMainline.DropDownTemplateOnInitialized = ProjectVariant[WOW_PROJECT_CLASSIC].DropDownTemplateOnInitialized
-end
 
 do
 
@@ -63,7 +61,15 @@ do
 
     for i = 1, 100 do
         local project = ProjectVariant[i]
-        if project then
+        if type(project) == "number" then
+            local otherProject = ProjectVariant[project]
+            ProjectVariant[i] = type(otherProject) == "table" and otherProject or DefaultProjectVariant
+        end
+    end
+
+    for i = 1, 100 do
+        local project = ProjectVariant[i]
+        if type(project) == "table" and project ~= DefaultProjectVariant then
             setmetatable(project, DefaultProjectVariantMetatable)
         end
     end
