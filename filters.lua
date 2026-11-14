@@ -10,6 +10,10 @@ local IsQuestItem = ns.Utils.IsQuestItem
 ---|"ge"
 ---|"lt"
 ---|"le"
+---|"contains"
+---|"notcontains"
+---|"startswith"
+---|"endswith"
 
 ---@alias MiniLootFilterConverters
 ---|"quality"
@@ -58,6 +62,32 @@ local function ConvertValue(value, convert)
     return value
 end
 
+---@type table<MiniLootFilterComparators, boolean?>
+local TextComparators = {
+    contains = true,
+    notcontains = true,
+    startswith = true,
+    endswith = true,
+}
+
+-- The text is expected to be lowercase as the comparison is not case sensitive.
+---@param text string
+---@param comparator MiniLootFilterComparators
+---@param search string
+---@return boolean
+local function CompareText(text, comparator, search)
+    if comparator == "contains" then
+        return text:find(search, 1, true) ~= nil
+    elseif comparator == "notcontains" then
+        return text:find(search, 1, true) == nil
+    elseif comparator == "startswith" then
+        return text:sub(1, #search) == search
+    elseif comparator == "endswith" then
+        return search == "" or text:sub(-#search) == search
+    end
+    return false
+end
+
 ---@param value1 any
 ---@param comparator MiniLootFilterComparators
 ---@param value2 any
@@ -74,7 +104,13 @@ local function CompareValues(value1, comparator, value2)
     end
     local type1 = type(value1)
     local type2 = type(value2)
-    local comparable = (type1 == "number" or type1 == "string") and (type2 == "number" or type2 == "string")
+    if TextComparators[comparator] then
+        if type1 ~= "string" or type2 ~= "string" then
+            return comparator == "notcontains"
+        end
+        return CompareText(value1:lower(), comparator, value2:lower())
+    end
+    local comparable = type1 == type2 and (type1 == "number" or type1 == "string")
     if comparable then
         if comparator == "gt" then
             return value1 > value2
@@ -118,16 +154,19 @@ end
 ---@param message MiniLootMessage
 ---@return boolean isRelevant
 local function IsRuleGroupRelevant(ruleGroup, result, message)
+    if not ruleGroup.children[1] then
+        return false
+    end
     for _, child in ipairs(ruleGroup.children) do
         if child.logic then
             ---@type MiniLootFilterRuleGroup
-            local childRuleGroup = child ---@diagnostic disable-line: assign-type-mismatch
+            local childRuleGroup = child
             if not IsRuleGroupRelevant(childRuleGroup, result, message) then
                 return false
             end
         else
             ---@type MiniLootFilterRule
-            local childRule = child ---@diagnostic disable-line: assign-type-mismatch
+            local childRule = child
             if not IsRuleRelevant(childRule, result, message) then
                 return false
             end
@@ -178,11 +217,11 @@ local function EvaluateRuleGroup(ruleGroup, result, message)
         local satisfiesChild = satisfiesRuleGroup
         if child.logic then
             ---@type MiniLootFilterRuleGroup
-            local childRuleGroup = child ---@diagnostic disable-line: assign-type-mismatch
+            local childRuleGroup = child
             satisfiesChild = EvaluateRuleGroup(childRuleGroup, result, message)
         else
             ---@type MiniLootFilterRule
-            local childRule = child ---@diagnostic disable-line: assign-type-mismatch
+            local childRule = child
             if IsRuleRelevant(childRule, result, message) then
                 satisfiesChild = EvaluateRule(childRule, result)
             end
@@ -231,13 +270,13 @@ local function EvaluateFilters(entries, result, message)
         local satisfies ---@type boolean?
         if entry.logic then
             ---@type MiniLootFilterRuleGroup
-            local temp = entry ---@diagnostic disable-line: assign-type-mismatch
+            local temp = entry
             if IsRuleGroupRelevant(temp, result, message) then
                 satisfies = EvaluateRuleGroup(temp, result, message)
             end
         else
             ---@type MiniLootFilterRule
-            local rule = entry ---@diagnostic disable-line: assign-type-mismatch
+            local rule = entry
             if IsRuleRelevant(rule, result, message) then
                 satisfies = EvaluateRule(rule, result)
             end

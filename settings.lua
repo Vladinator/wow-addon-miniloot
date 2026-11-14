@@ -4,19 +4,14 @@ local MiniLootMessageGroup = ns.Messages.MiniLootMessageGroup
 local MessagesCollection = ns.Messages.MessagesCollection
 local TableCopy = ns.Utils.TableCopy
 local GetTimerunningSeasonID = ns.Utils.GetTimerunningSeasonID
+local ChattynatorUtil = ns.Utils.ChattynatorUtil
+local IsChatFrame = ns.Utils.IsChatFrame
 
----@enum MiniLootChatFrame
-local MiniLootChatFrame = {
-    ChatFrame1 = "ChatFrame1",
-    ChatFrame2 = "ChatFrame2",
-    ChatFrame3 = "ChatFrame3",
-    ChatFrame4 = "ChatFrame4",
-    ChatFrame5 = "ChatFrame5",
-    ChatFrame6 = "ChatFrame6",
-    ChatFrame7 = "ChatFrame7",
-    ChatFrame8 = "ChatFrame8",
-    ChatFrame9 = "ChatFrame9",
-}
+-- The name of a default chat frame like `ChatFrame1` or a chat addon such as `Chattynator:1:1`
+---@alias MiniLootChatFrame string
+
+---@type MiniLootChatFrame
+local DefaultChatFrame = "ChatFrame1"
 
 ---@class MiniLootNSSettingsOptions
 ---@field ChatFrame MiniLootChatFrame
@@ -31,9 +26,9 @@ local DefaultOptions = {
     Enabled = true, --- actively monitor loot messages and apply transformations
     EnableTooltips = true, --- show tooltips above chat frame when hovering links
     EnableRemixMode = true, --- enable separate profile with settings when on a remix character
-    ChatFrame = MiniLootChatFrame.ChatFrame1, --- the default output chat frame
+    ChatFrame = DefaultChatFrame, --- the default output chat frame
     Debounce = 2, --- gather loot messages and when it settles this many seconds later we print the summary
-    DebounceInCombat = true, --- if debounce should wait until combat ends before counting down
+    DebounceInCombat = true, --- if debounce should keep counting down during combat, otherwise it waits until combat ends
     ShortenPlayerNames = true, --- enable to remove the realm name
     ShortenFactionNames = true, --- enable to reduce the length of faction names
     ShortenFactionNamesLength = 10, --- specify the length before reduction activates
@@ -50,7 +45,7 @@ local DefaultOptions = {
     ItemTierAsText = true, --- enable to convert the texture indicator into text
     EnabledGroups = {}, --- these groups are enabled for processing
     IgnoredGroups = {}, --- these groups are ignored and will be filtered from the chat
-    DebounceGroups = {}, --- these groups use a custom `Debounce` value
+    DebounceGroups = {}, --- these groups use a custom `Debounce` value (`0` prints right away)
     EnabledTooltips = {}, --- only used if `EnableTooltips` is enabled, only tooltips of this type will be shown when hovering links
     Filters = {}, --- list of filters (rules or rule groups) to better specify what we wish to see printed to the chat frame
 }
@@ -212,16 +207,36 @@ local function ResetSavedVariables()
     table.wipe(_G.MiniLootRemixDB2)
 end
 
+---Resolves the `ChatFrame` option into the object we add messages to. The saved value is left untouched if it does not match
+---the active chat addon, so switching between the default chat and Chattynator falls back to the first frame without losing the choice.
+---@return MiniLootChatTarget chatFrame, MiniLootChatFrame value
 local function GetChatFrame()
-    local chatName = flexDbProxy.ChatFrame
-    local chatFrame = _G[chatName] ---@type MiniLootChatFramePolyfill
-    return chatFrame
+    local value = flexDbProxy.ChatFrame
+    if ChattynatorUtil:IsLoaded() then
+        local windowIndex, tabIndex = ChattynatorUtil:ResolveTarget(value)
+        return ChattynatorUtil:GetChatTarget(windowIndex, tabIndex), ChattynatorUtil:CreateTargetValue(windowIndex, tabIndex)
+    end
+    local chatFrame = type(value) == "string" and _G[value] or nil ---@type MiniLootChatFramePolyfill?
+    if not IsChatFrame(chatFrame) then
+        value = DefaultChatFrame
+        chatFrame = _G[value] or DEFAULT_CHAT_FRAME
+    end
+    ---@cast chatFrame MiniLootChatFramePolyfill
+    return chatFrame, value
+end
+
+---@return MiniLootChatFrame value
+local function GetChatFrameValue()
+    local _, value = GetChatFrame()
+    return value
 end
 
 ---@class MiniLootNSSettings
 ns.Settings = {
     db = flexDbProxy,
     DefaultOptions = DefaultOptions,
+    DefaultChatFrame = DefaultChatFrame,
     ResetSavedVariables = ResetSavedVariables,
     GetChatFrame = GetChatFrame,
+    GetChatFrameValue = GetChatFrameValue,
 }

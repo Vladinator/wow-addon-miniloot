@@ -81,6 +81,21 @@ local function UnregisterChatEvents(onChatEvent)
     end
 end
 
+---Registers the chat events directly on the frame. Used when a chat addon replaces the default chat frames and we can't rely on the message event filters.
+---@param frame MiniLootNSEventFrame
+local function RegisterFrameChatEvents(frame)
+    for _, event in ipairs(MessageEvents) do
+        pcall(frame.RegisterEvent, frame, event)
+    end
+end
+
+---@param frame MiniLootNSEventFrame
+local function UnregisterFrameChatEvents(frame)
+    for _, event in ipairs(MessageEvents) do
+        pcall(frame.UnregisterEvent, frame, event)
+    end
+end
+
 ---@type MiniLootNSEventCallbackResult
 function ProcessChatEvent(event, ...)
     local result, message = ProcessChatMessage(event, ...)
@@ -109,5 +124,7 @@ ns.Reporting = {
     UnregisterEvents = UnregisterEvents,
     RegisterChatEvents = RegisterChatEvents,
     UnregisterChatEvents = UnregisterChatEvents,
+    RegisterFrameChatEvents = RegisterFrameChatEvents,
+    UnregisterFrameChatEvents = UnregisterFrameChatEvents,
     ProcessChatEvent = ProcessChatEvent,
 }

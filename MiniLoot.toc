@@ -5,6 +5,7 @@
 ## Author: Vladinator
 ## Version: 12.1.5.261105
 ## SavedVariables: MiniLootDB, MiniLootDB2, MiniLootRemixDB2
+## OptionalDeps: Chattynator
 ## X-Curse-Project-ID: 43440
 ## X-WoWI-ID: 19598
 ## X-Wago-ID: 0mKOQQNx

@@ -101,62 +101,99 @@ end
 ---@class MiniLootNSOutputHandler
 local MiniLootNSOutputHandler = {}
 
----@param chatFrame? MiniLootChatFramePolyfill
+local SharedTimerKey = "*"
+local CombatPollInterval = 0.5
+
+---@param group MiniLootMessageGroup
+---@return string timerKey, number debounce
+local function GetGroupDebounce(group)
+    local debounce = db.Debounce
+    local groupDebounce = db.DebounceGroups[group]
+    if groupDebounce ~= nil and groupDebounce ~= debounce then
+        return group, groupDebounce
+    end
+    return SharedTimerKey, debounce
+end
+
+---@param group MiniLootMessageGroup
+local function IsSharedDebounceGroup(group)
+    return GetGroupDebounce(group) == SharedTimerKey
+end
+
+---@param chatFrame? MiniLootChatTarget
 function MiniLootNSOutputHandler:OnLoad(chatFrame)
     self.chatFrame = chatFrame
     self.buffer = CreateBuffer()
-    self.lastAdd = 0
-    self.lastOutput = 0
-    self.prevInCombat = nil ---@type boolean?
-    self.inCombat = nil ---@type boolean?
-    self.timer = nil ---@type FunctionContainer?
-    self.timerOnTick = function()
-        if not db.DebounceInCombat then
-            self.prevInCombat = self.inCombat
-            self.inCombat = InCombatLockdown()
-            if self.inCombat then
-                return
+    self.timers = {} ---@type table<string, FunctionContainer?>
+    self.heldByCombat = {} ---@type table<string, boolean?>
+end
+
+---@param timerKey string
+---@param delay number
+function MiniLootNSOutputHandler:Schedule(timerKey, delay)
+    local timer = self.timers[timerKey]
+    if timer then
+        timer:Cancel()
+    end
+    self.timers[timerKey] = C_Timer.NewTimer(delay, function() self:OnTimer(timerKey) end)
+end
+
+---@param timerKey string
+function MiniLootNSOutputHandler:OnTimer(timerKey)
+    self.timers[timerKey] = nil
+    if not db.DebounceInCombat then
+        if InCombatLockdown() then
+            self.heldByCombat[timerKey] = true
+            self:Schedule(timerKey, CombatPollInterval)
+            return
+        end
+        if self.heldByCombat[timerKey] then
+            -- combat has ended so the countdown starts over
+            self.heldByCombat[timerKey] = nil
+            local debounce = db.Debounce
+            if timerKey ~= SharedTimerKey then
+                debounce = db.DebounceGroups[timerKey] or debounce
             end
-            if self.prevInCombat then
-                self:OnAdd()
+            if debounce > 0 then
+                self:Schedule(timerKey, debounce)
                 return
             end
         end
-        if self.timer then
-            self.timer:Cancel()
-            self.timer = nil
-        end
-        self:Flush()
-        self.lastOutput = GetTime()
+    end
+    self.heldByCombat[timerKey] = nil
+    self:FlushTimer(timerKey)
+end
+
+---@param timerKey string
+function MiniLootNSOutputHandler:FlushTimer(timerKey)
+    if timerKey == SharedTimerKey then
+        self:Flush(nil, IsSharedDebounceGroup)
+    else
+        self:Flush(timerKey)
     end
 end
 
-function MiniLootNSOutputHandler:OnAdd()
-    self.lastAdd = GetTime()
-    if self.timer then
-        self.timer:Cancel()
-    end
-    self.timer = C_Timer.NewTimer(db.Debounce, self.timerOnTick)
-end
-
----@param flushGroup? MiniLootMessageGroup
-function MiniLootNSOutputHandler:Flush(flushGroup)
+---@param flushGroup? MiniLootMessageGroup Only output this group.
+---@param predicate? fun(group: MiniLootMessageGroup): boolean? Only output the groups that pass.
+function MiniLootNSOutputHandler:Flush(flushGroup, predicate)
     local buffer = self.buffer
     if buffer:IsEmpty() then
         return
     end
     local chatFrame = self.chatFrame or GetChatFrame()
     local lines = {} ---@type string[]
+    local flushedGroups = {} ---@type MiniLootMessageGroup[]
     local groups = buffer:GroupResults()
     for _, group in ipairs(groups) do
-        if not flushGroup or group.name == flushGroup then
+        if (not flushGroup or group.name == flushGroup) and (not predicate or predicate(group.name)) then
+            flushedGroups[#flushedGroups + 1] = group.name
             local itemLines = Format(group.name, group.results)
             if itemLines then
                 local lineType = type(itemLines)
                 if lineType == "table" then
-                    TableCombine(lines, itemLines)
+                    TableCombine(lines, itemLines --[=[@as string[]]=])
                 elseif lineType == "string" then
-                    lines[#lines + 1] = itemLines
+                    lines[#lines + 1] = itemLines --[=[@as string]=]
                 else
                     lines[#lines + 1] = tostring(itemLines)
                 end
@@ -166,8 +203,10 @@ function MiniLootNSOutputHandler:Flush(flushGroup)
     for _, line in ipairs(lines) do
         chatFrame:AddMessage(line, 1, 1, 0)
     end
-    if flushGroup then
-        buffer:ClearGroup(flushGroup)
+    if flushGroup or predicate then
+        for _, group in ipairs(flushedGroups) do
+            buffer:ClearGroup(group)
+        end
     else
         buffer:Clear()
     end
@@ -176,27 +215,22 @@ end
 ---@param item MiniLootBufferItem
 function MiniLootNSOutputHandler:Add(item)
     self.buffer:Add(item)
-    if db.Debounce == 0 then
-        self:Flush()
+    local timerKey, debounce = GetGroupDebounce(item.message.group)
+    if debounce <= 0 then
+        self:FlushTimer(timerKey)
         return
     end
-    local group = item.message.group
-    local debounce = db.DebounceGroups[group]
-    if debounce == 0 then
-        self:Flush(group)
-        return
-    end
-    self:OnAdd()
+    self:Schedule(timerKey, debounce)
 end
 
----@param chatFrame? MiniLootChatFramePolyfill
+---@param chatFrame? MiniLootChatTarget
 function MiniLootNSOutputHandler:New(chatFrame)
     local handler = TableCopy(MiniLootNSOutputHandler) ---@type MiniLootNSOutputHandler
     handler:OnLoad(chatFrame)
     return handler
 end
 
----@param chatFrame? MiniLootChatFramePolyfill
+---@param chatFrame? MiniLootChatTarget
 local function CreateOutputHandler(chatFrame)
     return MiniLootNSOutputHandler:New(chatFrame)
 end

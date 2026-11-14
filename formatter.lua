@@ -101,7 +101,7 @@ local function TableGroupFormatOuter(results, key, outerFunc)
     local groups, keys = TableGroup(results, key)
     local lines ---@type string[]?
     for i = 1, #groups do
-        local group = groups[i] ---@type MiniLootMessageFormatSimpleParserResultMoney[]
+        local group = groups[i] ---@type MiniLootMessageFormatSimpleParserResults[]
         local groupKey = keys[i] ---@type MiniLootMessageFormatSimpleParserResultKeys
         local groupData = outerFunc(groupKey, group)
         if groupData then
@@ -242,22 +242,17 @@ local function TableGroupFormat_NameLinkValue(results)
     return TableGroupFormatInnerOuter(
         results,
         "Name", "Link",
-        ---@param groupResults MiniLootMessageFormatPseudoResult_NameLinkValue[]
+        ---@param groupResults MiniLootMessageFormatSimpleParserResults[]
         function(groupKey, groupResults)
             return SumResultsTotalsByKeyFormatted(groupKey, groupResults, "Value")
         end,
-        ---@param subResults MiniLootMessageFormatPseudoResult_NameLinkValue[]
-        ---@param groupResults MiniLootMessageFormatPseudoResult_NameLinkValue[]
+        ---@param subResults MiniLootMessageFormatSimpleParserResults[]
+        ---@param groupResults MiniLootMessageFormatSimpleParserResults[]
         function(subKey, subResults, lines, groupResults, groupKeys)
             return GetLooterStringFormatted(subKey, lines)
         end
     )
 end
-
----@class MiniLootMessageFormatPseudoResult_NameValue
----@field public Type string
----@field public Name string
----@field public Value? number
 
 ---@generic T
 ---@param results T[]
@@ -266,7 +261,7 @@ local function TableGroupFormat_NameValue(results, skipIfValueZero)
     return TableGroupFormatOuter(
         results,
         "Name",
-        ---@param groupResults MiniLootMessageFormatPseudoResult_NameValue[]
+        ---@param groupResults MiniLootMessageFormatSimpleParserResults[]
         function(groupKey, groupResults)
             return SumResultsTotalsByKeyFormatted(groupKey, groupResults, "Value", skipIfValueZero)
         end
@@ -298,7 +293,7 @@ local LootGrouphandlers = {
     ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollInfo[]
     LootRollInfo = function(key, results)
         local prefix = GetLootHistoryLink(results[1].Value)
-        _G.C = results print("C", key, results, prefix, "") -- DEBUG C
+        -- _G.C = results print("C", key, results, prefix, "") -- DEBUG C
         return TableMap(results, function(result)
             local link = GetLootIconFormatted(result.Link)
             return format("%s Everyone passed on %s", prefix, link)
@@ -307,7 +302,7 @@ local LootGrouphandlers = {
     ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouDecide[]
     LootRollYouDecide = function(key, results)
         local prefix = GetLootHistoryLink(results[1].Value)
-        _G.D = results print("D", key, results, prefix, "") -- DEBUG D
+        -- _G.D = results print("D", key, results, prefix, "") -- DEBUG D
         return TableMap(results, function(result)
             local action = result.Type == "YouPass" and "Pass" or result.Type == "YouDisenchant" and "Disenchant" or result.Type == "YouGreed" and "Greed" or result.Type == "YouNeed" and "Need" or "?"
             local link = GetLootIconFormatted(result.Link)
@@ -316,7 +311,7 @@ local LootGrouphandlers = {
     end,
     ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollDecide[]
     LootRollDecide = function(key, results)
-        _G.E = results print("E", key, results, "") -- DEBUG E
+        -- _G.E = results print("E", key, results, "") -- DEBUG E
         return TableMap(results, function(result)
             local name = ConvertNameToUnitNameFormatted(result.Name)
             local link = GetLootIconFormatted(result.Link)
@@ -325,7 +320,7 @@ local LootGrouphandlers = {
     end,
     ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollRolled[]
     LootRollRolled = function(key, results)
-        _G.F = results print("F", key, results, "") -- DEBUG F
+        -- _G.F = results print("F", key, results, "") -- DEBUG F
         return TableMap(results, function(result)
             local name = ConvertNameToUnitNameFormatted(result.Name)
             local action = result.Type == "DisenchantRoll" and "Disenchant" or result.Type == "GreedRoll" and "Greed" or result.Type == "NeedRoll" and "Need" or "?"
@@ -336,7 +331,7 @@ local LootGrouphandlers = {
     ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouResult[]
     LootRollYouResult = function(key, results)
         local prefix = GetLootHistoryLink(results[1].Value)
-        _G.G = results print("G", key, results, prefix, "") -- DEBUG G
+        -- _G.G = results print("G", key, results, prefix, "") -- DEBUG G
         return TableMap(results, function(result)
             local link = GetLootIconFormatted(result.Link)
             return format("%s %s rolled %s (%d) on %s", prefix, YOU, key, result.ValueExtra, link)
@@ -346,7 +341,7 @@ local LootGrouphandlers = {
     LootRollResult = function(key, results)
         local isWinner = key == "WinnerResult" or key == "YouWinnerResult"
         local prefix = not isWinner and GetLootHistoryLink(results[1].Value)
-        _G.H = results print("H", key, results, isWinner, prefix, "") -- DEBUG H
+        -- _G.H = results print("H", key, results, isWinner, prefix, "") -- DEBUG H
         return TableMap(results, function(result)
             local name = ConvertNameToUnitNameFormatted(result.Name)
             local link = GetLootIconFormatted(result.Link)
@@ -450,7 +445,7 @@ end
 
 ---@param results MiniLootMessageFormatSimpleParserResultLootRoll[]
 Formatters[MiniLootMessageGroup.LootRoll] = function(results)
-    _G.A = results print("A", A, "") -- DEBUG A
+    -- _G.A = results print("A", A, "") -- DEBUG A
     return TableGroupFormatOuter(
         results,
         "Type",
@@ -458,7 +453,7 @@ Formatters[MiniLootMessageGroup.LootRoll] = function(results)
         ---@param groupResults MiniLootMessageFormatSimpleParserResultLootRoll[]
         function(groupKey, groupResults)
             local handler = LootGroupMap[groupKey]
-            _G.B = results print("B", groupKey, handler, "") -- DEBUG B
+            -- _G.B = results print("B", groupKey, handler, "") -- DEBUG B
             if handler then
                 return handler(groupKey, groupResults)
             end

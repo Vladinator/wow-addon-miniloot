@@ -3,6 +3,15 @@ local ns = select(2, ...) ---@class MiniLootNS
 ---@type MiniLootNSSettingsOptions
 local db = setmetatable({}, { __index = function(self, key) return ns.Settings.db[key] end })
 
+local _issecretvalue = _G.issecretvalue
+
+---@secret-guard value is-secret
+---@param value any
+---@return boolean
+local function issecretvalue(value)
+    return _issecretvalue and _issecretvalue(value) and true or false
+end
+
 ---@class MiniLootProjectVariant
 ---@field public EditBoxNumberTemplate? string
 ---@field public DropDownTemplate? string
@@ -80,10 +89,9 @@ local ChattynatorUtil do
     ---@class ChattynatorAPI
     ---@field public GetHyperlinkHandler fun(): ChattynatorHyperlinkHandler
     ---@field public GetWindowsAndTabs fun(): table<number, table<number, string>>
-    ---@field public AddFilter fun(filter: ChattynatorChatFilter, winIndex: number, tabIndex: number)
-    ---@field public RemoveFilter fun(filter: ChattynatorChatFilter, winIndex: number, tabIndex: number)
-    ---@field public AddModifier fun(modifier: ChattynatorChatModifier)
-    ---@field public RemoveModifier fun(modifier: ChattynatorChatModifier)
+    ---@field public AddFilter fun(filter: ChattynatorChatFilter, windowIndex: number, tabIndex: number)
+    ---@field public RemoveFilter fun(filter: ChattynatorChatFilter, windowIndex: number, tabIndex: number)
+    ---@field public AddMessageToWindowAndTab fun(windowIndex: number, tabIndex: number, message: string, r?: number, g?: number, b?: number)
 
     ---@class ChattynatorChatData
     ---@field public timestamp number
@@ -95,9 +103,7 @@ local ChattynatorUtil do
 
     ---@alias ChattynatorChatFilter fun(data: ChattynatorChatData): showMessage: boolean?
 
-    ---@alias ChattynatorChatModifier fun(data: ChattynatorChatData)
-
-    ---@class ChattynatorHyperlinkHandler
+    ---@class ChattynatorHyperlinkHandler : MiniLootChatFramePolyfill
     ---@field public GetChildren fun(): ...: ChattynatorChatFrame
 
     ---@class ChattynatorChatFrame : Frame
@@ -106,13 +112,40 @@ local ChattynatorUtil do
 
     ---@class ChattynatorChatFrameScrollingMessages : Frame
 
+    ---@class ChattynatorChatTarget
+    ---@field public Value MiniLootChatFrame
+    ---@field public WindowIndex number
+    ---@field public TabIndex number
+    ---@field public TabName string
+
+    local RequiredAPI = {
+        "GetHyperlinkHandler",
+        "GetWindowsAndTabs",
+        "AddFilter",
+        "RemoveFilter",
+        "AddMessageToWindowAndTab",
+    }
+
+    local TargetFormat = "Chattynator:%d:%d"
+    local TargetPattern = "^Chattynator:(%d+):(%d+)$"
+
     function ChattynatorUtil:GetChattynatorAPI()
         ---@type Chattynator?
-        local chattynator = Chattynator ---@diagnostic disable-line: undefined-global
-        if type(chattynator) ~= "table" or type(chattynator.API) ~= "table" or type(chattynator.API.GetHyperlinkHandler) ~= "function" then
+        local chattynator = Chattynator
+        if type(chattynator) ~= "table" or type(chattynator.API) ~= "table" then
             return
         end
-        return chattynator.API
+        local api = chattynator.API
+        for _, name in ipairs(RequiredAPI) do
+            if type(api[name]) ~= "function" then
+                return
+            end
+        end
+        return api
+    end
+
+    function ChattynatorUtil:IsLoaded()
+        return self:GetChattynatorAPI() ~= nil
     end
 
     function ChattynatorUtil:GetChattynatorHandler()
@@ -124,7 +157,8 @@ local ChattynatorUtil do
     end
 
     ---@param chattynatorHandler? ChattynatorHyperlinkHandler
-    function ChattynatorUtil:GetChattynatorChatFrame(chattynatorHandler)
+    ---@return ChattynatorChatFrame? chatFrame
+    function ChattynatorUtil:GetHoveredChatFrame(chattynatorHandler)
         if not chattynatorHandler then
             chattynatorHandler = self:GetChattynatorHandler()
         end
@@ -132,60 +166,133 @@ local ChattynatorUtil do
             return
         end
         for _, frame in pairs({chattynatorHandler:GetChildren()}) do
-            if type(frame.ScrollingMessages) == "table" then
-                return frame, chattynatorHandler
+            if type(frame.ScrollingMessages) == "table" and frame:IsVisible() and frame:IsMouseOver() then
+                return frame
             end
         end
     end
 
+    ---@param windowIndex number
     ---@param tabIndex number
-    function ChattynatorUtil:IsChatFrameActive(tabIndex)
-        local chatFrame = self:GetChattynatorChatFrame()
-        if not chatFrame then
+    ---@return MiniLootChatFrame value `Chattynator:1:1`
+    function ChattynatorUtil:CreateTargetValue(windowIndex, tabIndex)
+        return format(TargetFormat, windowIndex, tabIndex)
+    end
+
+    ---@param value any
+    ---@return number? windowIndex, number? tabIndex
+    function ChattynatorUtil:ParseTargetValue(value)
+        if type(value) ~= "string" then
             return
         end
-        return chatFrame.tabIndex == tabIndex
+        local windowIndex, tabIndex = value:match(TargetPattern)
+        if not windowIndex then
+            return
+        end
+        return tonumber(windowIndex), tonumber(tabIndex)
+    end
+
+    ---@return table<number, table<number, string>>? windows
+    function ChattynatorUtil:GetWindowsAndTabs()
+        local api = self:GetChattynatorAPI()
+        if not api then
+            return
+        end
+        local success, windows = pcall(api.GetWindowsAndTabs)
+        if not success or type(windows) ~= "table" then
+            return
+        end
+        return windows
+    end
+
+    ---@return ChattynatorChatTarget[] targets
+    function ChattynatorUtil:GetTargets()
+        local targets = {} ---@type ChattynatorChatTarget[]
+        local windows = self:GetWindowsAndTabs()
+        if not windows then
+            return targets
+        end
+        local index = 0
+        for windowIndex, tabs in ipairs(windows) do
+            for tabIndex, tabName in ipairs(tabs) do
+                local globalName = _G[tabName]
+                if type(globalName) == "string" then
+                    tabName = globalName
+                end
+                index = index + 1
+                targets[index] = {
+                    Value = self:CreateTargetValue(windowIndex, tabIndex),
+                    WindowIndex = windowIndex,
+                    TabIndex = tabIndex,
+                    TabName = tostring(tabName),
+                }
+            end
+        end
+        return targets
+    end
+
+    ---@param value any
+    ---@return number windowIndex, number tabIndex
+    function ChattynatorUtil:ResolveTarget(value)
+        local windowIndex, tabIndex = self:ParseTargetValue(value)
+        if not windowIndex or not tabIndex then
+            return 1, 1
+        end
+        local windows = self:GetWindowsAndTabs()
+        if windows and (not windows[windowIndex] or not windows[windowIndex][tabIndex]) then
+            return 1, 1
+        end
+        return windowIndex, tabIndex
+    end
+
+    ---@type table<MiniLootChatFrame, MiniLootChatTarget>
+    local chatTargets = {}
+
+    ---@param windowIndex number
+    ---@param tabIndex number
+    ---@return MiniLootChatTarget chatTarget
+    function ChattynatorUtil:GetChatTarget(windowIndex, tabIndex)
+        local value = self:CreateTargetValue(windowIndex, tabIndex)
+        local chatTarget = chatTargets[value]
+        if chatTarget then
+            return chatTarget
+        end
+        ---@type MiniLootChatTarget
+        chatTarget = {
+            AddMessage = function(_, text, r, g, b)
+                local api = ChattynatorUtil:GetChattynatorAPI()
+                if not api then
+                    return
+                end
+                api.AddMessageToWindowAndTab(windowIndex, tabIndex, text, r, g, b)
+                return
+            end,
+        }
+        chatTargets[value] = chatTarget
+        return chatTarget
     end
 
     ---@param filter ChattynatorChatFilter
-    function ChattynatorUtil:AddFilter(filter)
+    ---@param windowIndex number
+    ---@param tabIndex number
+    function ChattynatorUtil:AddFilter(filter, windowIndex, tabIndex)
         local api = self:GetChattynatorAPI()
         if not api then
             return
         end
-        api.AddFilter(filter, 1, 1)
+        api.AddFilter(filter, windowIndex, tabIndex)
     end
 
     ---@param filter ChattynatorChatFilter
-    function ChattynatorUtil:RemoveFilter(filter)
+    ---@param windowIndex number
+    ---@param tabIndex number
+    function ChattynatorUtil:RemoveFilter(filter, windowIndex, tabIndex)
         local api = self:GetChattynatorAPI()
         if not api then
             return
         end
-        api.RemoveFilter(filter, 1, 1)
+        api.RemoveFilter(filter, windowIndex, tabIndex)
     end
-
-    ---@param modifier ChattynatorChatModifier
-    function ChattynatorUtil:AddModifier(modifier)
-        local api = self:GetChattynatorAPI()
-        if not api then
-            return
-        end
-        api.AddModifier(modifier)
-    end
-
-    ---@param modifier ChattynatorChatModifier
-    function ChattynatorUtil:RemoveModifier(modifier)
-        local api = self:GetChattynatorAPI()
-        if not api then
-            return
-        end
-        api.RemoveModifier(modifier)
-    end
-
-    ChattynatorUtil.Loaded = ChattynatorUtil:GetChattynatorAPI() ~= nil
-
-    ChattynatorUtil.Loaded = false -- TODO: WIP (need more testing with the latest changes)
 
 end
 
@@ -444,11 +551,10 @@ local ConvertToNumberPattern2 = format("[\\%s]", DECIMAL_SEPERATOR)
 ---@param value? string|number
 ---@return number?
 local function ConvertToNumber(value)
-    local type = type(value)
-    if type == "number" then
+    if type(value) == "number" then
         return value
     end
-    if type ~= "string" then
+    if type(value) ~= "string" then
         return
     end
     value = value
@@ -467,11 +573,10 @@ local ConvertToMoneyPatterns = {
 ---@param value? string|number
 ---@return number?
 local function ConvertToMoney(value)
-    local type = type(value)
-    if type == "number" then
+    if type(value) == "number" then
         return value
     end
-    if type ~= "string" then
+    if type(value) ~= "string" then
         return
     end
     local goldText = value:match(ConvertToMoneyPatterns.Gold)
@@ -604,7 +709,7 @@ local function GetUnitName(unit)
         name, realm = strsplit("-", unit, 2)
     end
     if not name or name == "" then
-        return ---@diagnostic disable-line: missing-return-value
+        return ---@diagnostic expect-line: missing-return-value
     end
     if not realm or realm == "" then
         realm = GetNormalizedRealmName()
@@ -699,9 +804,9 @@ local AtlasMarkupPattern = "(|A:(.-[Tt][Ii][Ee][Rr](%d+)):(.-)|a)"
 local function GetUnitMawPowerInfo(unit, query, fallback)
     if not unit or not query then
         if fallback then
-            return 538040 ---@diagnostic disable-line: missing-return-value
+            return 538040 ---@diagnostic expect-line: missing-return-value
         end
-        return ---@diagnostic disable-line: missing-return-value
+        return ---@diagnostic expect-line: missing-return-value
     end
     for i = 1, 100 do
         local success, aura = pcall(C_UnitAuras.GetAuraDataByIndex, unit, i, "MAW")
@@ -725,7 +830,7 @@ local function GetUnitMawPowerInfo(unit, query, fallback)
             end
         end
     end
-    return ---@diagnostic disable-line: missing-return-value
+    return ---@diagnostic expect-line: missing-return-value
 end
 
 ---@param link? string
@@ -763,7 +868,7 @@ end
 ---@return string? tierAtlas, string tierAtlasName, string tier, string tierAtlasSuffix
 local function GetAtlasTierInfo(text)
     if not text then
-        return ---@diagnostic disable-line: missing-return-value
+        return ---@diagnostic expect-line: missing-return-value
     end
     local tierAtlas, tierAtlasName, tier, tierAtlasSuffix = text:match(AtlasMarkupPattern)
     -- TODO: db.IconSize
@@ -780,7 +885,7 @@ end
 ---@return string?
 local function CreateTextureMarkupFromAtlas(atlas, fileWidth, fileHeight, width, height, offsetX, offsetY)
     local info = C_Texture.GetAtlasInfo(atlas)
-    if not info then
+    if not info or not info.file then
         return
     end
     return CreateTextureMarkup(info.file, fileWidth, fileHeight, width or 0, height or 0, info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord, offsetX or 0, offsetY or 0)
@@ -800,7 +905,7 @@ local function GetItemLevelAndEquipSlot(itemLink)
     local actualItemLevel, previewLevel, sparseItemLevel = C_Item.GetDetailedItemLevelInfo(itemLink)
     equipSlot = equipSlot or tempEquipSlot
     if equipSlot and NonEquippableSlots[equipSlot] then
-        equipSlot = nil ---@diagnostic disable-line: cast-local-type
+        equipSlot = nil ---@diagnostic expect-line: cast-local-type
     end
     return actualItemLevel or baseItemLevel, equipSlot
 end
@@ -856,7 +961,7 @@ local function GetLootIcon(link, hyperlink, simple, customColor, mawPowerUnit)
     local color, data, text = link:match(LinkMarkupPattern1) ---@type string?, string?, string?
     if not color then
         color, data, text = link:match(LinkMarkupPattern2) ---@type string?, string?, string?
-        ---@diagnostic disable-next-line: cast-local-type, param-type-mismatch
+        ---@diagnostic expect-next-line: cast-local-type, param-type-mismatch
         color = C_ColorOverrides.GetColorForQuality(color) ---@type ColorMixin
         color = color:GenerateHexColor():sub(3)
     end
@@ -902,7 +1007,7 @@ local function GetChatFrames()
     return chatFrames
 end
 
----@param chatFrame MiniLootChatFramePolyfill
+---@param chatFrame? MiniLootChatFramePolyfill
 local function IsChatFrame(chatFrame)
     return chatFrame and type(chatFrame) == "table" and
         chatFrame.IsShown and type(chatFrame.IsShown) == "function" and
@@ -965,7 +1070,7 @@ end
 local function GetHyperlinkLineInTooltip(link, leftText, rightText)
     local lines = GetHyperlinkTooltipLines(link)
     if not lines then
-        return ---@diagnostic disable-line: missing-return-value
+        return ---@diagnostic expect-line: missing-return-value
     end
     for i = 2, #lines do
         local line = lines[i]
@@ -976,7 +1081,7 @@ local function GetHyperlinkLineInTooltip(link, leftText, rightText)
             return line, i
         end
     end
-    return ---@diagnostic disable-line: missing-return-value
+    return ---@diagnostic expect-line: missing-return-value
 end
 
 ---@param link string
@@ -1081,6 +1186,7 @@ end
 
 ---@class MiniLootNSUtils
 ns.Utils = {
+    issecretvalue = issecretvalue,
     ProjectVariant = ProjectVariant,
     SimpleHexColors = SimpleHexColors,
     ChattynatorUtil = ChattynatorUtil,

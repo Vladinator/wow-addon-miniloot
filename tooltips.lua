@@ -1,8 +1,9 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
 local db = ns.Settings.db
+local ChattynatorUtil = ns.Utils.ChattynatorUtil
 
----@diagnostic disable-next-line: undefined-global
+---@diagnostic expect-next-line: undefined-global
 local GetSpellInfo = GetSpellInfo or function(spell)
     local info = C_Spell.GetSpellInfo(spell)
     if not info then
@@ -316,7 +317,7 @@ local TooltipHandlers = {
                 end
                 local dmgInfo = evtData.DamageInfo
                 if not dmgInfo then
-                    dmgInfo = {} ---@diagnostic disable-line: missing-fields
+                    dmgInfo = {} ---@diagnostic expect-line: missing-fields
                     evtData.DamageInfo = dmgInfo
                 end
                 if evtData.amount then
@@ -412,6 +413,11 @@ local function OnHyperlinkEnter(chatFrame, linkData, link)
         showingHandler = nil
     end
     link, linkData = ns.Links.Unwrap(link, linkData)
+    local chattynatorHandler = ChattynatorUtil:GetChattynatorHandler()
+    if chattynatorHandler and chatFrame == chattynatorHandler then
+        local hoveredChatFrame = ChattynatorUtil:GetHoveredChatFrame(chattynatorHandler)
+        chatFrame = hoveredChatFrame --[[@as MiniLootChatFramePolyfill]] or chatFrame
+    end
     for _, handler in ipairs(TooltipHandlers) do
         if db.EnabledTooltips[handler.Type] ~= false and (not handler.IsEnabled or handler:IsEnabled()) then
             local matched = false

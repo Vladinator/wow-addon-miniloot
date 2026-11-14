@@ -1,5 +1,6 @@
 local ns = select(2, ...) ---@class MiniLootNS
 
+local issecretvalue = ns.Utils.issecretvalue
 local SimpleHexColors = ns.Utils.SimpleHexColors
 local TableCopy = ns.Utils.TableCopy
 local TableContains = ns.Utils.TableContains
@@ -59,7 +60,6 @@ local MiniLootMessageFormatTokenType = {
     Target = "Target",
 }
 
----@type table<MiniLootMessageFormatSimpleParserResultExperienceKeys, MiniLootMessageFormatToken>
 local Tokens = {
     NameString = {
         field = MiniLootMessageFormatField.Name,
@@ -431,7 +431,7 @@ local function FinalizeMessages()
             local numMessageSubPatterns = messageSubPatterns and #messageSubPatterns
             local createdMessageSubPatterns ---@type boolean?
 
-            if not messageSubPatterns then
+            if not numMessageSubPatterns or not messageSubPatterns then
                 createdMessageSubPatterns = true
                 messageSubPatterns = {}
                 numMessageSubPatterns = #messageSubPatterns
@@ -1414,37 +1414,37 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultLootRollArgs : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Link? string
 
-        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollInfo
+        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollInfo : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type "AllPass"
         ---@field public Link string The item link.
         ---@field public Value number Loot history ID.
         ---@field public Name? string The name of the player. Relevant for `DisenchantCredit` and `IneligibleResult`.
 
-        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouDecide
+        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouDecide : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type "YouPass"|"YouDisenchant"|"YouGreed"|"YouNeed"
         ---@field public Link string The item link.
         ---@field public Value number Loot history ID.
         ---@field public ValueExtra? number Loot history ID.
 
-        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollDecide
+        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollDecide : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type "Pass"|"Disenchant"|"Greed"|"Need"
         ---@field public Link string The item link.
         ---@field public Name string The name of the player.
 
-        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollRolled
+        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollRolled : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type "DisenchantRoll"|"GreedRoll"|"NeedRoll"
         ---@field public Link string The item link.
         ---@field public Name string The name of the player.
         ---@field public Value number The number rolled.
 
-        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouResult
+        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouResult : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type "YouDisenchantResult"|"YouGreedResult"|"YouNeedResult"
         ---@field public Link string The item link.
         ---@field public Value number Loot history ID.
         ---@field public ValueExtra number The number rolled.
 
         -- Note that `YouWinnerResult` and `WinnerResult` only have `Link` and `Name` assigned.
-        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollResult
+        ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollResult : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type "DisenchantResult"|"GreedResult"|"NeedResult"|"LostResult"|"YouWinnerResult"|"WinnerResult"
         ---@field public Link string The item link.
         ---@field public Name string The name of the player.
@@ -2276,6 +2276,9 @@ end
 ---@param supressRaidIcons? boolean
 ---@return MiniLootMessageFormatSimpleParserResults?, MiniLootMessage
 local function ProcessChatMessage(event, text, playerName, languageName, channelName, playerName2, specialFlags, zoneChannelID, channelIndex, channelBaseName, languageID, lineID, guid, bnSenderID, isMobile, isSubtitle, hideSenderInLetterbox, supressRaidIcons)
+    if type(text) ~= "string" or issecretvalue(text) then
+        return ---@diagnostic expect-line: missing-return-value
+    end
     for _, message in ipairs(MessagesCollection) do
         if TableContains(message.events, event) then
             for _, messageFormat in ipairs(message.formats) do
@@ -2294,7 +2297,7 @@ local function ProcessChatMessage(event, text, playerName, languageName, channel
             end
         end
     end
-    return ---@diagnostic disable-line: missing-return-value
+    return ---@diagnostic expect-line: missing-return-value
 end
 
 ---@param message MiniLootMessage
@@ -2305,8 +2308,8 @@ local function GenerateChatMessage(message, includeResult)
     if not tests then
         return
     end
-    local testIndex = random(1, #message.tests)
-    local test = message.tests[testIndex]
+    local testIndex = random(1, #tests)
+    local test = tests[testIndex]
     if not includeResult then
         return test[1]
     end
@@ -2404,7 +2407,11 @@ end
 
 ---@param message MiniLootMessage
 local function RunAndEvaluateTests(message)
-    for _, test in ipairs(message.tests) do
+    local tests = message.tests
+    if not tests then
+        return
+    end
+    for _, test in ipairs(tests) do
         local testResult, closeResults = RunAndEvaluateTest(message, test)
         if not testResult then
             print(format("%s |cff%sfailed|r %s", message.group, SimpleHexColors.Red, test[1]))
