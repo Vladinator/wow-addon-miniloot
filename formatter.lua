@@ -278,6 +278,7 @@ end
 
 local LootHistoryText = format("[%s]", LOOT)
 
+local NoLootIconMarkup = "|TInterface\\Common\\Icon-NoLoot:13:13:0:0|t"
 local RightArrowMarkup = "|A:perks-forwardarrow:8:8:2:0|a"
 local DotSeparatorMarkup = "|A:perks-radio-dot:8:8:0:-2|a"
 local RightArrowMarkupSpaced = format(" %s ", RightArrowMarkup)
@@ -298,6 +299,20 @@ end
 
 ---@type table<string, LootGroupHandler>
 local LootGrouphandlers = {
+    ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollInfo[]
+    LootRollStart = function(key, results)
+        local prefix = GetLootHistoryLink(results[1].Value)
+        return TableMap(results, function(result)
+            return format("%s Rolling on %s", prefix, GetLootIconFormatted(result.Link))
+        end)
+    end,
+    ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollInfo[]
+    LootRollIneligible = function(key, results)
+        return TableMap(results, function(result)
+            local name = ConvertNameToUnitNameFormatted(result.Name)
+            return format("%s: %s%s", name, NoLootIconMarkup, GetLootIconFormatted(result.Link))
+        end)
+    end,
     ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollInfo[]
     LootRollInfo = function(key, results)
         local prefix = GetLootHistoryLink(results[1].Value)
@@ -332,6 +347,13 @@ local LootGrouphandlers = {
             return format("%s rolled %s (%d) on %s", name, action, result.Value, link)
         end)
     end,
+    ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollInfo[]
+    LootRollDisenchantCredit = function(key, results)
+        return TableMap(results, function(result)
+            local name = ConvertNameToUnitNameFormatted(result.Name)
+            return format("%s disenchanted %s", name, GetLootIconFormatted(result.Link))
+        end)
+    end,
     ---@param results MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouResult[]
     LootRollYouResult = function(key, results)
         local prefix = GetLootHistoryLink(results[1].Value)
@@ -357,6 +379,8 @@ local LootGrouphandlers = {
 
 ---@type table<MiniLootMessageFormatSimpleParserResultLootRollTypes, LootGroupHandler>
 local LootGroupMap = {
+    StartRoll = LootGrouphandlers.LootRollStart,
+    IneligibleResult = LootGrouphandlers.LootRollIneligible,
     AllPass = LootGrouphandlers.LootRollInfo,
     YouPass = LootGrouphandlers.LootRollYouDecide,
     YouDisenchant = LootGrouphandlers.LootRollYouDecide,
@@ -374,6 +398,7 @@ local LootGroupMap = {
     YouNeedResult = LootGrouphandlers.LootRollYouResult,
     YouTransmogResult = LootGrouphandlers.LootRollYouResult,
     DisenchantResult = LootGrouphandlers.LootRollResult,
+    DisenchantCredit = LootGrouphandlers.LootRollDisenchantCredit,
     GreedResult = LootGrouphandlers.LootRollResult,
     NeedResult = LootGrouphandlers.LootRollResult,
     TransmogResult = LootGrouphandlers.LootRollResult,
@@ -462,6 +487,14 @@ Formatters[MiniLootMessageGroup.LootRoll] = function(results)
         end
     )
 end
+
+-- Shares the same handler.
+Formatters[MiniLootMessageGroup.LootRollInfo] = Formatters[MiniLootMessageGroup.LootRoll]
+Formatters[MiniLootMessageGroup.LootRollYouDecide] = Formatters[MiniLootMessageGroup.LootRoll]
+Formatters[MiniLootMessageGroup.LootRollDecide] = Formatters[MiniLootMessageGroup.LootRoll]
+Formatters[MiniLootMessageGroup.LootRollRolled] = Formatters[MiniLootMessageGroup.LootRoll]
+Formatters[MiniLootMessageGroup.LootRollYouResult] = Formatters[MiniLootMessageGroup.LootRoll]
+Formatters[MiniLootMessageGroup.LootRollResult] = Formatters[MiniLootMessageGroup.LootRoll]
 
 ---@param results MiniLootMessageFormatSimpleParserResultMoney[]
 Formatters[MiniLootMessageGroup.Money] = function(results)
