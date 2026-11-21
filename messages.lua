@@ -48,6 +48,7 @@ local MiniLootMessageFormatField = {
     LinkExtra = "LinkExtra",
     Zone = "Zone",
     ZoneExtra = "ZoneExtra",
+    LootHistory = "LootHistory",
 }
 
 ---@enum MiniLootMessageFormatTokenType
@@ -153,6 +154,11 @@ local Tokens = {
         field = MiniLootMessageFormatField.ZoneExtra,
         type = MiniLootMessageFormatTokenType.String,
     },
+    LootHistoryNumber = {
+        field = MiniLootMessageFormatField.LootHistory,
+        type = MiniLootMessageFormatTokenType.Number,
+        requiredText = "|HlootHistory:",
+    },
 }
 
 ---@alias MiniLootMessageFormatSimpleParserResultType
@@ -218,6 +224,7 @@ local Tokens = {
 ---@field public field MiniLootMessageFormatField
 ---@field public type MiniLootMessageFormatTokenType
 ---@field public fallbackValue? any
+---@field public requiredText? string
 
 ---@class MiniLootMessageFormatTokenResult : MiniLootMessageFormatToken
 ---@field public value any
@@ -291,7 +298,9 @@ local function CreateMessageTests(messageFormat)
         local argIndex = 0
         for j = 1, #messageFormat.tokens do
             local token = messageFormat.tokens[j]
-            if token.type == MiniLootMessageFormatTokenType.Float then
+            if token.requiredText and not msgFormat:find(token.requiredText, 1, true) then
+                -- the game string doesn't have this argument
+            elseif token.type == MiniLootMessageFormatTokenType.Float then
                 argIndex = argIndex + 1
                 args[argIndex] = random(1000, 9999)/10
             elseif token.type == MiniLootMessageFormatTokenType.Link then
@@ -1413,7 +1422,7 @@ do
     -- Loot Roll
     do
 
-        ---@alias MiniLootMessageFormatSimpleParserResultLootRollKeys "Name"|"Link"|"Value"|"ValueExtra"
+        ---@alias MiniLootMessageFormatSimpleParserResultLootRollKeys "Name"|"NameExtra"|"Link"|"Value"|"ValueExtra"|"LootHistory"
 
         ---@alias MiniLootMessageFormatSimpleParserResultLootRollTypes
         ---|"FallbackRoll"
@@ -1448,8 +1457,9 @@ do
         ---@field public Type MiniLootMessageFormatSimpleParserResultLootRollTypes
         ---@field public Name? string If provided, the name of the player looting.
         ---@field public Link string The item link.
-        ---@field public Value? number If provided, the loot history ID.
-        ---@field public ValueExtra? number If provided, the loot history ID.
+        ---@field public Value? number If provided, the number rolled. Only for the `DisenchantRoll`, `GreedRoll` and `NeedRoll` types.
+        ---@field public ValueExtra? number If provided, the number rolled for the `*Result` types, or the loot history ID of the "View Loot Rolls" link for the `You*` decisions.
+        ---@field public LootHistory? number Loot history ID.
 
         ---@class MiniLootMessageFormatSimpleParserResultLootRollArgs : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Link? string
@@ -1457,39 +1467,41 @@ do
         ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollInfo : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type "AllPass"
         ---@field public Link string The item link.
-        ---@field public Value number Loot history ID.
+        ---@field public LootHistory number Loot history ID.
         ---@field public Name? string The name of the player. Relevant for `DisenchantCredit` and `IneligibleResult`.
 
         ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouDecide : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type "YouPass"|"YouDisenchant"|"YouGreed"|"YouNeed"
         ---@field public Link string The item link.
-        ---@field public Value number Loot history ID.
-        ---@field public ValueExtra? number Loot history ID.
+        ---@field public LootHistory number Loot history ID.
+        ---@field public ValueExtra? number Loot history ID of the "View Loot Rolls" link.
 
         ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollDecide : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type "Pass"|"Disenchant"|"Greed"|"Need"
         ---@field public Link string The item link.
         ---@field public Name string The name of the player.
+        ---@field public LootHistory? number Loot history ID.
 
         ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollRolled : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type "DisenchantRoll"|"GreedRoll"|"NeedRoll"
         ---@field public Link string The item link.
         ---@field public Name string The name of the player.
         ---@field public Value number The number rolled.
+        ---@field public LootHistory? number Loot history ID.
 
         ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouResult : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type "YouDisenchantResult"|"YouGreedResult"|"YouNeedResult"|"YouTransmogResult"
         ---@field public Link string The item link.
-        ---@field public Value number Loot history ID.
+        ---@field public LootHistory number Loot history ID.
         ---@field public ValueExtra number The number rolled.
 
-        -- Note that `YouWinnerResult` and `WinnerResult` only have `Link` and `Name` assigned.
+        -- Note that `YouWinnerResult` and `WinnerResult` only have `Link`, `Name` and `LootHistory` assigned.
         ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollResult : MiniLootMessageFormatSimpleParserResultLootRoll
         ---@field public Type "DisenchantResult"|"GreedResult"|"NeedResult"|"TransmogResult"|"LostResult"|"YouWinnerResult"|"WinnerResult"
         ---@field public Link string The item link.
         ---@field public Name string The name of the player.
-        ---@field public Value number Loot history ID.
-        ---@field public ValueExtra number The number rolled.
+        ---@field public LootHistory number Loot history ID.
+        ---@field public ValueExtra? number The number rolled. Not provided for `YouWinnerResult` and `WinnerResult`.
         ---@field public NameExtra? string The roll type like `Need` or `Greed`, etc. Only provided for `LostResult`.
 
         ---@class MiniLootMessageFormatLootRoll : MiniLootMessageFormat
@@ -1525,7 +1537,7 @@ do
                             "LOOT_ROLL_ALL_PASSED",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -1544,7 +1556,7 @@ do
                             "LOOT_ROLL_PASSED_SELF",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.Link,
                             Tokens.ValueExtraNumber,
                         },
@@ -1557,7 +1569,7 @@ do
                             "LOOT_ROLL_DISENCHANT_SELF",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -1569,7 +1581,7 @@ do
                             "LOOT_ROLL_GREED_SELF",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.Link,
                             Tokens.ValueExtraNumber,
                         },
@@ -1583,7 +1595,7 @@ do
                             "LOOT_ROLL_NEED_SELF",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.Link,
                             Tokens.ValueExtraNumber,
                         },
@@ -1604,6 +1616,7 @@ do
                             "LOOT_ROLL_PASSED",
                         },
                         tokens = {
+                            Tokens.LootHistoryNumber,
                             Tokens.NameTarget,
                             Tokens.Link,
                         },
@@ -1616,6 +1629,7 @@ do
                             "LOOT_ROLL_DISENCHANT",
                         },
                         tokens = {
+                            Tokens.LootHistoryNumber,
                             Tokens.NameTarget,
                             Tokens.Link,
                         },
@@ -1628,6 +1642,7 @@ do
                             "LOOT_ROLL_GREED",
                         },
                         tokens = {
+                            Tokens.LootHistoryNumber,
                             Tokens.NameTarget,
                             Tokens.Link,
                         },
@@ -1640,6 +1655,7 @@ do
                             "LOOT_ROLL_NEED",
                         },
                         tokens = {
+                            Tokens.LootHistoryNumber,
                             Tokens.NameTarget,
                             Tokens.Link,
                         },
@@ -1658,6 +1674,7 @@ do
                             "LOOT_ROLL_ROLLED_DE",
                         },
                         tokens = {
+                            Tokens.LootHistoryNumber,
                             Tokens.ValueNumber,
                             Tokens.Link,
                             Tokens.NameTarget,
@@ -1671,6 +1688,7 @@ do
                             "LOOT_ROLL_ROLLED_GREED",
                         },
                         tokens = {
+                            Tokens.LootHistoryNumber,
                             Tokens.ValueNumber,
                             Tokens.Link,
                             Tokens.NameTarget,
@@ -1685,6 +1703,7 @@ do
                             "LOOT_ROLL_ROLLED_NEED",
                         },
                         tokens = {
+                            Tokens.LootHistoryNumber,
                             Tokens.ValueNumber,
                             Tokens.Link,
                             Tokens.NameTarget,
@@ -1704,7 +1723,7 @@ do
                             "LOOT_ROLL_YOU_WON_NO_SPAM_DE",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.ValueExtraNumber,
                             Tokens.Link,
                         },
@@ -1717,7 +1736,7 @@ do
                             "LOOT_ROLL_YOU_WON_NO_SPAM_GREED",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.ValueExtraNumber,
                             Tokens.Link,
                         },
@@ -1731,7 +1750,7 @@ do
                             "LOOT_ROLL_YOU_WON_NO_SPAM_NEED",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.ValueExtraNumber,
                             Tokens.Link,
                         },
@@ -1744,7 +1763,7 @@ do
                             "LOOT_ROLL_YOU_WON_NO_SPAM_TRANSMOG",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.ValueExtraNumber,
                             Tokens.Link,
                         },
@@ -1763,7 +1782,7 @@ do
                             "LOOT_ROLL_WON_NO_SPAM_DE",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.NameTarget,
                             Tokens.ValueExtraNumber,
                             Tokens.Link,
@@ -1777,7 +1796,7 @@ do
                             "LOOT_ROLL_WON_NO_SPAM_GREED",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.NameTarget,
                             Tokens.ValueExtraNumber,
                             Tokens.Link,
@@ -1792,7 +1811,7 @@ do
                             "LOOT_ROLL_WON_NO_SPAM_NEED",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.NameTarget,
                             Tokens.ValueExtraNumber,
                             Tokens.Link,
@@ -1806,7 +1825,7 @@ do
                             "LOOT_ROLL_WON_NO_SPAM_TRANSMOGRIFICATION",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.NameTarget,
                             Tokens.ValueExtraNumber,
                             Tokens.Link,
@@ -1826,7 +1845,7 @@ do
                             "LOOT_ROLL_LOST_ROLL",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.NameExtraString,
                             Tokens.ValueExtraNumber,
                             Tokens.Link,
@@ -1840,6 +1859,7 @@ do
                             "LOOT_ROLL_YOU_WON",
                         },
                         tokens = {
+                            Tokens.LootHistoryNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -1851,6 +1871,7 @@ do
                             "LOOT_ROLL_WON",
                         },
                         tokens = {
+                            Tokens.LootHistoryNumber,
                             Tokens.NameTarget,
                             Tokens.Link,
                         },
@@ -1869,7 +1890,7 @@ do
                             "LOOT_ROLL_STARTED",
                         },
                         tokens = {
-                            Tokens.ValueNumber,
+                            Tokens.LootHistoryNumber,
                             Tokens.Link,
                         },
                         result = {
@@ -2316,15 +2337,20 @@ local function ProcessMatchedToResult(messageFormat, matches, pattern)
     if messageFormat.result then
         result = TableCopy(messageFormat.result)
     end
+    local numSkipped = 0
     for i = 1, numTokens do
         local token = tokens[i]
-        local match = matches[i] ---@type string?
-        local key, value = ProcessTokens(token, match)
-        if key then
-            if not result then
-                result = { Type = "Fallback" }
+        if token.requiredText and pattern and not pattern:find(token.requiredText, 1, true) then
+            numSkipped = numSkipped + 1
+        else
+            local match = matches[i - numSkipped] ---@type string?
+            local key, value = ProcessTokens(token, match)
+            if key then
+                if not result then
+                    result = { Type = "Fallback" }
+                end
+                result[key] = value
             end
-            result[key] = value
         end
     end
     local parser = messageFormat.parser
