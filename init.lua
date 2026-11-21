@@ -34,7 +34,7 @@ local SetupUI = ns.UI.SetupUI
 
 ---@class MiniLootChatFramePolyfill : ScrollingMessageFramePolyfill, MiniLootChatTarget, ChattynatorChatFrame
 
----@alias MiniLootNSEventCallbackResult fun(event: WowEvent, ...: any): result: MiniLootMessageFormatSimpleParserResults?, message: MiniLootMessage?, hideChatIgnoreResult: boolean?, extraResult: MiniLootMessageFormatSimpleParserResults?, extraMessage: MiniLootMessage?, hideExtraChatIgnoreResult: boolean?
+---@alias MiniLootNSEventCallbackResult fun(event: WowEvent, ...: any): result: MiniLootMessageFormatSimpleParserResults?, message: MiniLootMessage?, hideChatIgnoreResult: boolean?
 
 ---@alias MiniLootNSEventChatEventCallback fun(chatFrame: MiniLootChatFramePolyfill, event: WowEvent, ...: any): filter: boolean?, ...
 
@@ -153,15 +153,11 @@ function frame:OnEvent(event, ...)
         return
     end
     local result, message, hideChatIgnoreResult ---@type MiniLootMessageFormatSimpleParserResults?, MiniLootMessage?, boolean?
-    local extraResult, extraMessage, hideExtraChatIgnoreResult ---@type MiniLootMessageFormatSimpleParserResults?, MiniLootMessage?, boolean?
     local eventHandler = EventHandlers[event]
     if eventHandler then
-        result, message, hideChatIgnoreResult, extraResult, extraMessage, hideExtraChatIgnoreResult = eventHandler(event, ...)
+        result, message, hideChatIgnoreResult = eventHandler(event, ...)
     elseif self.useFrameChatEvents and IsChatEventRelevant(event) then
         result, message, hideChatIgnoreResult = ProcessChatEvent(event, ...)
-    end
-    if extraResult and extraMessage and not hideExtraChatIgnoreResult then
-        output:Add({ result = extraResult, message = extraMessage })
     end
     if hideChatIgnoreResult then
         return
