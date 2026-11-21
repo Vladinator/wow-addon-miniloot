@@ -33,7 +33,6 @@
         "CreateObjectPool",
         "CreateScrollBoxLinearView",
         "DEATH_RECAP_UNAVAILABLE",
-        "DeathRecap_GetEvents",
         "DECIMAL_SEPERATOR",
         "DEFAULT_CHAT_FRAME",
         "FloatingGarrisonFollower_Toggle",

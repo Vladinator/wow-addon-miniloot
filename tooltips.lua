@@ -69,7 +69,7 @@ local HandlerTypes = {
 ---@field public Show? MiniLootTooltipHandlerShow
 ---@field public Hide? MiniLootTooltipHandlerHide
 
----@class DeathRecapEventPolyfill
+---@class DeathRecapEventPolyfill : DeathRecapEventInfo
 ---@field public timestamp number 1421121447.489
 ---@field public event string "SWING_DAMAGE"
 ---@field public hideCaster boolean false
@@ -244,7 +244,7 @@ local TooltipHandlers = {
         Type = "DeathRecap",
         Pattern = "^death:",
         IsEnabled = function()
-            return DeathRecap_GetEvents and true
+            return C_DeathRecap and C_DeathRecap.GetRecapEvents and true
         end,
         Show = function(self, chatFrame, linkData, link)
             ---@type _, string|number?
@@ -253,7 +253,8 @@ local TooltipHandlers = {
             if not id then
                 return
             end
-            local events = DeathRecap_GetEvents(id) ---@type DeathRecapEventPolyfill[]
+            ---@type DeathRecapEventPolyfill[]
+            local events = C_DeathRecap.GetRecapEvents(id) ---@diagnostic expect-line: assign-type-mismatch
             if not events or not events[1] then
                 AnchorTooltip(GameTooltip, chatFrame)
 				GameTooltip:SetText(DEATH_RECAP_UNAVAILABLE, 1, 1, 1)
@@ -267,7 +268,6 @@ local TooltipHandlers = {
             for i = 1, #events do
                 local evtData = events[i]
                 local spellId, spellName, texture
-                -- DeathRecapFrame_GetEventInfo
                 do
                     spellName = evtData.spellName
                     local nameIsNotSpell = false

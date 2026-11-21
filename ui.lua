@@ -2041,11 +2041,11 @@ end
 local function AddInterfacePanel(panel)
     if panel.parent then
         local category = Settings.GetCategory(panel.parent)
-		local subcategory, layout = Settings.RegisterCanvasLayoutSubcategory(category, panel, panel.name, panel.name)
+		local subcategory, layout = Settings.RegisterCanvasLayoutSubcategory(category, panel, panel.name)
 		subcategory.ID = panel.name
 		return
     end
-    local category, layout = Settings.RegisterCanvasLayoutCategory(panel, panel.name, panel.name)
+    local category, layout = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
     category.ID = panel.name
     Settings.RegisterAddOnCategory(category)
 end

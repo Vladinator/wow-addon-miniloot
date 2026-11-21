@@ -18,12 +18,20 @@ local EventHandlers = {
     QUEST_TURNED_IN = function(event, ...)
         ---@type number?, number?, number?
         local questID, xp, money = ...
+        ---@type MiniLootMessageFormatSimpleParserResults?, MiniLootMessage?, boolean?
+        local xpResult, xpMessage, xpHidden
         if xp and xp > 0 then
-            return ProcessChatEvent("CHAT_MSG_COMBAT_XP_GAIN", format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED, xp))
+            xpResult, xpMessage, xpHidden = ProcessChatEvent("CHAT_MSG_COMBAT_XP_GAIN", format(COMBATLOG_XPGAIN_FIRSTPERSON_UNNAMED, xp))
         end
+        ---@type MiniLootMessageFormatSimpleParserResults?, MiniLootMessage?, boolean?
+        local moneyResult, moneyMessage, moneyHidden
         if money and money > 0 then
-            return ProcessChatEvent("CHAT_MSG_MONEY", format(YOU_LOOT_MONEY, C_CurrencyInfo.GetCoinText(money)))
+            moneyResult, moneyMessage, moneyHidden = ProcessChatEvent("CHAT_MSG_MONEY", format(YOU_LOOT_MONEY, C_CurrencyInfo.GetCoinText(money)))
         end
+        if not xpResult then
+            return moneyResult, moneyMessage, moneyHidden
+        end
+        return xpResult, xpMessage, xpHidden, moneyResult, moneyMessage, moneyHidden
     end,
 }
 

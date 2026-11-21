@@ -519,7 +519,25 @@ end
 
 ---@param pattern string
 ---@return string format
+---@return number[]? order If the format variables contain position information we will store it in this table to be able to re-construct the original.
 local function PatternToFormat(pattern)
+    local order ---@type number[]?
+    local sequence = 0
+    local captureOrder = {} ---@type number[]
+    local reordered = false
+    for position, spec in pattern:gmatch("%%(%d*)%$?([%.%d]*[sdf%%])") do
+        if spec ~= "%" then
+            sequence = sequence + 1
+            local argument = tonumber(position) or sequence
+            captureOrder[sequence] = argument
+            if argument ~= sequence then
+                reordered = true
+            end
+        end
+    end
+    if reordered then
+        order = captureOrder
+    end
     -- grammar from hell ( http://wow.gamepedia.com/UI_escape_sequences#Grammar )
     -- pattern = pattern
     --     :gsub("|4[^:]-:[^:]-:[^;]-;", "") -- "|4singular:plural1:plural2;"
@@ -548,7 +566,7 @@ local function PatternToFormat(pattern)
         :gsub("%%%%s", "(.-)")
         :gsub("%%%%d", "(%%d+)")
         :gsub("%%%%%%[%d%.%,]+f", "([%%d%%.%%,]+)")
-    return pattern
+    return pattern, order
 end
 
 local ConvertToNumberPattern1 = format("[\\%s]+", LARGE_NUMBER_SEPERATOR)
@@ -624,7 +642,7 @@ local function ValuesAreSameish(val1, val2)
     if type1 == "boolean" or type2 == "boolean" then
         return (not not val1) == (not not val2)
     end
-    return true
+    return false
 end
 
 ---@param number number

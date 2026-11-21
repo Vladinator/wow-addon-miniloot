@@ -109,6 +109,10 @@ local Tokens = {
         field = MiniLootMessageFormatField.ValueExtra,
         type = MiniLootMessageFormatTokenType.Money,
     },
+    BonusMoney = {
+        field = MiniLootMessageFormatField.Bonus,
+        type = MiniLootMessageFormatTokenType.Money,
+    },
     BonusNumber = {
         field = MiniLootMessageFormatField.Bonus,
         type = MiniLootMessageFormatTokenType.Number,
@@ -204,7 +208,7 @@ local Tokens = {
 ---@class MiniLootMessageFormatSimpleParserResultFallback
 ---@field public Type MiniLootMessageFormatSimpleParserResultType
 
----@alias MiniLootMessageFormatSimpleParser fun(result: MiniLootMessageFormatSimpleParserResults): MiniLootMessageFormatSimpleParserResults|false?
+---@alias MiniLootMessageFormatSimpleParser fun(result: MiniLootMessageFormatSimpleParserResults, matches?: string[]): MiniLootMessageFormatSimpleParserResults|false?
 
 ---@alias MiniLootMessageFormatSimpleMap fun(result: MiniLootMessageFormatSimpleParserResults): MiniLootMessageFormatSimpleParserResults|false?
 
@@ -223,6 +227,7 @@ local Tokens = {
 ---@class MiniLootMessageFormat
 ---@field public formats string[]
 ---@field public patterns? string[]
+---@field public patternOrders? table<string, number[]>
 ---@field public tokens MiniLootMessageFormatToken[]
 ---@field public result? MiniLootMessageFormatSimpleParserResults
 ---@field public parser? MiniLootMessageFormatSimpleParser
@@ -288,7 +293,7 @@ local function CreateMessageTests(messageFormat)
             local token = messageFormat.tokens[j]
             if token.type == MiniLootMessageFormatTokenType.Float then
                 argIndex = argIndex + 1
-                args[argIndex] = random(10000, 99999)/100
+                args[argIndex] = random(1000, 9999)/10
             elseif token.type == MiniLootMessageFormatTokenType.Link then
                 argIndex = argIndex + 1
                 args[argIndex] = "|cffffffff|Hitem:6948::::::::70:::::|h[Hearthstone]|h|r"
@@ -442,8 +447,18 @@ local function FinalizeMessages()
 
                 local messageSubFormat = messageSubFormats[messageSubFormatIndex]
 
-                messageSubFormat = PatternToFormat(messageSubFormat)
+                local messageSubOrder ---@type number[]?
+                messageSubFormat, messageSubOrder = PatternToFormat(messageSubFormat)
                 messageSubFormat = format("^%s$", messageSubFormat)
+
+                if messageSubOrder then
+                    local patternOrders = messageFormat.patternOrders
+                    if not patternOrders then
+                        patternOrders = {}
+                        messageFormat.patternOrders = patternOrders
+                    end
+                    patternOrders[messageSubFormat] = messageSubOrder
+                end
 
                 if not TableContains(messageSubPatterns, messageSubFormat) then
                     numMessageSubPatterns = numMessageSubPatterns + 1
@@ -1093,7 +1108,7 @@ do
     -- Currency
     do
 
-        ---@alias MiniLootMessageFormatSimpleParserResultCurrencyKeys "Link"|"Value"
+        ---@alias MiniLootMessageFormatSimpleParserResultCurrencyKeys "Link"|"Value"|"ValueExtra"
 
         ---@alias MiniLootMessageFormatSimpleParserResultCurrencyTypes "Currency"|"CurrencyWarband"|"CurrencyWarbandOverflow"
 
@@ -1101,6 +1116,7 @@ do
         ---@field public Type MiniLootMessageFormatSimpleParserResultCurrencyTypes
         ---@field public Link string The currency link.
         ---@field public Value? number If provided, the number of items received.
+        ---@field public ValueExtra? string If provided, the maximum amount that was reached/overflow.
 
         ---@class MiniLootMessageFormatSimpleParserResultCurrencyArgs : MiniLootMessageFormatSimpleParserResultCurrency
         ---@field public Link? string
@@ -1129,7 +1145,7 @@ do
                         tokens = {
                             Tokens.Link,
                             Tokens.ValueNumber,
-                            Tokens.ValueString,
+                            Tokens.ValueExtraString,
                         },
                         result = {
                             Type = "CurrencyWarbandOverflow",
@@ -1146,6 +1162,16 @@ do
                         },
                         result = {
                             Type = "CurrencyWarband",
+                        },
+                    },
+                    {
+                        formats = {
+                            "CURRENCY_GAINED_MULTIPLE_OVERFLOW",
+                        },
+                        tokens = {
+                            Tokens.Link,
+                            Tokens.ValueNumber,
+                            Tokens.ValueExtraString,
                         },
                     },
                     {
@@ -1176,7 +1202,7 @@ do
     -- Money
     do
 
-        ---@alias MiniLootMessageFormatSimpleParserResultMoneyKeys "Name"|"Value"|"ValueExtra"
+        ---@alias MiniLootMessageFormatSimpleParserResultMoneyKeys "Name"|"Value"|"ValueExtra"|"Bonus"
 
         ---@alias MiniLootMessageFormatSimpleParserResultMoneyTypes "Money"
 
@@ -1185,6 +1211,7 @@ do
         ---@field public Name? string If provided, this player earned the gold.
         ---@field public Value number The amount of money in copper.
         ---@field public ValueExtra? number If provided, the gold sent to the guild bank.
+        ---@field public Bonus? number If provided, the extra money received on top of `Value`.
 
         ---@class MiniLootMessageFormatSimpleParserResultMoneyArgs : MiniLootMessageFormatSimpleParserResultMoney
         ---@field public Value? number
@@ -1206,6 +1233,17 @@ do
             {
                 ---@type MiniLootMessageFormatMoney[]
                 formats = {
+                    -- Must come before `YOU_LOOT_MONEY`, which has no ending and would also match these.
+                    {
+                        formats = {
+                            "YOU_LOOT_MONEY_MOD",
+                            "LOOT_MONEY_SPLIT_MOD",
+                        },
+                        tokens = {
+                            Tokens.ValueMoney,
+                            Tokens.BonusMoney,
+                        },
+                    },
                     {
                         formats = {
                             "YOU_LOOT_MONEY_GUILD",
@@ -1398,6 +1436,8 @@ do
         ---|"GreedResult"
         ---|"YouNeedResult"
         ---|"NeedResult"
+        ---|"YouTransmogResult"
+        ---|"TransmogResult"
         ---|"IneligibleResult"
         ---|"LostResult"
         ---|"YouWinnerResult"
@@ -1438,22 +1478,31 @@ do
         ---@field public Value number The number rolled.
 
         ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollYouResult : MiniLootMessageFormatSimpleParserResultLootRoll
-        ---@field public Type "YouDisenchantResult"|"YouGreedResult"|"YouNeedResult"
+        ---@field public Type "YouDisenchantResult"|"YouGreedResult"|"YouNeedResult"|"YouTransmogResult"
         ---@field public Link string The item link.
         ---@field public Value number Loot history ID.
         ---@field public ValueExtra number The number rolled.
 
         -- Note that `YouWinnerResult` and `WinnerResult` only have `Link` and `Name` assigned.
         ---@class MiniLootMessageFormatSimpleParserResultLootRoll_LootRollResult : MiniLootMessageFormatSimpleParserResultLootRoll
-        ---@field public Type "DisenchantResult"|"GreedResult"|"NeedResult"|"LostResult"|"YouWinnerResult"|"WinnerResult"
+        ---@field public Type "DisenchantResult"|"GreedResult"|"NeedResult"|"TransmogResult"|"LostResult"|"YouWinnerResult"|"WinnerResult"
         ---@field public Link string The item link.
         ---@field public Name string The name of the player.
         ---@field public Value number Loot history ID.
         ---@field public ValueExtra number The number rolled.
-        ---@field public NameExtraString? string The roll type like `Need` or `Greed`, etc.
+        ---@field public NameExtra? string The roll type like `Need` or `Greed`, etc. Only provided for `LostResult`.
 
         ---@class MiniLootMessageFormatLootRoll : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultLootRollArgs
+
+        ---@param result MiniLootMessageFormatSimpleParserResultLootRoll
+        ---@type MiniLootMessageFormatSimpleParser
+        local function CustomRollParser(result, matches)
+            local text = matches and matches[2]
+            if type(text) == "string" and not text:match("^|c[^|]-|H[^|]-|h[^|]-|h|r$") and not text:match("^|H[^|]-|h[^|]-|h$") then
+                return false
+            end
+        end
 
         AppendMessages(
             {
@@ -1530,6 +1579,7 @@ do
                     },
                     {
                         formats = {
+                            "LOOT_ROLL_NEED_SELF_OFF_SPEC",
                             "LOOT_ROLL_NEED_SELF",
                         },
                         tokens = {
@@ -1677,6 +1727,7 @@ do
                     },
                     {
                         formats = {
+                            "LOOT_ROLL_YOU_WON_NO_SPAM_NEED_OFF_SPEC",
                             "LOOT_ROLL_YOU_WON_NO_SPAM_NEED",
                         },
                         tokens = {
@@ -1686,6 +1737,19 @@ do
                         },
                         result = {
                             Type = "YouNeedResult",
+                        },
+                    },
+                    {
+                        formats = {
+                            "LOOT_ROLL_YOU_WON_NO_SPAM_TRANSMOG",
+                        },
+                        tokens = {
+                            Tokens.ValueNumber,
+                            Tokens.ValueExtraNumber,
+                            Tokens.Link,
+                        },
+                        result = {
+                            Type = "YouTransmogResult",
                         },
                     },
                 },
@@ -1724,6 +1788,7 @@ do
                     },
                     {
                         formats = {
+                            "LOOT_ROLL_WON_NO_SPAM_NEED_OFF_SPEC",
                             "LOOT_ROLL_WON_NO_SPAM_NEED",
                         },
                         tokens = {
@@ -1734,6 +1799,20 @@ do
                         },
                         result = {
                             Type = "NeedResult",
+                        },
+                    },
+                    {
+                        formats = {
+                            "LOOT_ROLL_WON_NO_SPAM_TRANSMOGRIFICATION",
+                        },
+                        tokens = {
+                            Tokens.ValueNumber,
+                            Tokens.NameTarget,
+                            Tokens.ValueExtraNumber,
+                            Tokens.Link,
+                        },
+                        result = {
+                            Type = "TransmogResult",
                         },
                     },
                 },
@@ -1796,6 +1875,7 @@ do
                         result = {
                             Type = "StartRoll",
                         },
+                        parser = CustomRollParser,
                     },
                     {
                         formats = {
@@ -2079,8 +2159,8 @@ do
         ---@class MiniLootMessageFormatIgnore : MiniLootMessageFormat
         ---@field public result? MiniLootMessageFormatSimpleParserResultIgnoreArgs
 
-        ---@type MiniLootMessageFormatSimpleParser
         ---@param result MiniLootMessageFormatSimpleParserResultIgnore
+        ---@type MiniLootMessageFormatSimpleParser
         local function CustomItemParser(result)
             if not result.Link then
                 return
@@ -2169,7 +2249,12 @@ local function ProcessTokens(token, match)
     if tokenType == MiniLootMessageFormatTokenType.Float
         or tokenType == MiniLootMessageFormatTokenType.Number then
 
-        local value = ConvertToNumber(match)
+        local value ---@type number?
+        if tokenType == MiniLootMessageFormatTokenType.Float and type(match) == "string" then
+            value = tonumber((match:gsub(",", ".")))
+        else
+            value = ConvertToNumber(match)
+        end
         return token.field, value or token.fallbackValue
 
     elseif tokenType == MiniLootMessageFormatTokenType.Link
@@ -2213,8 +2298,18 @@ end
 
 ---@param messageFormat MiniLootMessageFormat
 ---@param matches string[]
+---@param pattern? string The pattern that produced the matches.
 ---@return MiniLootMessageFormatSimpleParserResults?
-local function ProcessMatchedToResult(messageFormat, matches)
+local function ProcessMatchedToResult(messageFormat, matches, pattern)
+    local patternOrders = messageFormat.patternOrders
+    local order = patternOrders and pattern and patternOrders[pattern]
+    if order then
+        local ordered = {} ---@type string[]
+        for captureIndex, argumentIndex in ipairs(order) do
+            ordered[argumentIndex] = matches[captureIndex]
+        end
+        matches = ordered
+    end
     local tokens = messageFormat.tokens
     local numTokens = #tokens
     local result ---@type MiniLootMessageFormatSimpleParserResults?
@@ -2234,7 +2329,7 @@ local function ProcessMatchedToResult(messageFormat, matches)
     end
     local parser = messageFormat.parser
     if parser and result then
-        local parserResult = parser(result)
+        local parserResult = parser(result, matches)
         if parserResult ~= nil then
             if parserResult == false then
                 result = nil
@@ -2287,7 +2382,7 @@ local function ProcessChatMessage(event, text, playerName, languageName, channel
                     for _, messageFormatPattern in ipairs(messageFormatPatterns) do
                         local matches = {text:match(messageFormatPattern)} ---@type string[]
                         if matches[1] then
-                            local result = ProcessMatchedToResult(messageFormat, matches)
+                            local result = ProcessMatchedToResult(messageFormat, matches, messageFormatPattern)
                             if result then
                                 return result, message
                             end
